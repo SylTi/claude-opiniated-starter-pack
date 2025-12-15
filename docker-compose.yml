@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # PostgreSQL pour les tests locaux uniquement
+  # ⚠️ NE PAS utiliser en production - Supabase cloud pour la prod
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: saas-postgres-test
+    environment:
+      POSTGRES_DB: saas_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"  # Port 5433 pour éviter conflits avec PostgreSQL local
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - saas-network
+
+  # PostgreSQL pour le développement local (optionnel)
+  # Utiliser Supabase cloud en production
+  postgres-dev:
+    image: postgres:15-alpine
+    container_name: saas-postgres-dev
+    environment:
+      POSTGRES_DB: saas_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - saas-network
+
+volumes:
+  postgres_test_data:
+    driver: local
+  postgres_dev_data:
+    driver: local
+
+networks:
+  saas-network:
+    driver: bridge

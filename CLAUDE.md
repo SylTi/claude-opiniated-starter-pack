@@ -1,0 +1,364 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Architecture Overview
+
+This is a **TypeScript monorepo** for a SaaS application using pnpm workspaces.
+
+### Key Architecture Principles
+
+1. **Strict TypeScript everywhere** - No `any`, explicit return types required
+2. **Convention over configuration** - Follow established patterns
+3. **Backend is source of truth** - No business logic in frontend
+4. **Shared types** - `@saas/shared` package for end-to-end type safety
+
+### Monorepo Structure
+
+```
+apps/
+  web/          → Next.js 15 (App Router) frontend
+  api/          → AdonisJS 6 backend (MVC)
+packages/
+  shared/       → Shared TypeScript types (types only, no runtime)
+  config/       → Shared configs (ESLint, TypeScript)
+infra/
+  supabase/     → SQL migrations (reference, not used by backend)
+```
+
+### Communication Pattern
+
+- Frontend consumes REST API at `/api/v1/*`
+- Types from `@saas/shared` ensure consistency
+- Backend uses Lucid ORM to connect to PostgreSQL (Supabase for prod)
+- Frontend has NO direct database access
+
+## Critical Rules
+
+### Testing Database Strategy
+
+**⚠️ ABSOLUTE RULE: NEVER run tests against Supabase cloud**
+
+- **Unit tests**: Database MOCKED (no DB connection)
+- **Integration tests**: Docker PostgreSQL local (port 5433)
+- **Development**: Supabase cloud OR Docker PostgreSQL (port 5432)
+- **Production**: Supabase cloud only
+
+Setup test environment:
+```bash
+pnpm run test:setup  # Automated setup with Docker
+```
+
+See `docs/testing-database.md` for complete strategy.
+
+### Code Style
+
+**Naming conventions differ by app:**
+- Frontend (Next.js): `kebab-case` files, `PascalCase` components
+- Backend (AdonisJS): `snake_case` files, `PascalCase` classes
+- Database: `snake_case` tables/columns (plural tables: `users`, `blog_posts`)
+
+**Always:**
+- Use `async/await` (never `.then()`)
+- Explicit return types on functions
+- No `any` type (use `unknown` if needed)
+
+### API Response Format
+
+All API responses must follow this structure:
+
+```typescript
+// Success
+{ "data": T | T[], "message"?: "Optional" }
+
+// Error
+{
+  "error": "ErrorType",
+  "message": "Human readable",
+  "errors"?: [{ "field": "email", "message": "...", "rule": "..." }]
+}
+```
+
+## Development Commands
+
+### Initial Setup
+
+```bash
+pnpm install                       # Install all workspace dependencies
+cd packages/shared && pnpm run build  # Build shared types
+```
+
+### Running Applications
+
+```bash
+# Development (both apps)
+pnpm run dev
+
+# Individual apps
+pnpm run web:dev                   # Next.js on :3000
+pnpm run api:dev                   # AdonisJS on :3333
+```
+
+### Testing
+
+```bash
+# Setup test DB (first time only)
+pnpm run test:setup                # Starts Docker PostgreSQL + migrations
+
+# Run tests
+pnpm test                          # All tests (all workspaces)
+pnpm run web:test                  # Frontend tests (Vitest)
+pnpm run api:test                  # Backend tests (Japa)
+
+# Backend specific
+cd apps/api
+node ace test unit                 # Unit tests only (mocked DB)
+node ace test functional           # Integration tests (Docker DB)
+
+# Docker management
+pnpm run docker:test:up            # Start test DB
+pnpm run docker:test:down          # Stop test DB
+pnpm run docker:test:reset         # Reset test DB (drops data)
+```
+
+### Backend (AdonisJS)
+
+```bash
+cd apps/api
+
+# Database
+node ace migration:run            # Run migrations
+node ace migration:rollback       # Rollback migrations
+NODE_ENV=test node ace migration:run  # Migrate test DB
+
+# Code generation
+node ace make:model ModelName
+node ace make:controller ControllerName
+node ace make:migration create_table_name
+
+# Other
+node ace generate:key             # Generate APP_KEY for .env
+```
+
+### Frontend (Next.js)
+
+```bash
+cd apps/web
+
+# shadcn/ui components
+npx shadcn@latest add button      # Add UI components
+npx shadcn@latest add card
+
+# Tests
+pnpm run test:watch               # Watch mode
+pnpm run test:ui                  # UI mode
+```
+
+### Shared Package
+
+```bash
+cd packages/shared
+pnpm run build                     # Compile TypeScript
+pnpm run dev                       # Watch mode
+```
+
+## Backend Architecture (AdonisJS)
+
+### MVC Pattern
+
+- **Models** (`app/models/`): Lucid ORM models, use `#models/user` import alias
+- **Controllers** (`app/controllers/`): HTTP request handlers, use `#controllers/users_controller`
+- **Routes** (`start/routes.ts`): Route definitions, grouped under `/api/v1`
+
+### Route Structure
+
+Routes MUST be grouped under `/api/v1`:
+
+```typescript
+router.group(() => {
+  router.get('/users', [UsersController, 'index'])
+  router.get('/users/:id', [UsersController, 'show'])
+}).prefix('/api/v1')
+```
+
+### Controller Pattern
+
+```typescript
+export default class UsersController {
+  async index({ response }: HttpContext): Promise<void> {
+    const users = await User.all()
+    response.json({ data: users })  // Standard format
+  }
+}
+```
+
+### Database
+
+- **ORM**: Lucid (built into AdonisJS)
+- **Migrations**: Located in `database/migrations/`
+- **Models**: Use decorators (`@column`, `@hasMany`, etc.)
+- **Dev/Prod**: Connects to Supabase PostgreSQL
+- **Tests**: NEVER use Supabase (use Docker local)
+
+### Import Aliases (AdonisJS)
+
+Configured in `adonisrc.ts`:
+- `#models/*` → `app/models/*.js`
+- `#controllers/*` → `app/controllers/*.js`
+- `#services/*` → `app/services/*.js`
+
+## Frontend Architecture (Next.js)
+
+### App Router
+
+- Server Components by default
+- Pages in `app/` directory
+- Layouts cascade down
+- Example: `app/dashboard/page.tsx` → `/dashboard`
+
+### UI Components
+
+- **shadcn/ui**: Pre-built accessible components in `components/ui/`
+- **Tailwind CSS**: Utility-first styling
+- Import example: `import { Button } from '@/components/ui/button'`
+
+### Path Alias
+
+`@/*` → Root of `apps/web/` (configured in `tsconfig.json`)
+
+## Shared Types Package
+
+Located in `packages/shared/src/`:
+
+- **Export pattern**: All types exported through `index.ts`
+- **Types only**: No runtime code, only TypeScript interfaces/types
+- **Usage**:
+  - Backend: `import { UserDTO } from '@saas/shared'`
+  - Frontend: `import { UserDTO } from '@saas/shared'`
+- **Build required**: Run `pnpm run build` after changes
+
+Example:
+```typescript
+// packages/shared/src/types/user.ts
+export interface UserDTO {
+  id: number
+  email: string
+  fullName: string | null
+}
+```
+
+## Testing
+
+### Frontend Tests (Vitest)
+
+- **Location**: `apps/web/tests/`
+- **Framework**: Vitest + React Testing Library + @testing-library/jest-dom
+- **Setup**: `tests/setup.ts` configures jest-dom matchers
+- **Matchers**: Use `toBeInTheDocument()`, `toHaveClass()`, `toBeDisabled()` instead of basic assertions
+
+### Backend Tests (Japa)
+
+**Two types:**
+
+1. **Unit tests** (`tests/unit/`) - Database MOCKED
+   - Test pure logic
+   - No real DB connection
+   - Fast (< 1s per test)
+
+2. **Integration tests** (`tests/functional/`) - Docker PostgreSQL
+   - Full API testing
+   - Uses `testUtils.db().truncate()` for cleanup
+   - Requires Docker running
+
+**Test with Supertest or @japa/api-client:**
+```typescript
+// Option 1: @japa/api-client (recommended for AdonisJS)
+const response = await client.get('/api/v1/users')
+response.assertStatus(200)
+
+// Option 2: Supertest (standard Node.js)
+const response = await request(BASE_URL).get('/api/v1/users').expect(200)
+```
+
+## Environment Configuration
+
+### Backend Environments
+
+- **`.env`**: Development (Supabase cloud or local Docker)
+- **`.env.test`**: Tests (Docker PostgreSQL on port 5433) - PRE-CONFIGURED
+- **`.env.example`**: Template
+
+⚠️ **Never commit `.env` files**
+
+### Required for Development
+
+1. Copy `.env.example` to `.env` in `apps/api/`
+2. Configure Supabase credentials OR use Docker with `docker-compose up postgres-dev`
+3. Generate `APP_KEY`: `node ace generate:key`
+
+## Docker
+
+Docker is used ONLY for testing (not required for development):
+
+```bash
+docker-compose up -d postgres-test    # Test DB (port 5433)
+docker-compose up -d postgres-dev     # Dev DB (port 5432) - optional
+```
+
+See `DOCKER-TESTING.md` for full guide.
+
+## Documentation
+
+Critical docs in `docs/`:
+- `testing-database.md` - Database strategy for tests (MUST READ)
+- `conventions.md` - Code style and patterns
+- `architecture.md` - System design
+- `testing.md` - Testing guide
+- `testing-setup.md` - Test tools configuration
+
+## Common Patterns
+
+### Adding a New API Endpoint
+
+1. Create/update model: `node ace make:model Post`
+2. Create migration: `node ace make:migration create_posts_table`
+3. Run migration: `node ace migration:run`
+4. Create controller: `node ace make:controller PostsController`
+5. Add route in `start/routes.ts` under `/api/v1` group
+6. Create types in `packages/shared/src/types/`
+7. Build shared: `cd packages/shared && pnpm run build`
+8. Write tests in `tests/functional/` and `tests/unit/`
+
+### Adding a New Frontend Page
+
+1. Create `app/your-page/page.tsx`
+2. Import types from `@saas/shared`
+3. Use shadcn/ui components from `@/components/ui/`
+4. Write tests in `tests/pages/your-page.test.tsx`
+
+### Adding shadcn/ui Component
+
+```bash
+cd apps/web
+npx shadcn@latest add [component-name]
+# Component appears in components/ui/
+```
+
+## Package Manager
+
+**pnpm workspaces** - commands run from root apply to all workspaces:
+
+```bash
+pnpm install            # Installs all workspace dependencies
+pnpm run build          # Builds all workspaces
+pnpm test               # Tests all workspaces
+```
+
+Workspace-specific:
+```bash
+pnpm --filter web run dev              # Run script in specific workspace
+pnpm --filter api add package-name     # Install in specific workspace
+pnpm -r run dev                        # Run in all workspaces recursively
+pnpm -r --parallel run dev             # Run in parallel
+```
+- toujours utiliser pnpm a la place de npm

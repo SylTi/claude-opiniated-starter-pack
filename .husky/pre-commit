@@ -1,0 +1,7 @@
+#!/bin/sh
+
+# Lint fichiers modifiés
+pnpm lint-staged
+
+# TypeCheck global
+pnpm run typecheck

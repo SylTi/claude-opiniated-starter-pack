@@ -1,0 +1,40 @@
+{
+  "name": "saas-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm --filter web run typecheck && pnpm --filter api run typecheck",
+    "test": "pnpm -r run test",
+    "test:setup": "bash scripts/test-setup.sh",
+    "docker:test:up": "docker-compose up -d postgres-test",
+    "docker:test:down": "docker-compose down postgres-test",
+    "docker:test:reset": "docker-compose down -v postgres-test && docker-compose up -d postgres-test",
+    "web:dev": "pnpm --filter web run dev",
+    "api:dev": "pnpm --filter api run dev",
+    "web:build": "pnpm --filter web run build",
+    "api:build": "pnpm --filter api run build",
+    "web:test": "pnpm --filter web run test",
+    "api:test": "pnpm --filter api run test",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.3.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "lint-staged": {
+    "apps/web/**/*.{js,jsx,ts,tsx}": [
+      "pnpm --filter web exec eslint --fix"
+    ],
+    "apps/api/**/*.{js,ts}": [
+      "pnpm --filter api exec eslint --fix"
+    ]
+  }
+}
