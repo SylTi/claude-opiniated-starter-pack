@@ -1,0 +1,92 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { User, Settings, LogOut, Shield, Users } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/contexts/auth-context";
+
+export function UserMenu(): React.ReactElement {
+  const router = useRouter();
+  const { user, logout } = useAuth();
+
+  if (!user) {
+    return <></>;
+  }
+
+  const initials = user.fullName
+    ? user.fullName
+        .split(" ")
+        .map((n: string) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : user.email[0].toUpperCase();
+
+  const handleLogout = async (): Promise<void> => {
+    await logout();
+    router.push("/login");
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+          <Avatar className="h-8 w-8">
+            <AvatarImage
+              src={user.avatarUrl || undefined}
+              alt={user.fullName || user.email}
+            />
+            <AvatarFallback>{initials}</AvatarFallback>
+          </Avatar>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel>
+          <div className="flex flex-col space-y-1">
+            <p className="text-sm font-medium leading-none">
+              {user.fullName || "User"}
+            </p>
+            <p className="text-xs leading-none text-muted-foreground">
+              {user.email}
+            </p>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => router.push("/profile")}>
+          <User className="mr-2 h-4 w-4" />
+          <span>Profile</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/profile/security")}>
+          <Shield className="mr-2 h-4 w-4" />
+          <span>Security</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/profile/settings")}>
+          <Settings className="mr-2 h-4 w-4" />
+          <span>Settings</span>
+        </DropdownMenuItem>
+        {user.role === "admin" && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => router.push("/admin/users")}>
+              <Users className="mr-2 h-4 w-4" />
+              <span>User Management</span>
+            </DropdownMenuItem>
+          </>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleLogout}>
+          <LogOut className="mr-2 h-4 w-4" />
+          <span>Log out</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}

@@ -35,4 +35,32 @@ export default await Env.create(new URL('../', import.meta.url), {
   |----------------------------------------------------------
   */
   SESSION_DRIVER: Env.schema.enum(['cookie', 'memory'] as const),
+
+  /*
+  |----------------------------------------------------------
+  | Variables for OAuth providers
+  |----------------------------------------------------------
+  */
+  GOOGLE_CLIENT_ID: Env.schema.string.optional(),
+  GOOGLE_CLIENT_SECRET: Env.schema.string.optional(),
+  GOOGLE_CALLBACK_URL: Env.schema.string.optional(),
+
+  GITHUB_CLIENT_ID: Env.schema.string.optional(),
+  GITHUB_CLIENT_SECRET: Env.schema.string.optional(),
+  GITHUB_CALLBACK_URL: Env.schema.string.optional(),
+
+  /*
+  |----------------------------------------------------------
+  | Variables for frontend URL (for redirects)
+  |----------------------------------------------------------
+  */
+  FRONTEND_URL: Env.schema.string(),
+
+  /*
+  |----------------------------------------------------------
+  | Variables for seed users (development only)
+  |----------------------------------------------------------
+  */
+  SEED_ADMIN_PASSWORD: Env.schema.string.optional(),
+  SEED_USER_PASSWORD: Env.schema.string.optional(),
 })

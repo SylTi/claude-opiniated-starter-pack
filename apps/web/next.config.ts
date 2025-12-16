@@ -1,7 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Enable polling for file watching on WSL2 with Windows filesystem
+  webpack: (config) => {
+    config.watchOptions = {
+      poll: 15000,
+      aggregateTimeout: 300,
+    };
+    return config;
+  },
 };
 
 export default nextConfig;
