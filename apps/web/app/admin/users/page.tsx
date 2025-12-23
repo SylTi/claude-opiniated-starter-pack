@@ -21,12 +21,23 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
-import type { AdminUserDTO } from "@saas/shared";
+import {
+  type AdminUserDTO,
+  type SubscriptionTier,
+  SUBSCRIPTION_TIER_LABELS,
+} from "@saas/shared";
 
 export default function AdminUsersPage(): React.ReactElement {
   const router = useRouter();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user } = useAuth();
   const [users, setUsers] = useState<AdminUserDTO[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
@@ -40,8 +51,8 @@ export default function AdminUsersPage(): React.ReactElement {
     } catch (error) {
       if (error instanceof ApiError) {
         toast.error(error.message);
-        if (error.statusCode === 401) {
-          router.push("/login");
+        if (error.statusCode === 401 || error.statusCode === 403) {
+          router.push("/dashboard");
         }
       } else {
         toast.error("Failed to fetch users");
@@ -52,21 +63,8 @@ export default function AdminUsersPage(): React.ReactElement {
   }, [router]);
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login");
-      return;
-    }
-
-    if (user && user.role !== "admin") {
-      toast.error("Access denied. Admin only.");
-      router.push("/dashboard");
-      return;
-    }
-
-    if (user) {
-      fetchUsers();
-    }
-  }, [user, authLoading, router, fetchUsers]);
+    fetchUsers();
+  }, [fetchUsers]);
 
   async function handleVerifyEmail(userId: number): Promise<void> {
     setActionLoading(userId);
@@ -126,6 +124,41 @@ export default function AdminUsersPage(): React.ReactElement {
     }
   }
 
+  async function handleUpdateTier(
+    userId: number,
+    tier: SubscriptionTier,
+  ): Promise<void> {
+    setActionLoading(userId);
+    try {
+      await api.put(`/api/v1/admin/users/${userId}/tier`, {
+        subscriptionTier: tier,
+      });
+      toast.success("Subscription tier updated successfully");
+      fetchUsers();
+    } catch (error) {
+      if (error instanceof ApiError) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to update subscription tier");
+      }
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  function getTierBadgeVariant(
+    tier: SubscriptionTier,
+  ): "default" | "secondary" | "outline" {
+    switch (tier) {
+      case "tier2":
+        return "default";
+      case "tier1":
+        return "secondary";
+      default:
+        return "outline";
+    }
+  }
+
   function formatDate(dateString: string | null): string {
     if (!dateString) return "-";
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -137,20 +170,17 @@ export default function AdminUsersPage(): React.ReactElement {
     });
   }
 
-  if (authLoading || isLoading) {
+  if (isLoading) {
     return (
-      <div className="container mx-auto py-8 px-4">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 w-64 bg-gray-200 rounded" />
-          <div className="h-64 bg-gray-200 rounded" />
-        </div>
+      <div className="animate-pulse space-y-4">
+        <div className="h-8 w-64 bg-gray-200 rounded" />
+        <div className="h-64 bg-gray-200 rounded" />
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <Card>
+    <Card>
         <CardHeader>
           <CardTitle>User Management</CardTitle>
           <CardDescription>
@@ -166,6 +196,7 @@ export default function AdminUsersPage(): React.ReactElement {
                 <TableHead>Email</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Subscription</TableHead>
                 <TableHead>Email Status</TableHead>
                 <TableHead>MFA</TableHead>
                 <TableHead>Created</TableHead>
@@ -176,7 +207,7 @@ export default function AdminUsersPage(): React.ReactElement {
               {users.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={9}
                     className="text-center text-muted-foreground py-8"
                   >
                     No users found
@@ -194,6 +225,34 @@ export default function AdminUsersPage(): React.ReactElement {
                       >
                         {u.role}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Select
+                        value={u.subscriptionTier}
+                        onValueChange={(value: SubscriptionTier) =>
+                          handleUpdateTier(u.id, value)
+                        }
+                        disabled={actionLoading === u.id}
+                      >
+                        <SelectTrigger className="w-[120px]">
+                          <SelectValue>
+                            <Badge variant={getTierBadgeVariant(u.subscriptionTier as SubscriptionTier)}>
+                              {SUBSCRIPTION_TIER_LABELS[u.subscriptionTier as SubscriptionTier]}
+                            </Badge>
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="free">
+                            <Badge variant="outline">Free</Badge>
+                          </SelectItem>
+                          <SelectItem value="tier1">
+                            <Badge variant="secondary">Tier 1</Badge>
+                          </SelectItem>
+                          <SelectItem value="tier2">
+                            <Badge variant="default">Tier 2</Badge>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell>
                       {u.emailVerified ? (
@@ -255,7 +314,6 @@ export default function AdminUsersPage(): React.ReactElement {
             </TableBody>
           </Table>
         </CardContent>
-      </Card>
-    </div>
+    </Card>
   );
 }

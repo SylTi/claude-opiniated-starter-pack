@@ -9,6 +9,9 @@
     "build": "node ace build",
     "dev": "CHOKIDAR_USEPOLLING=true CHOKIDAR_INTERVAL=15000 node ace serve --hmr",
     "test": "node ace test",
+    "test:coverage": "c8 node ace test",
+    "test:coverage:unit": "c8 node ace test unit",
+    "test:coverage:functional": "c8 node ace test functional",
     "lint": "eslint .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit"
@@ -45,6 +48,7 @@
     "@types/node": "^22.15.18",
     "@types/qrcode": "^1.5.6",
     "@types/supertest": "^6.0.3",
+    "c8": "^10.1.3",
     "eslint": "^9.26.0",
     "hot-hook": "^0.4.0",
     "pino-pretty": "^13.0.0",
@@ -66,7 +70,8 @@
     "otplib": "^12.0.1",
     "pg": "^8.16.3",
     "qrcode": "^1.5.4",
-    "reflect-metadata": "^0.2.2"
+    "reflect-metadata": "^0.2.2",
+    "resend": "^6.6.0"
   },
   "hotHook": {
     "boundaries": [
@@ -74,5 +79,11 @@
       "./app/middleware/*.ts"
     ]
   },
-  "prettier": "@adonisjs/prettier-config"
+  "prettier": "@adonisjs/prettier-config",
+  "c8": {
+    "include": ["app/**/*.ts"],
+    "exclude": ["app/**/*.spec.ts", "tests/**/*"],
+    "reporter": ["text", "html", "lcov"],
+    "report-dir": "coverage"
+  }
 }

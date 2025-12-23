@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { Header } from "@/components/header";
-import type { UserDTO } from "@saas/shared";
+import type { UserDTO, SubscriptionTierDTO } from "@saas/shared";
 
 // Mock next/navigation
 vi.mock("next/navigation", () => ({
@@ -15,6 +15,20 @@ const mockUseAuth = vi.fn();
 vi.mock("@/contexts/auth-context", () => ({
   useAuth: () => mockUseAuth(),
 }));
+
+function createMockTier(slug: string, level: number): SubscriptionTierDTO {
+  return {
+    id: level + 1,
+    slug,
+    name: slug === "free" ? "Free" : slug === "tier1" ? "Tier 1" : "Tier 2",
+    level,
+    maxTeamMembers: slug === "free" ? 5 : slug === "tier1" ? 20 : null,
+    priceMonthly: null,
+    yearlyDiscountPercent: null,
+    features: null,
+    isActive: true,
+  };
+}
 
 describe("Header Component", () => {
   beforeEach(() => {
@@ -86,6 +100,9 @@ describe("Header Component", () => {
       email: "user@example.com",
       fullName: "Regular User",
       role: "user",
+      currentTeamId: null,
+      currentTeam: null,
+      effectiveSubscriptionTier: createMockTier("free", 0),
       emailVerified: true,
       mfaEnabled: false,
       avatarUrl: null,
@@ -135,6 +152,9 @@ describe("Header Component", () => {
       email: "admin@example.com",
       fullName: "Admin User",
       role: "admin",
+      currentTeamId: null,
+      currentTeam: null,
+      effectiveSubscriptionTier: createMockTier("free", 0),
       emailVerified: true,
       mfaEnabled: false,
       avatarUrl: null,
@@ -175,6 +195,9 @@ describe("Header Component", () => {
       email: "guest@example.com",
       fullName: "Guest User",
       role: "guest",
+      currentTeamId: null,
+      currentTeam: null,
+      effectiveSubscriptionTier: createMockTier("free", 0),
       emailVerified: false,
       mfaEnabled: false,
       avatarUrl: null,

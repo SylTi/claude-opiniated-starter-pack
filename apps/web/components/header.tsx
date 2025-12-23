@@ -24,7 +24,7 @@ export function Header(): React.ReactElement {
                 <Button variant="ghost">Dashboard</Button>
               </Link>
               {user.role === "admin" && (
-                <Link href="/admin/users">
+                <Link href="/admin/dashboard">
                   <Button variant="ghost">Admin</Button>
                 </Link>
               )}

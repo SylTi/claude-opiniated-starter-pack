@@ -159,6 +159,24 @@ docker-compose down postgres-test
 
 Voir [Testing Database Guide](./docs/testing-database.md) pour les détails complets.
 
+**Commandes pour lancer les tests et le coverage**
+#### Resets test database
+pnpm run docker:test:reset
+
+#### Tests unitaires API
+cd apps/api && node ace test unit
+
+#### Tests fonctionnels API (nécessite Docker)
+pnpm run docker:test:up
+cd apps/api && node ace test functional
+
+#### Tous les tests
+pnpm test
+
+#### Coverage
+cd apps/api && node ace test --coverage
+
+
 ## Commandes Utiles
 
 ### Monorepo

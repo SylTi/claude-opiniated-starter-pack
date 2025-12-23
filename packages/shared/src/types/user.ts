@@ -1,3 +1,5 @@
+import type { SubscriptionTierDTO, SubscriptionDTO } from "./subscription.js";
+
 export type UserRole = "admin" | "user" | "guest";
 
 export interface UserDTO {
@@ -5,6 +7,18 @@ export interface UserDTO {
   email: string;
   fullName: string | null;
   role: UserRole;
+  // Active subscription (may be null if using team subscription)
+  subscription?: SubscriptionDTO | null;
+  // Team info
+  currentTeamId: number | null;
+  currentTeam?: {
+    id: number;
+    name: string;
+    slug: string;
+    subscription?: SubscriptionDTO | null;
+  } | null;
+  // Effective subscription tier (team's if in team, personal otherwise)
+  effectiveSubscriptionTier: SubscriptionTierDTO;
   emailVerified: boolean;
   mfaEnabled: boolean;
   avatarUrl: string | null;
@@ -69,10 +83,19 @@ export interface AdminUserDTO {
   email: string;
   fullName: string | null;
   role: UserRole;
+  subscriptionTier: string;
+  subscriptionExpiresAt: string | null;
+  currentTeamId: number | null;
+  currentTeamName: string | null;
   emailVerified: boolean;
   emailVerifiedAt: string | null;
   mfaEnabled: boolean;
   avatarUrl: string | null;
   createdAt: string;
   updatedAt: string | null;
+}
+
+export interface UpdateUserTierDTO {
+  subscriptionTier: string;
+  subscriptionExpiresAt?: string | null;
 }

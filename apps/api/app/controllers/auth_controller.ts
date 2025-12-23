@@ -8,9 +8,13 @@ import {
   changePasswordValidator,
 } from '#validators/auth'
 import AuthService from '#services/auth_service'
+import MailService from '#services/mail_service'
+import TeamInvitation from '#models/team_invitation'
+import TeamMember from '#models/team_member'
 
 export default class AuthController {
   private authService = new AuthService()
+  private mailService = new MailService()
 
   /**
    * Register a new user
@@ -18,6 +22,7 @@ export default class AuthController {
    */
   async register({ request, response }: HttpContext): Promise<void> {
     const data = await request.validateUsing(registerValidator)
+    const invitationToken = request.input('invitationToken')
 
     // Check if email already exists
     const existingUser = await this.authService.findByEmail(data.email)
@@ -29,10 +34,85 @@ export default class AuthController {
       return
     }
 
-    const user = await this.authService.register(data)
+    // Check for valid invitation if token is provided
+    let invitation: TeamInvitation | null = null
+    if (invitationToken) {
+      invitation = await TeamInvitation.query()
+        .where('token', invitationToken)
+        .preload('team', (query) => {
+          query.preload('members')
+        })
+        .first()
 
-    // TODO: Send verification email when email service is ready
-    // For now, we just return success
+      if (!invitation) {
+        response.badRequest({
+          error: 'InvalidInvitation',
+          message: 'Invalid invitation token',
+        })
+        return
+      }
+
+      if (!invitation.isValid()) {
+        response.badRequest({
+          error: 'InvalidInvitation',
+          message: invitation.isExpired()
+            ? 'This invitation has expired'
+            : `This invitation has been ${invitation.status}`,
+        })
+        return
+      }
+
+      // Verify email matches invitation
+      if (invitation.email.toLowerCase() !== data.email.toLowerCase()) {
+        response.badRequest({
+          error: 'EmailMismatch',
+          message: 'Your email does not match the invitation email',
+        })
+        return
+      }
+
+      // Check team member limit
+      if (!(await invitation.team.canAddMember(invitation.team.members.length))) {
+        response.badRequest({
+          error: 'LimitReached',
+          message: 'This team has reached its member limit',
+        })
+        return
+      }
+    }
+
+    const { user, verificationToken } = await this.authService.register(data)
+
+    // Auto-join team if there's a valid invitation
+    let joinedTeam = null
+    if (invitation) {
+      // Add user to team
+      await TeamMember.create({
+        userId: user.id,
+        teamId: invitation.teamId,
+        role: invitation.role,
+      })
+
+      // Update user's current team
+      user.currentTeamId = invitation.teamId
+      await user.save()
+
+      // Mark invitation as accepted
+      invitation.status = 'accepted'
+      await invitation.save()
+
+      joinedTeam = {
+        id: invitation.team.id,
+        name: invitation.team.name,
+        slug: invitation.team.slug,
+        role: invitation.role,
+      }
+    }
+
+    // Send verification email (non-blocking, don't fail registration if email fails)
+    this.mailService
+      .sendVerificationEmail(user.email, verificationToken, user.fullName ?? undefined)
+      .catch((err) => console.error('Failed to send verification email:', err))
 
     response.created({
       data: {
@@ -40,9 +120,13 @@ export default class AuthController {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        currentTeamId: user.currentTeamId,
+        joinedTeam,
         emailVerified: user.emailVerified,
       },
-      message: 'Registration successful. Please check your email to verify your account.',
+      message: joinedTeam
+        ? `Registration successful. You have been added to team "${joinedTeam.name}".`
+        : 'Registration successful. Please check your email to verify your account.',
     })
   }
 
@@ -103,12 +187,25 @@ export default class AuthController {
         userAgent
       )
 
+      // Load current team if exists
+      if (user.currentTeamId) {
+        await user.load('currentTeam')
+      }
+
       response.ok({
         data: {
           id: user.id,
           email: user.email,
           fullName: user.fullName,
           role: user.role,
+          currentTeamId: user.currentTeamId,
+          currentTeam: user.currentTeam
+            ? {
+                id: user.currentTeam.id,
+                name: user.currentTeam.name,
+                slug: user.currentTeam.slug,
+              }
+            : null,
           emailVerified: user.emailVerified,
           mfaEnabled: user.mfaEnabled,
           avatarUrl: user.avatarUrl,
@@ -154,12 +251,25 @@ export default class AuthController {
   async me({ response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
 
+    // Load current team if exists
+    if (user.currentTeamId) {
+      await user.load('currentTeam')
+    }
+
     response.ok({
       data: {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        currentTeamId: user.currentTeamId,
+        currentTeam: user.currentTeam
+          ? {
+              id: user.currentTeam.id,
+              name: user.currentTeam.name,
+              slug: user.currentTeam.slug,
+            }
+          : null,
         emailVerified: user.emailVerified,
         mfaEnabled: user.mfaEnabled,
         avatarUrl: user.avatarUrl,
@@ -180,8 +290,10 @@ export default class AuthController {
     // Always return success to prevent email enumeration
     if (user) {
       const token = await this.authService.createPasswordResetToken(user)
-      // TODO: Send password reset email when email service is ready
-      console.log(`Password reset token for ${email}: ${token}`)
+      // Send password reset email (non-blocking)
+      this.mailService
+        .sendPasswordResetEmail(user.email, token, user.fullName ?? undefined)
+        .catch((err) => console.error('Failed to send password reset email:', err))
     }
 
     response.ok({
@@ -249,8 +361,10 @@ export default class AuthController {
     }
 
     const token = await this.authService.createEmailVerificationToken(user)
-    // TODO: Send verification email when email service is ready
-    console.log(`Verification token for ${user.email}: ${token}`)
+    // Send verification email (non-blocking)
+    this.mailService
+      .sendVerificationEmail(user.email, token, user.fullName ?? undefined)
+      .catch((err) => console.error('Failed to send verification email:', err))
 
     response.ok({
       message: 'Verification email has been sent',

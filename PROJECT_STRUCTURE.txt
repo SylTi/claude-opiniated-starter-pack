@@ -1,100 +1,291 @@
 .
-./.claude
-./.claude/settings.local.json
-./.git
-./.git/branches
-./.git/config
-./.git/description
-./.git/HEAD
-./.git/hooks
-./.git/hooks/applypatch-msg.sample
-./.git/hooks/commit-msg.sample
-./.git/hooks/fsmonitor-watchman.sample
-./.git/hooks/post-update.sample
-./.git/hooks/pre-applypatch.sample
-./.git/hooks/pre-commit.sample
-./.git/hooks/pre-merge-commit.sample
-./.git/hooks/pre-push.sample
-./.git/hooks/pre-rebase.sample
-./.git/hooks/pre-receive.sample
-./.git/hooks/prepare-commit-msg.sample
-./.git/hooks/push-to-checkout.sample
-./.git/hooks/sendemail-validate.sample
-./.git/hooks/update.sample
-./.git/info
-./.git/info/exclude
-./.git/objects
-./.git/objects/info
-./.git/objects/pack
-./.git/refs
-./.git/refs/heads
-./.git/refs/tags
-./.gitignore
-./apps
-./apps/api
-./apps/api/.editorconfig
-./apps/api/.env
-./apps/api/.env.example
-./apps/api/.gitignore
-./apps/api/ace.js
-./apps/api/adonisrc.ts
-./apps/api/app
-./apps/api/app/controllers
-./apps/api/app/controllers/users_controller.ts
-./apps/api/app/exceptions
-./apps/api/app/exceptions/handler.ts
-./apps/api/app/middleware
-./apps/api/app/middleware/auth_middleware.ts
-./apps/api/app/middleware/container_bindings_middleware.ts
-./apps/api/app/middleware/force_json_response_middleware.ts
-./apps/api/app/middleware/guest_middleware.ts
-./apps/api/app/middleware/silent_auth_middleware.ts
-./apps/api/app/models
-./apps/api/app/models/user.ts
-./apps/api/bin
-./apps/api/bin/console.ts
-./apps/api/bin/server.ts
-./apps/api/bin/test.ts
-./apps/api/config
-./apps/api/config/app.ts
-./apps/api/config/auth.ts
-./apps/api/config/bodyparser.ts
-./apps/api/config/cors.ts
-./apps/api/config/database.ts
-./apps/api/config/hash.ts
-./apps/api/config/logger.ts
-./apps/api/config/session.ts
-./apps/api/database
-./apps/api/database/migrations
-./apps/api/database/migrations/1765740372222_create_users_table.ts
-./apps/api/eslint.config.js
-./apps/api/package.json
-./apps/api/start
-./apps/api/start/env.ts
-./apps/api/start/kernel.ts
-./apps/api/start/routes.ts
-./apps/api/tests
-./apps/api/tests/bootstrap.ts
-./apps/api/tests/functional
-./apps/api/tests/functional/users.spec.ts
-./apps/api/tests/unit
-./apps/api/tests/unit/user.spec.ts
-./apps/api/tsconfig.json
-./apps/web
-./apps/web/.gitignore
-./apps/web/app
-./apps/web/app/dashboard
-./apps/web/app/dashboard/page.tsx
-./apps/web/app/favicon.ico
-./apps/web/app/globals.css
-./apps/web/app/layout.tsx
-./apps/web/app/page.tsx
-./apps/web/components
-./apps/web/components/ui
-./apps/web/components/ui/button.tsx
-./apps/web/components/ui/card.tsx
-./apps/web/components.json
-./apps/web/eslint.config.mjs
-./apps/web/lib
-./apps/web/lib/utils.ts
-./apps/web/package.json
+├── .claude
+│   ├── scripts
+│   │   └── context-monitor.py
+│   └── settings.local.json
+├── .github
+│   └── workflows
+│       └── ci.yml
+├── .gitignore
+├── .husky
+│   ├── _
+│   │   ├── .gitignore
+│   │   ├── applypatch-msg
+│   │   ├── commit-msg
+│   │   ├── h
+│   │   ├── husky.sh
+│   │   ├── post-applypatch
+│   │   ├── post-checkout
+│   │   ├── post-commit
+│   │   ├── post-merge
+│   │   ├── post-rewrite
+│   │   ├── pre-applypatch
+│   │   ├── pre-auto-gc
+│   │   ├── pre-commit
+│   │   ├── pre-merge-commit
+│   │   ├── pre-push
+│   │   ├── pre-rebase
+│   │   └── prepare-commit-msg
+│   └── pre-commit
+├── CLAUDE.md
+├── DOCKER-TESTING.md
+├── PROJECT_STRUCTURE.md
+├── PROJECT_STRUCTURE.txt
+├── PROMPT-PAYMENT-PROVIDER.md
+├── README.md
+├── TODO.md
+├── api.md
+├── apps
+│   ├── api
+│   │   ├── .editorconfig
+│   │   ├── .env
+│   │   ├── .env.example
+│   │   ├── .env.test
+│   │   ├── .gitignore
+│   │   ├── ace.js
+│   │   ├── adonisrc.ts
+│   │   ├── app
+│   │   │   ├── abilities
+│   │   │   │   └── main.ts
+│   │   │   ├── controllers
+│   │   │   │   ├── admin_controller.ts
+│   │   │   │   ├── auth_controller.ts
+│   │   │   │   ├── dashboard_controller.ts
+│   │   │   │   ├── mfa_controller.ts
+│   │   │   │   ├── oauth_controller.ts
+│   │   │   │   ├── teams_controller.ts
+│   │   │   │   └── users_controller.ts
+│   │   │   ├── exceptions
+│   │   │   │   └── handler.ts
+│   │   │   ├── middleware
+│   │   │   │   ├── admin_middleware.ts
+│   │   │   │   ├── auth_middleware.ts
+│   │   │   │   ├── container_bindings_middleware.ts
+│   │   │   │   ├── force_json_response_middleware.ts
+│   │   │   │   ├── guest_middleware.ts
+│   │   │   │   ├── initialize_bouncer_middleware.ts
+│   │   │   │   └── silent_auth_middleware.ts
+│   │   │   ├── models
+│   │   │   │   ├── email_verification_token.ts
+│   │   │   │   ├── login_history.ts
+│   │   │   │   ├── oauth_account.ts
+│   │   │   │   ├── password_reset_token.ts
+│   │   │   │   ├── team.ts
+│   │   │   │   ├── team_invitation.ts
+│   │   │   │   ├── team_member.ts
+│   │   │   │   └── user.ts
+│   │   │   ├── policies
+│   │   │   │   └── main.ts
+│   │   │   ├── services
+│   │   │   │   ├── auth_service.ts
+│   │   │   │   ├── mail_service.ts
+│   │   │   │   ├── mfa_service.ts
+│   │   │   │   └── subscription_service.ts
+│   │   │   └── validators
+│   │   │       └── auth.ts
+│   │   ├── bin
+│   │   │   ├── console.ts
+│   │   │   ├── server.ts
+│   │   │   └── test.ts
+│   │   ├── commands
+│   │   │   └── check_expired_subscriptions.ts
+│   │   ├── config
+│   │   │   ├── ally.ts
+│   │   │   ├── app.ts
+│   │   │   ├── auth.ts
+│   │   │   ├── bodyparser.ts
+│   │   │   ├── cors.ts
+│   │   │   ├── database.ts
+│   │   │   ├── hash.ts
+│   │   │   ├── logger.ts
+│   │   │   └── session.ts
+│   │   ├── database
+│   │   │   ├── migrations
+│   │   │   │   ├── 1765740372222_create_users_table.ts
+│   │   │   │   ├── 1765740372223_add_auth_fields_to_users_table.ts
+│   │   │   │   ├── 1765740372224_create_oauth_accounts_table.ts
+│   │   │   │   ├── 1765740372225_create_password_reset_tokens_table.ts
+│   │   │   │   ├── 1765740372226_create_email_verification_tokens_table.ts
+│   │   │   │   ├── 1765740372227_create_login_history_table.ts
+│   │   │   │   ├── 1765740372228_add_subscription_tier_to_users_table.ts
+│   │   │   │   ├── 1765740372229_add_subscription_expires_at_to_users_table.ts
+│   │   │   │   ├── 1765740372230_create_teams_table.ts
+│   │   │   │   ├── 1765740372231_create_team_members_table.ts
+│   │   │   │   ├── 1765740372232_add_current_team_to_users.ts
+│   │   │   │   ├── 1765740372233_add_max_members_to_teams.ts
+│   │   │   │   └── 1765740372234_create_team_invitations_table.ts
+│   │   │   └── seeders
+│   │   │       └── admin_user_seeder.ts
+│   │   ├── eslint.config.js
+│   │   ├── package.json
+│   │   ├── start
+│   │   │   ├── env.ts
+│   │   │   ├── kernel.ts
+│   │   │   └── routes.ts
+│   │   ├── tests
+│   │   │   ├── README.md
+│   │   │   ├── bootstrap.ts
+│   │   │   ├── functional
+│   │   │   │   ├── auth.spec.ts
+│   │   │   │   ├── teams.spec.ts
+│   │   │   │   ├── users.spec.ts
+│   │   │   │   └── users_supertest.spec.ts
+│   │   │   └── unit
+│   │   │       ├── abilities.spec.ts
+│   │   │       ├── auth_service.spec.ts
+│   │   │       ├── mail_service.spec.ts
+│   │   │       ├── team.spec.ts
+│   │   │       ├── team_invitation.spec.ts
+│   │   │       ├── user.spec.ts
+│   │   │       └── user_service.spec.ts
+│   │   └── tsconfig.json
+│   └── web
+│       ├── .gitignore
+│       ├── README.md
+│       ├── app
+│       │   ├── (auth)
+│       │   │   ├── forgot-password
+│       │   │   │   └── page.tsx
+│       │   │   ├── layout.tsx
+│       │   │   ├── login
+│       │   │   │   └── page.tsx
+│       │   │   ├── register
+│       │   │   │   └── page.tsx
+│       │   │   └── reset-password
+│       │   │       └── page.tsx
+│       │   ├── admin
+│       │   │   ├── dashboard
+│       │   │   │   └── page.tsx
+│       │   │   ├── layout.tsx
+│       │   │   └── users
+│       │   │       └── page.tsx
+│       │   ├── auth
+│       │   │   └── callback
+│       │   │       └── page.tsx
+│       │   ├── dashboard
+│       │   │   └── page.tsx
+│       │   ├── favicon.ico
+│       │   ├── globals.css
+│       │   ├── layout.tsx
+│       │   ├── page.tsx
+│       │   ├── profile
+│       │   │   ├── layout.tsx
+│       │   │   ├── page.tsx
+│       │   │   ├── security
+│       │   │   │   └── page.tsx
+│       │   │   └── settings
+│       │   │       └── page.tsx
+│       │   └── team
+│       │       └── page.tsx
+│       ├── components
+│       │   ├── header.tsx
+│       │   ├── ui
+│       │   │   ├── alert-dialog.tsx
+│       │   │   ├── alert.tsx
+│       │   │   ├── avatar.tsx
+│       │   │   ├── badge.tsx
+│       │   │   ├── button.tsx
+│       │   │   ├── card.tsx
+│       │   │   ├── dropdown-menu.tsx
+│       │   │   ├── form.tsx
+│       │   │   ├── input.tsx
+│       │   │   ├── label.tsx
+│       │   │   ├── select.tsx
+│       │   │   ├── separator.tsx
+│       │   │   ├── sonner.tsx
+│       │   │   └── table.tsx
+│       │   └── user-menu.tsx
+│       ├── components.json
+│       ├── contexts
+│       │   └── auth-context.tsx
+│       ├── eslint.config.mjs
+│       ├── lib
+│       │   ├── api.ts
+│       │   ├── auth.ts
+│       │   ├── utils.ts
+│       │   └── validations.ts
+│       ├── next-env.d.ts
+│       ├── next.config.ts
+│       ├── package.json
+│       ├── postcss.config.mjs
+│       ├── public
+│       │   ├── file.svg
+│       │   ├── globe.svg
+│       │   ├── next.svg
+│       │   ├── vercel.svg
+│       │   └── window.svg
+│       ├── tests
+│       │   ├── README.md
+│       │   ├── components
+│       │   │   ├── button.test.tsx
+│       │   │   ├── header.test.tsx
+│       │   │   └── user-menu.test.tsx
+│       │   ├── contexts
+│       │   │   └── auth-context.test.tsx
+│       │   ├── lib
+│       │   │   ├── api.test.ts
+│       │   │   ├── auth.test.ts
+│       │   │   └── validations.test.ts
+│       │   ├── pages
+│       │   │   ├── admin
+│       │   │   │   ├── dashboard.test.tsx
+│       │   │   │   ├── layout.test.tsx
+│       │   │   │   └── users.test.tsx
+│       │   │   ├── auth
+│       │   │   │   ├── callback.test.tsx
+│       │   │   │   ├── forgot-password.test.tsx
+│       │   │   │   ├── login.test.tsx
+│       │   │   │   ├── register.test.tsx
+│       │   │   │   └── reset-password.test.tsx
+│       │   │   ├── dashboard.test.tsx
+│       │   │   ├── home.test.tsx
+│       │   │   ├── profile
+│       │   │   │   ├── layout.test.tsx
+│       │   │   │   ├── page.test.tsx
+│       │   │   │   ├── security.test.tsx
+│       │   │   │   └── settings.test.tsx
+│       │   │   └── team.test.tsx
+│       │   ├── setup.ts
+│       │   └── vitest.d.ts
+│       ├── tsconfig.json
+│       ├── tsconfig.tsbuildinfo
+│       └── vitest.config.ts
+├── docker-compose.yml
+├── docs
+│   ├── architecture.md
+│   ├── conventions.md
+│   ├── testing-database.md
+│   ├── testing-setup.md
+│   └── testing.md
+├── infra
+│   └── supabase
+│       ├── README.md
+│       ├── migrations
+│       │   └── 001_create_users_table.sql
+│       └── seed.sql
+├── package-lock.json
+├── package.json
+├── packages
+│   ├── config
+│   │   ├── eslint.base.js
+│   │   ├── package.json
+│   │   └── tsconfig.base.json
+│   └── shared
+│       ├── package.json
+│       ├── src
+│       │   ├── index.ts
+│       │   └── types
+│       │       ├── api.ts
+│       │       ├── auth.ts
+│       │       ├── team.ts
+│       │       └── user.ts
+│       └── tsconfig.json
+├── pnpm-lock.yaml
+├── pnpm-workspace.yaml
+├── prompts-used
+│   ├── PROMPT-AUTH.md
+│   └── PROMPT.md
+└── scripts
+    └── test-setup.sh
+
+69 directories, 220 files

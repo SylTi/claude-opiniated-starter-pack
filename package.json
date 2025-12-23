@@ -17,7 +17,9 @@
     "web:build": "pnpm --filter web run build",
     "api:build": "pnpm --filter api run build",
     "web:test": "pnpm --filter web run test",
+    "web:test:coverage": "pnpm --filter web run test:coverage",
     "api:test": "pnpm --filter api run test",
+    "api:test:coverage": "pnpm --filter api run test:coverage",
     "prepare": "husky"
   },
   "devDependencies": {

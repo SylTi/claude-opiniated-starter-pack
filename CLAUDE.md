@@ -362,3 +362,8 @@ pnpm -r run dev                        # Run in all workspaces recursively
 pnpm -r --parallel run dev             # Run in parallel
 ```
 - toujours utiliser pnpm a la place de npm
+- toujours ajouter a API.md quand on modifie ou ajoute une route.
+- toujours verifier API.md quand on doit ajouter une nouvelle fonctionnalité qui depend de l'existant pour eviter de faire des lectures inutiles dans les fichiers.
+- ne jamais lancer les tests quand on fini une nouvelle fonctionnalité, mais toujours demander a l'utilisateur de le faire en lui affichants les commandes. Pareil pour le coverage.
+- chaque fonctionnalité et element UX doit avoir son test unitaire/fonctionnel/etc qui valide son fonctionnement. 
+- n'ecris jamais de placeholder tests, ecris directement les vrais tests.

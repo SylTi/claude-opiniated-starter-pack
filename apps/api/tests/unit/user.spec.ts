@@ -1,10 +1,18 @@
 import { test } from '@japa/runner'
+import { DateTime } from 'luxon'
 import User from '#models/user'
-import testUtils from '@adonisjs/core/services/test_utils'
+import Team from '#models/team'
+import Subscription from '#models/subscription'
+import SubscriptionTier from '#models/subscription_tier'
+import { truncateAllTables } from '../bootstrap.js'
+
+function uniqueId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 8)
+}
 
 test.group('User Model', (group) => {
   group.each.setup(async () => {
-    await testUtils.db().truncate()
+    await truncateAllTables()
   })
 
   test('can create a user', async ({ assert }) => {
@@ -148,5 +156,280 @@ test.group('User Model', (group) => {
     assert.isTrue(admin.hasRole('admin'))
     assert.isFalse(user.isAdmin())
     assert.isTrue(user.hasRole('user'))
+  })
+
+  test('isTeamMember returns true when user has currentTeamId', async ({ assert }) => {
+    const id = uniqueId()
+    const owner = await User.create({
+      email: `owner-${id}@example.com`,
+      password: 'password123',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+    })
+
+    const team = await Team.create({
+      name: 'Test Team',
+      slug: `test-team-${id}`,
+      ownerId: owner.id,
+    })
+
+    const user = await User.create({
+      email: `team-member-${id}@example.com`,
+      password: 'password123',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+      currentTeamId: team.id,
+    })
+
+    assert.isTrue(user.isTeamMember())
+  })
+
+  test('isTeamMember returns false when currentTeamId is null', async ({ assert }) => {
+    const user = await User.create({
+      email: 'no-team@example.com',
+      password: 'password123',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+      currentTeamId: null,
+    })
+
+    assert.isFalse(user.isTeamMember())
+  })
+
+  test('getMfaBackupCodes returns empty array when no codes set', async ({ assert }) => {
+    const user = await User.create({
+      email: 'no-mfa@example.com',
+      password: 'password123',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+      mfaBackupCodes: null,
+    })
+
+    const codes = user.getMfaBackupCodes()
+    assert.isArray(codes)
+    assert.lengthOf(codes, 0)
+  })
+
+  test('getMfaBackupCodes returns parsed codes when set', async ({ assert }) => {
+    const backupCodes = ['code1', 'code2', 'code3']
+    const user = await User.create({
+      email: 'mfa-codes@example.com',
+      password: 'password123',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: true,
+      mfaBackupCodes: JSON.stringify(backupCodes),
+    })
+
+    const codes = user.getMfaBackupCodes()
+    assert.deepEqual(codes, backupCodes)
+  })
+
+  test('getMfaBackupCodes returns empty array for invalid JSON', async ({ assert }) => {
+    const user = await User.create({
+      email: 'invalid-json@example.com',
+      password: 'password123',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: true,
+      mfaBackupCodes: 'invalid-json-string',
+    })
+
+    const codes = user.getMfaBackupCodes()
+    assert.isArray(codes)
+    assert.lengthOf(codes, 0)
+  })
+
+  test('setMfaBackupCodes stores codes as JSON string', async ({ assert }) => {
+    const user = await User.create({
+      email: 'set-mfa@example.com',
+      password: 'password123',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: true,
+    })
+
+    const backupCodes = ['backup1', 'backup2', 'backup3']
+    user.setMfaBackupCodes(backupCodes)
+
+    assert.equal(user.mfaBackupCodes, JSON.stringify(backupCodes))
+
+    const retrievedCodes = user.getMfaBackupCodes()
+    assert.deepEqual(retrievedCodes, backupCodes)
+  })
+
+  test('getSubscriptionTier returns free tier when no subscription', async ({ assert }) => {
+    const user = await User.create({
+      email: 'no-sub@example.com',
+      password: 'password123',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+    })
+
+    const tier = await user.getSubscriptionTier()
+    assert.equal(tier.slug, 'free')
+  })
+
+  test('getSubscriptionTier returns correct tier when subscription exists', async ({ assert }) => {
+    const id = uniqueId()
+    const user = await User.create({
+      email: `tier1-user-${id}@example.com`,
+      password: 'password123',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+    })
+
+    const tier1 = await SubscriptionTier.findBySlugOrFail('tier1')
+    await Subscription.createForUser(user.id, tier1.id)
+
+    const tier = await user.getSubscriptionTier()
+    assert.equal(tier.slug, 'tier1')
+  })
+
+  test('hasAccessToTier returns correct values', async ({ assert }) => {
+    const id = uniqueId()
+    const user = await User.create({
+      email: `tier1-access-${id}@example.com`,
+      password: 'password123',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+    })
+
+    const tier1 = await SubscriptionTier.findBySlugOrFail('tier1')
+    await Subscription.createForUser(user.id, tier1.id)
+
+    const freeTier = await SubscriptionTier.findBySlugOrFail('free')
+    const tier2 = await SubscriptionTier.findBySlugOrFail('tier2')
+
+    assert.isTrue(await user.hasAccessToTier(freeTier))
+    assert.isTrue(await user.hasAccessToTier(tier1))
+    assert.isFalse(await user.hasAccessToTier(tier2))
+  })
+
+  test('isSubscriptionExpired returns false when no subscription', async ({ assert }) => {
+    const user = await User.create({
+      email: 'no-sub-expired@example.com',
+      password: 'password123',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+    })
+
+    const isExpired = await user.isSubscriptionExpired()
+    assert.isFalse(isExpired)
+  })
+
+  test('isSubscriptionExpired returns true for expired subscription', async ({ assert }) => {
+    const id = uniqueId()
+    const user = await User.create({
+      email: `expired-${id}@example.com`,
+      password: 'password123',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+    })
+
+    const tier1 = await SubscriptionTier.findBySlugOrFail('tier1')
+    const expiresAt = DateTime.now().minus({ days: 1 })
+    await Subscription.createForUser(user.id, tier1.id, expiresAt)
+
+    const isExpired = await user.isSubscriptionExpired()
+    assert.isTrue(isExpired)
+  })
+
+  test('isSubscriptionExpired returns false for active subscription', async ({ assert }) => {
+    const id = uniqueId()
+    const user = await User.create({
+      email: `active-${id}@example.com`,
+      password: 'password123',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+    })
+
+    const tier1 = await SubscriptionTier.findBySlugOrFail('tier1')
+    const expiresAt = DateTime.now().plus({ days: 30 })
+    await Subscription.createForUser(user.id, tier1.id, expiresAt)
+
+    const isExpired = await user.isSubscriptionExpired()
+    assert.isFalse(isExpired)
+  })
+
+  test('getEffectiveSubscriptionTier uses team subscription when in team', async ({ assert }) => {
+    const id = uniqueId()
+    const owner = await User.create({
+      email: `owner-${id}@example.com`,
+      password: 'password123',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+    })
+
+    const team = await Team.create({
+      name: 'Test Team',
+      slug: `test-team-${id}`,
+      ownerId: owner.id,
+    })
+
+    // Give team tier2 subscription
+    const tier2 = await SubscriptionTier.findBySlugOrFail('tier2')
+    await Subscription.createForTeam(team.id, tier2.id)
+
+    const user = await User.create({
+      email: `member-${id}@example.com`,
+      password: 'password123',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+      currentTeamId: team.id,
+    })
+
+    // User has no personal subscription but is in a team with tier2
+    const effectiveTier = await user.getEffectiveSubscriptionTier()
+    assert.equal(effectiveTier.slug, 'tier2')
+  })
+
+  test('getEffectiveSubscriptionTier falls back to personal when team subscription expired', async ({
+    assert,
+  }) => {
+    const id = uniqueId()
+    const owner = await User.create({
+      email: `owner-${id}@example.com`,
+      password: 'password123',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+    })
+
+    const team = await Team.create({
+      name: 'Test Team',
+      slug: `test-team-${id}`,
+      ownerId: owner.id,
+    })
+
+    // Give team expired tier1 subscription
+    const tier1 = await SubscriptionTier.findBySlugOrFail('tier1')
+    const expiresAt = DateTime.now().minus({ days: 1 })
+    await Subscription.createForTeam(team.id, tier1.id, expiresAt)
+
+    const user = await User.create({
+      email: `member-${id}@example.com`,
+      password: 'password123',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+      currentTeamId: team.id,
+    })
+
+    // User has no personal subscription, team's is expired -> should get free
+    const effectiveTier = await user.getEffectiveSubscriptionTier()
+    assert.equal(effectiveTier.slug, 'free')
   })
 })

@@ -3,102 +3,300 @@
 ## Arborescence Générale
 
 ```
+```
 saas-monorepo/
-├── apps/
-│   ├── web/                          # Frontend Next.js
-│   │   ├── app/
-│   │   │   ├── layout.tsx            # Layout principal
-│   │   │   ├── page.tsx              # Page d'accueil
-│   │   │   ├── globals.css           # Styles globaux
-│   │   │   └── dashboard/
-│   │   │       └── page.tsx          # Page dashboard (exemple)
-│   │   ├── components/
-│   │   │   └── ui/                   # Composants shadcn/ui
-│   │   │       ├── button.tsx
-│   │   │       └── card.tsx
-│   │   ├── lib/
-│   │   │   └── utils.ts              # Utilitaires (cn, etc.)
-│   │   ├── tests/
-│   │   │   ├── setup.ts              # Configuration Vitest
-│   │   │   ├── components/
-│   │   │   │   └── button.test.tsx   # Tests composants
-│   │   │   └── pages/
-│   │   │       └── dashboard.test.tsx # Tests pages
-│   │   ├── public/                   # Assets statiques
-│   │   ├── package.json              # Config Next.js
-│   │   ├── vitest.config.ts          # Config Vitest
-│   │   ├── tsconfig.json             # Config TypeScript
-│   │   ├── next.config.ts            # Config Next.js
-│   │   ├── tailwind.config.ts        # Config Tailwind
-│   │   └── components.json           # Config shadcn/ui
-│   │
-│   └── api/                          # Backend AdonisJS
-│       ├── app/
-│       │   ├── controllers/
-│       │   │   └── users_controller.ts # Controller REST users
-│       │   └── models/
-│       │       └── user.ts           # Modèle User (Lucid ORM)
-│       ├── config/
-│       │   ├── app.ts                # Config app
-│       │   ├── database.ts           # Config database
-│       │   ├── auth.ts               # Config auth
-│       │   └── session.ts            # Config sessions
-│       ├── database/
-│       │   └── migrations/
-│       │       └── *_create_users_table.ts # Migration users
-│       ├── start/
-│       │   └── routes.ts             # Définition des routes API
-│       ├── tests/
-│       │   ├── bootstrap.ts          # Configuration Japa
-│       │   ├── functional/
-│       │   │   ├── users.spec.ts     # Tests API (@japa/api-client)
-│       │   │   └── users_supertest.spec.ts # Tests API (Supertest)
-│       │   └── unit/
-│       │       └── user.spec.ts      # Tests modèle
-│       ├── package.json              # Config AdonisJS
-│       ├── tsconfig.json             # Config TypeScript
-│       ├── adonisrc.ts               # Config AdonisJS RC
-│       └── .env.example              # Variables d'environnement exemple
-│
-├── packages/
-│   ├── shared/                       # Types partagés
-│   │   ├── src/
-│   │   │   ├── types/
-│   │   │   │   ├── user.ts           # DTOs User
-│   │   │   │   └── api.ts            # Types API (ApiResponse, etc.)
-│   │   │   └── index.ts              # Export principal
-│   │   ├── dist/                     # Types compilés
-│   │   ├── package.json              # Config package
-│   │   └── tsconfig.json             # Config TypeScript
-│   │
-│   └── config/                       # Configurations partagées
-│       ├── eslint.base.js            # Config ESLint de base
-│       ├── tsconfig.base.json        # Config TypeScript de base
-│       └── package.json              # Config package
-│
-├── infra/
-│   └── supabase/                     # Infrastructure Supabase
-│       ├── migrations/
-│       │   └── 001_create_users_table.sql # Migration SQL users
-│       ├── seed.sql                  # Données de départ
-│       └── README.md                 # Documentation Supabase
-│
-├── docs/
-│   ├── architecture.md               # Documentation architecture
-│   ├── conventions.md                # Conventions de code
-│   ├── testing.md                    # Guide des tests
-│   ├── testing-setup.md              # Configuration outils de test
-│   └── testing-database.md           # ⚠️ Stratégie DB : Mock vs Docker
-│
-├── scripts/
-│   └── test-setup.sh                 # Setup auto environnement de test
-│
-├── docker-compose.yml                # PostgreSQL pour tests (port 5433)
-├── DOCKER-TESTING.md                 # Guide Docker pour les tests
-├── package.json                      # Config monorepo + scripts Docker
-├── .gitignore                        # Fichiers ignorés par git
-├── README.md                         # Documentation principale
-└── PROMPT.md                         # Spécifications du projet
+.
+├── .claude
+│   ├── scripts
+│   │   └── context-monitor.py
+│   └── settings.local.json
+├── .github
+│   └── workflows
+│       └── ci.yml
+├── .gitignore
+├── .husky
+│   ├── _
+│   │   ├── .gitignore
+│   │   ├── applypatch-msg
+│   │   ├── commit-msg
+│   │   ├── h
+│   │   ├── husky.sh
+│   │   ├── post-applypatch
+│   │   ├── post-checkout
+│   │   ├── post-commit
+│   │   ├── post-merge
+│   │   ├── post-rewrite
+│   │   ├── pre-applypatch
+│   │   ├── pre-auto-gc
+│   │   ├── pre-commit
+│   │   ├── pre-merge-commit
+│   │   ├── pre-push
+│   │   ├── pre-rebase
+│   │   └── prepare-commit-msg
+│   └── pre-commit
+├── CLAUDE.md
+├── DOCKER-TESTING.md
+├── PROJECT_STRUCTURE.md
+├── PROJECT_STRUCTURE.txt
+├── PROMPT-PAYMENT-PROVIDER.md
+├── README.md
+├── TODO.md
+├── api.md
+├── apps
+│   ├── api
+│   │   ├── .editorconfig
+│   │   ├── .env
+│   │   ├── .env.example
+│   │   ├── .env.test
+│   │   ├── .gitignore
+│   │   ├── ace.js
+│   │   ├── adonisrc.ts
+│   │   ├── app
+│   │   │   ├── abilities
+│   │   │   │   └── main.ts
+│   │   │   ├── controllers
+│   │   │   │   ├── admin_controller.ts
+│   │   │   │   ├── auth_controller.ts
+│   │   │   │   ├── dashboard_controller.ts
+│   │   │   │   ├── mfa_controller.ts
+│   │   │   │   ├── oauth_controller.ts
+│   │   │   │   ├── teams_controller.ts
+│   │   │   │   └── users_controller.ts
+│   │   │   ├── exceptions
+│   │   │   │   └── handler.ts
+│   │   │   ├── middleware
+│   │   │   │   ├── admin_middleware.ts
+│   │   │   │   ├── auth_middleware.ts
+│   │   │   │   ├── container_bindings_middleware.ts
+│   │   │   │   ├── force_json_response_middleware.ts
+│   │   │   │   ├── guest_middleware.ts
+│   │   │   │   ├── initialize_bouncer_middleware.ts
+│   │   │   │   └── silent_auth_middleware.ts
+│   │   │   ├── models
+│   │   │   │   ├── email_verification_token.ts
+│   │   │   │   ├── login_history.ts
+│   │   │   │   ├── oauth_account.ts
+│   │   │   │   ├── password_reset_token.ts
+│   │   │   │   ├── team.ts
+│   │   │   │   ├── team_invitation.ts
+│   │   │   │   ├── team_member.ts
+│   │   │   │   └── user.ts
+│   │   │   ├── policies
+│   │   │   │   └── main.ts
+│   │   │   ├── services
+│   │   │   │   ├── auth_service.ts
+│   │   │   │   ├── mail_service.ts
+│   │   │   │   ├── mfa_service.ts
+│   │   │   │   └── subscription_service.ts
+│   │   │   └── validators
+│   │   │       └── auth.ts
+│   │   ├── bin
+│   │   │   ├── console.ts
+│   │   │   ├── server.ts
+│   │   │   └── test.ts
+│   │   ├── commands
+│   │   │   └── check_expired_subscriptions.ts
+│   │   ├── config
+│   │   │   ├── ally.ts
+│   │   │   ├── app.ts
+│   │   │   ├── auth.ts
+│   │   │   ├── bodyparser.ts
+│   │   │   ├── cors.ts
+│   │   │   ├── database.ts
+│   │   │   ├── hash.ts
+│   │   │   ├── logger.ts
+│   │   │   └── session.ts
+│   │   ├── database
+│   │   │   ├── migrations
+│   │   │   │   ├── 1765740372222_create_users_table.ts
+│   │   │   │   ├── 1765740372223_add_auth_fields_to_users_table.ts
+│   │   │   │   ├── 1765740372224_create_oauth_accounts_table.ts
+│   │   │   │   ├── 1765740372225_create_password_reset_tokens_table.ts
+│   │   │   │   ├── 1765740372226_create_email_verification_tokens_table.ts
+│   │   │   │   ├── 1765740372227_create_login_history_table.ts
+│   │   │   │   ├── 1765740372228_add_subscription_tier_to_users_table.ts
+│   │   │   │   ├── 1765740372229_add_subscription_expires_at_to_users_table.ts
+│   │   │   │   ├── 1765740372230_create_teams_table.ts
+│   │   │   │   ├── 1765740372231_create_team_members_table.ts
+│   │   │   │   ├── 1765740372232_add_current_team_to_users.ts
+│   │   │   │   ├── 1765740372233_add_max_members_to_teams.ts
+│   │   │   │   └── 1765740372234_create_team_invitations_table.ts
+│   │   │   └── seeders
+│   │   │       └── admin_user_seeder.ts
+│   │   ├── eslint.config.js
+│   │   ├── package.json
+│   │   ├── start
+│   │   │   ├── env.ts
+│   │   │   ├── kernel.ts
+│   │   │   └── routes.ts
+│   │   ├── tests
+│   │   │   ├── README.md
+│   │   │   ├── bootstrap.ts
+│   │   │   ├── functional
+│   │   │   │   ├── auth.spec.ts
+│   │   │   │   ├── teams.spec.ts
+│   │   │   │   ├── users.spec.ts
+│   │   │   │   └── users_supertest.spec.ts
+│   │   │   └── unit
+│   │   │       ├── abilities.spec.ts
+│   │   │       ├── auth_service.spec.ts
+│   │   │       ├── mail_service.spec.ts
+│   │   │       ├── team.spec.ts
+│   │   │       ├── team_invitation.spec.ts
+│   │   │       ├── user.spec.ts
+│   │   │       └── user_service.spec.ts
+│   │   └── tsconfig.json
+│   └── web
+│       ├── .gitignore
+│       ├── README.md
+│       ├── app
+│       │   ├── (auth)
+│       │   │   ├── forgot-password
+│       │   │   │   └── page.tsx
+│       │   │   ├── layout.tsx
+│       │   │   ├── login
+│       │   │   │   └── page.tsx
+│       │   │   ├── register
+│       │   │   │   └── page.tsx
+│       │   │   └── reset-password
+│       │   │       └── page.tsx
+│       │   ├── admin
+│       │   │   ├── dashboard
+│       │   │   │   └── page.tsx
+│       │   │   ├── layout.tsx
+│       │   │   └── users
+│       │   │       └── page.tsx
+│       │   ├── auth
+│       │   │   └── callback
+│       │   │       └── page.tsx
+│       │   ├── dashboard
+│       │   │   └── page.tsx
+│       │   ├── favicon.ico
+│       │   ├── globals.css
+│       │   ├── layout.tsx
+│       │   ├── page.tsx
+│       │   ├── profile
+│       │   │   ├── layout.tsx
+│       │   │   ├── page.tsx
+│       │   │   ├── security
+│       │   │   │   └── page.tsx
+│       │   │   └── settings
+│       │   │       └── page.tsx
+│       │   └── team
+│       │       └── page.tsx
+│       ├── components
+│       │   ├── header.tsx
+│       │   ├── ui
+│       │   │   ├── alert-dialog.tsx
+│       │   │   ├── alert.tsx
+│       │   │   ├── avatar.tsx
+│       │   │   ├── badge.tsx
+│       │   │   ├── button.tsx
+│       │   │   ├── card.tsx
+│       │   │   ├── dropdown-menu.tsx
+│       │   │   ├── form.tsx
+│       │   │   ├── input.tsx
+│       │   │   ├── label.tsx
+│       │   │   ├── select.tsx
+│       │   │   ├── separator.tsx
+│       │   │   ├── sonner.tsx
+│       │   │   └── table.tsx
+│       │   └── user-menu.tsx
+│       ├── components.json
+│       ├── contexts
+│       │   └── auth-context.tsx
+│       ├── eslint.config.mjs
+│       ├── lib
+│       │   ├── api.ts
+│       │   ├── auth.ts
+│       │   ├── utils.ts
+│       │   └── validations.ts
+│       ├── next-env.d.ts
+│       ├── next.config.ts
+│       ├── package.json
+│       ├── postcss.config.mjs
+│       ├── public
+│       │   ├── file.svg
+│       │   ├── globe.svg
+│       │   ├── next.svg
+│       │   ├── vercel.svg
+│       │   └── window.svg
+│       ├── tests
+│       │   ├── README.md
+│       │   ├── components
+│       │   │   ├── button.test.tsx
+│       │   │   ├── header.test.tsx
+│       │   │   └── user-menu.test.tsx
+│       │   ├── contexts
+│       │   │   └── auth-context.test.tsx
+│       │   ├── lib
+│       │   │   ├── api.test.ts
+│       │   │   ├── auth.test.ts
+│       │   │   └── validations.test.ts
+│       │   ├── pages
+│       │   │   ├── admin
+│       │   │   │   ├── dashboard.test.tsx
+│       │   │   │   ├── layout.test.tsx
+│       │   │   │   └── users.test.tsx
+│       │   │   ├── auth
+│       │   │   │   ├── callback.test.tsx
+│       │   │   │   ├── forgot-password.test.tsx
+│       │   │   │   ├── login.test.tsx
+│       │   │   │   ├── register.test.tsx
+│       │   │   │   └── reset-password.test.tsx
+│       │   │   ├── dashboard.test.tsx
+│       │   │   ├── home.test.tsx
+│       │   │   ├── profile
+│       │   │   │   ├── layout.test.tsx
+│       │   │   │   ├── page.test.tsx
+│       │   │   │   ├── security.test.tsx
+│       │   │   │   └── settings.test.tsx
+│       │   │   └── team.test.tsx
+│       │   ├── setup.ts
+│       │   └── vitest.d.ts
+│       ├── tsconfig.json
+│       ├── tsconfig.tsbuildinfo
+│       └── vitest.config.ts
+├── docker-compose.yml
+├── docs
+│   ├── architecture.md
+│   ├── conventions.md
+│   ├── testing-database.md
+│   ├── testing-setup.md
+│   └── testing.md
+├── infra
+│   └── supabase
+│       ├── README.md
+│       ├── migrations
+│       │   └── 001_create_users_table.sql
+│       └── seed.sql
+├── package-lock.json
+├── package.json
+├── packages
+│   ├── config
+│   │   ├── eslint.base.js
+│   │   ├── package.json
+│   │   └── tsconfig.base.json
+│   └── shared
+│       ├── package.json
+│       ├── src
+│       │   ├── index.ts
+│       │   └── types
+│       │       ├── api.ts
+│       │       ├── auth.ts
+│       │       ├── team.ts
+│       │       └── user.ts
+│       └── tsconfig.json
+├── pnpm-lock.yaml
+├── pnpm-workspace.yaml
+├── prompts-used
+│   ├── PROMPT-AUTH.md
+│   └── PROMPT.md
+└── scripts
+    └── test-setup.sh
+
+69 directories, 220 files
+
 ```
 
 ## Détail des Composants Principaux

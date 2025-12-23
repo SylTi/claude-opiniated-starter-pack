@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
+import  Image from 'next/image'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2, Shield, ShieldCheck, ShieldX, Copy, Check } from 'lucide-react'
 import { toast } from 'sonner'
@@ -232,7 +233,7 @@ export default function SecurityPage(): React.ReactElement {
                   Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
                 </p>
                 <div className="bg-white p-4 rounded-lg border inline-block">
-                  <img src={setupData.qrCode} alt="MFA QR Code" className="w-48 h-48" />
+                  <Image src={setupData.qrCode} alt="MFA QR Code" className="w-48 h-48" />
                 </div>
               </div>
 

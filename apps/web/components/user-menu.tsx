@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { User, Settings, LogOut, Shield, Users } from "lucide-react";
+import { User, Settings, LogOut, Shield, LayoutDashboard, Users, UsersRound } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/auth-context";
+import { SUBSCRIPTION_TIER_LEVELS, type SubscriptionTier } from "@saas/shared";
 
 export function UserMenu(): React.ReactElement {
   const router = useRouter();
@@ -60,6 +61,10 @@ export function UserMenu(): React.ReactElement {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => router.push("/dashboard")}>
+          <LayoutDashboard className="mr-2 h-4 w-4" />
+          <span>Dashboard</span>
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => router.push("/profile")}>
           <User className="mr-2 h-4 w-4" />
           <span>Profile</span>
@@ -72,12 +77,18 @@ export function UserMenu(): React.ReactElement {
           <Settings className="mr-2 h-4 w-4" />
           <span>Settings</span>
         </DropdownMenuItem>
+        {user.currentTeamId && SUBSCRIPTION_TIER_LEVELS[user.effectiveSubscriptionTier.slug as SubscriptionTier] >= SUBSCRIPTION_TIER_LEVELS["tier1"] && (
+          <DropdownMenuItem onClick={() => router.push("/team")}>
+            <UsersRound className="mr-2 h-4 w-4" />
+            <span>Team</span>
+          </DropdownMenuItem>
+        )}
         {user.role === "admin" && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push("/admin/users")}>
+            <DropdownMenuItem onClick={() => router.push("/admin/dashboard")}>
               <Users className="mr-2 h-4 w-4" />
-              <span>User Management</span>
+              <span>Admin Panel</span>
             </DropdownMenuItem>
           </>
         )}

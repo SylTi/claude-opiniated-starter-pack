@@ -18,11 +18,16 @@ interface LoginResult {
   requiresMfa: boolean
 }
 
+interface RegisterResult {
+  user: User
+  verificationToken: string
+}
+
 export default class AuthService {
   /**
    * Register a new user
    */
-  async register(data: RegisterData): Promise<User> {
+  async register(data: RegisterData): Promise<RegisterResult> {
     const user = await User.create({
       email: data.email,
       password: data.password,
@@ -33,9 +38,9 @@ export default class AuthService {
     })
 
     // Create email verification token
-    await this.createEmailVerificationToken(user)
+    const verificationToken = await this.createEmailVerificationToken(user)
 
-    return user
+    return { user, verificationToken }
   }
 
   /**

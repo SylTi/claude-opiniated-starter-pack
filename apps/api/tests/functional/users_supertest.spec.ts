@@ -1,11 +1,11 @@
 import { test } from '@japa/runner'
 import User from '#models/user'
-import testUtils from '@adonisjs/core/services/test_utils'
+import { truncateAllTables } from '../bootstrap.js'
 import request from 'supertest'
 
 test.group('Users API (Supertest)', (group) => {
   group.each.setup(async () => {
-    await testUtils.db().truncate()
+    await truncateAllTables()
   })
 
   test('GET /api/v1/users returns list of users with supertest', async ({ assert }) => {

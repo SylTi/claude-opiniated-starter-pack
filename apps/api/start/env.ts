@@ -63,4 +63,13 @@ export default await Env.create(new URL('../', import.meta.url), {
   */
   SEED_ADMIN_PASSWORD: Env.schema.string.optional(),
   SEED_USER_PASSWORD: Env.schema.string.optional(),
+
+  /*
+  |----------------------------------------------------------
+  | Variables for Resend email service
+  |----------------------------------------------------------
+  */
+  RESEND_API_KEY: Env.schema.string.optional(),
+  MAIL_FROM_ADDRESS: Env.schema.string.optional(),
+  MAIL_FROM_NAME: Env.schema.string.optional(),
 })

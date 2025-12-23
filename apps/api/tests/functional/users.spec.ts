@@ -1,6 +1,6 @@
 import { test } from '@japa/runner'
 import User from '#models/user'
-import testUtils from '@adonisjs/core/services/test_utils'
+import { truncateAllTables } from '../bootstrap.js'
 
 /**
  * TESTS D'INTÉGRATION - Base de données PostgreSQL LOCALE (Docker)
@@ -20,7 +20,7 @@ import testUtils from '@adonisjs/core/services/test_utils'
 test.group('Users API (Integration - Local DB)', (group) => {
   group.each.setup(async () => {
     // Nettoie toutes les tables avant chaque test
-    await testUtils.db().truncate()
+    await truncateAllTables()
   })
 
   test('GET /api/v1/users returns list of users', async ({ client, assert }) => {

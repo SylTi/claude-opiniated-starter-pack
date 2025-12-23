@@ -15,6 +15,8 @@ const AuthController = () => import('#controllers/auth_controller')
 const MfaController = () => import('#controllers/mfa_controller')
 const OAuthController = () => import('#controllers/oauth_controller')
 const AdminController = () => import('#controllers/admin_controller')
+const DashboardController = () => import('#controllers/dashboard_controller')
+const TeamsController = () => import('#controllers/teams_controller')
 
 router.get('/', async () => {
   return {
@@ -86,12 +88,56 @@ router
     // Admin - Protected routes (admin only)
     router
       .group(() => {
+        router.get('/stats', [AdminController, 'getStats'])
         router.get('/users', [AdminController, 'listUsers'])
         router.post('/users/:id/verify-email', [AdminController, 'verifyUserEmail'])
         router.post('/users/:id/unverify-email', [AdminController, 'unverifyUserEmail'])
+        router.put('/users/:id/tier', [AdminController, 'updateUserTier'])
         router.delete('/users/:id', [AdminController, 'deleteUser'])
+        router.get('/teams', [AdminController, 'listTeams'])
+        router.put('/teams/:id/tier', [AdminController, 'updateTeamTier'])
       })
       .prefix('/admin')
+      .use([middleware.auth(), middleware.admin()])
+
+    // Dashboard - Protected routes (any logged-in user)
+    router
+      .group(() => {
+        router.get('/stats', [DashboardController, 'getUserStats'])
+      })
+      .prefix('/dashboard')
+      .use(middleware.auth())
+
+    // Teams - Protected routes
+    router
+      .group(() => {
+        router.get('/', [TeamsController, 'index'])
+        router.post('/', [TeamsController, 'store'])
+        router.get('/:id', [TeamsController, 'show'])
+        router.put('/:id', [TeamsController, 'update'])
+        router.post('/:id/switch', [TeamsController, 'switchTeam'])
+        router.post('/:id/members', [TeamsController, 'addMember'])
+        router.delete('/:id/members/:userId', [TeamsController, 'removeMember'])
+        router.post('/:id/leave', [TeamsController, 'leave'])
+        router.delete('/:id', [TeamsController, 'destroy'])
+        // Invitations
+        router.post('/:id/invitations', [TeamsController, 'sendInvitation'])
+        router.get('/:id/invitations', [TeamsController, 'listInvitations'])
+        router.delete('/:id/invitations/:invitationId', [TeamsController, 'cancelInvitation'])
+      })
+      .prefix('/teams')
+      .use(middleware.auth())
+
+    // Invitations - Public route (get invitation details by token)
+    router.get('/invitations/:token', [TeamsController, 'getInvitationByToken'])
+
+    // Invitations - Protected routes (accept/decline)
+    router
+      .group(() => {
+        router.post('/:token/accept', [TeamsController, 'acceptInvitation'])
+        router.post('/:token/decline', [TeamsController, 'declineInvitation'])
+      })
+      .prefix('/invitations')
       .use(middleware.auth())
   })
   .prefix('/api/v1')

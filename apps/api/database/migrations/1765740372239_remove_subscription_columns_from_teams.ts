@@ -1,0 +1,19 @@
+import { BaseSchema } from '@adonisjs/lucid/schema'
+
+export default class extends BaseSchema {
+  protected tableName = 'teams'
+
+  async up(): Promise<void> {
+    this.schema.alterTable(this.tableName, (table) => {
+      table.dropColumn('subscription_tier')
+      table.dropColumn('subscription_expires_at')
+    })
+  }
+
+  async down(): Promise<void> {
+    this.schema.alterTable(this.tableName, (table) => {
+      table.enum('subscription_tier', ['free', 'tier1', 'tier2']).notNullable().defaultTo('free')
+      table.timestamp('subscription_expires_at').nullable()
+    })
+  }
+}
