@@ -146,6 +146,7 @@ test.group('Team Model', (group) => {
     // Give team tier1 subscription (20 max members)
     const tier1 = await SubscriptionTier.findBySlugOrFail('tier1')
     await Subscription.createForTeam(team.id, tier1.id)
+    await team.refresh()
 
     const maxMembers = await team.getEffectiveMaxMembers()
     assert.equal(maxMembers, 20)
@@ -170,6 +171,7 @@ test.group('Team Model', (group) => {
     // Give team tier2 subscription (unlimited members)
     const tier2 = await SubscriptionTier.findBySlugOrFail('tier2')
     await Subscription.createForTeam(team.id, tier2.id)
+    await team.refresh()
 
     const maxMembers = await team.getEffectiveMaxMembers()
     assert.isNull(maxMembers)
@@ -194,6 +196,7 @@ test.group('Team Model', (group) => {
     // Free tier has 5 max members
     const freeTier = await SubscriptionTier.findBySlugOrFail('free')
     await Subscription.createForTeam(team.id, freeTier.id)
+    await team.refresh()
 
     assert.isTrue(await team.canAddMember(4))
     assert.isFalse(await team.canAddMember(5))
@@ -219,6 +222,7 @@ test.group('Team Model', (group) => {
     // Tier2 has unlimited members
     const tier2 = await SubscriptionTier.findBySlugOrFail('tier2')
     await Subscription.createForTeam(team.id, tier2.id)
+    await team.refresh()
 
     assert.isTrue(await team.canAddMember(100))
     assert.isTrue(await team.canAddMember(1000))

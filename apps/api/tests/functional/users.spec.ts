@@ -1,25 +1,62 @@
 import { test } from '@japa/runner'
 import User from '#models/user'
 import { truncateAllTables } from '../bootstrap.js'
+import request from 'supertest'
 
 /**
- * TESTS D'INTÉGRATION - Base de données PostgreSQL LOCALE (Docker)
+ * TESTS D'INTEGRATION - Base de donnees PostgreSQL LOCALE (Docker)
  *
- * ⚠️ IMPORTANT :
+ * IMPORTANT :
  * - Ces tests utilisent PostgreSQL local via Docker (port 5433)
- * - La base est nettoyée (truncate) avant chaque test
- * - Rollback automatique après chaque test
+ * - La base est nettoyee (truncate) avant chaque test
+ * - Rollback automatique apres chaque test
  * - NE JAMAIS pointer vers Supabase cloud pour les tests
  *
  * Configuration requise:
- * - Docker doit être démarré
+ * - Docker doit etre demarre
  * - docker-compose up postgres-test
- * - Variables .env.test configurées avec DB locale
+ * - Variables .env.test configurees avec DB locale
+ *
+ * NOTE: User creation and profile update operations are tested elsewhere:
+ * - POST /auth/register (user creation) -> see tests/functional/auth.spec.ts
+ * - PUT /auth/profile (profile update) -> see tests/functional/auth.spec.ts
+ * - DELETE /admin/users/:id (admin deletion) -> see tests below
  */
+
+const BASE_URL = `http://${process.env.HOST}:${process.env.PORT}`
+
+function uniqueId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 8)
+}
+
+async function createAdminAndLogin(
+  email: string,
+  password: string
+): Promise<{ user: User; cookies: string[] }> {
+  const user = await User.create({
+    email,
+    password,
+    fullName: 'Admin User',
+    role: 'admin',
+    emailVerified: true,
+    mfaEnabled: false,
+  })
+
+  const response = await request(BASE_URL)
+    .post('/api/v1/auth/login')
+    .send({ email, password })
+    .set('Accept', 'application/json')
+
+  if (response.status !== 200) {
+    throw new Error(`Login failed: ${response.status}`)
+  }
+
+  const cookies = response.headers['set-cookie']
+  return { user, cookies: Array.isArray(cookies) ? cookies : [] }
+}
 
 test.group('Users API (Integration - Local DB)', (group) => {
   group.each.setup(async () => {
-    // Nettoie toutes les tables avant chaque test
     await truncateAllTables()
   })
 
@@ -86,5 +123,104 @@ test.group('Users API (Integration - Local DB)', (group) => {
     response.assertStatus(200)
     const body = response.body()
     assert.equal(body.data.length, 0)
+  })
+})
+
+test.group('Admin Users API (Integration - Local DB)', (group) => {
+  group.each.setup(async () => {
+    await truncateAllTables()
+  })
+
+  test('DELETE /api/v1/admin/users/:id deletes a user', async ({ assert }) => {
+    const id = uniqueId()
+    const { cookies } = await createAdminAndLogin(`admin-${id}@example.com`, 'password123')
+
+    const userToDelete = await User.create({
+      email: `delete-${id}@example.com`,
+      password: 'password123',
+      fullName: 'User To Delete',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+    })
+
+    const response = await request(BASE_URL)
+      .delete(`/api/v1/admin/users/${userToDelete.id}`)
+      .set('Cookie', cookies)
+      .expect(200)
+
+    assert.equal(response.body.message, 'User has been deleted successfully')
+
+    const deletedUser = await User.find(userToDelete.id)
+    assert.isNull(deletedUser, 'User should be deleted from database')
+  })
+
+  test('DELETE /api/v1/admin/users/:id returns 404 for non-existent user', async () => {
+    const id = uniqueId()
+    const { cookies } = await createAdminAndLogin(`admin-${id}@example.com`, 'password123')
+
+    await request(BASE_URL).delete('/api/v1/admin/users/99999').set('Cookie', cookies).expect(404)
+  })
+
+  test('DELETE /api/v1/admin/users/:id prevents admin from deleting themselves', async ({
+    assert,
+  }) => {
+    const id = uniqueId()
+    const { user: admin, cookies } = await createAdminAndLogin(
+      `admin-${id}@example.com`,
+      'password123'
+    )
+
+    const response = await request(BASE_URL)
+      .delete(`/api/v1/admin/users/${admin.id}`)
+      .set('Cookie', cookies)
+      .expect(400)
+
+    assert.equal(response.body.error, 'ValidationError')
+    assert.equal(response.body.message, 'You cannot delete your own account from admin panel')
+
+    const stillExists = await User.find(admin.id)
+    assert.isNotNull(stillExists, 'Admin user should still exist')
+  })
+
+  test('DELETE /api/v1/admin/users/:id requires authentication', async () => {
+    await request(BASE_URL).delete('/api/v1/admin/users/1').expect(401)
+  })
+
+  test('DELETE /api/v1/admin/users/:id requires admin role', async ({ assert }) => {
+    const id = uniqueId()
+
+    const regularUser = await User.create({
+      email: `user-${id}@example.com`,
+      password: 'password123',
+      fullName: 'Regular User',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+    })
+
+    const loginResponse = await request(BASE_URL)
+      .post('/api/v1/auth/login')
+      .send({ email: `user-${id}@example.com`, password: 'password123' })
+      .set('Accept', 'application/json')
+
+    const cookies = loginResponse.headers['set-cookie']
+
+    const otherUser = await User.create({
+      email: `other-${id}@example.com`,
+      password: 'password123',
+      fullName: 'Other User',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+    })
+
+    await request(BASE_URL)
+      .delete(`/api/v1/admin/users/${otherUser.id}`)
+      .set('Cookie', cookies)
+      .expect(403)
+
+    const stillExists = await User.find(otherUser.id)
+    assert.isNotNull(stillExists, 'User should not be deleted by non-admin')
   })
 })

@@ -38,6 +38,8 @@ export interface SubscriptionDTO {
   status: SubscriptionStatus;
   startsAt: string;
   expiresAt: string | null;
+  providerName: string | null;
+  providerSubscriptionId: string | null;
   createdAt: string;
   updatedAt: string | null;
 }

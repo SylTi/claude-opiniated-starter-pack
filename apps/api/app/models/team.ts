@@ -52,8 +52,16 @@ export default class Team extends BaseModel {
    * Get the active subscription tier for this team
    */
   async getSubscriptionTier(): Promise<SubscriptionTier> {
-    const subscription = await this.getActiveSubscription()
-    if (subscription) {
+    // Query directly to ensure tier is always loaded
+    const subscription = await Subscription.query()
+      .where('subscriberType', 'team')
+      .where('subscriberId', this.id)
+      .where('status', 'active')
+      .preload('tier')
+      .orderBy('createdAt', 'desc')
+      .first()
+
+    if (subscription && subscription.tier) {
       return subscription.tier
     }
     return SubscriptionTier.getFreeTier()

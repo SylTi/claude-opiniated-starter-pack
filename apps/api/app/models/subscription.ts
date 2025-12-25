@@ -28,6 +28,12 @@ export default class Subscription extends BaseModel {
   @column.dateTime()
   declare expiresAt: DateTime | null
 
+  @column()
+  declare providerName: string | null
+
+  @column()
+  declare providerSubscriptionId: string | null
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 
@@ -196,5 +202,44 @@ export default class Subscription extends BaseModel {
 
     // Create new free subscription
     return this.createForTeam(teamId, freeTier.id)
+  }
+
+  /**
+   * Find subscription by provider subscription ID
+   */
+  static async findByProviderSubscriptionId(
+    providerName: string,
+    providerSubscriptionId: string
+  ): Promise<Subscription | null> {
+    return this.query()
+      .where('providerName', providerName)
+      .where('providerSubscriptionId', providerSubscriptionId)
+      .preload('tier')
+      .first()
+  }
+
+  /**
+   * Create subscription with provider info
+   */
+  static async createWithProvider(
+    subscriberType: SubscriberType,
+    subscriberId: number,
+    tierId: number,
+    providerName: string,
+    providerSubscriptionId: string,
+    expiresAt: DateTime | null = null
+  ): Promise<Subscription> {
+    const subscription = await this.create({
+      subscriberType,
+      subscriberId,
+      tierId,
+      status: 'active',
+      startsAt: DateTime.now(),
+      expiresAt,
+      providerName,
+      providerSubscriptionId,
+    })
+    await subscription.load('tier')
+    return subscription
   }
 }

@@ -4,6 +4,8 @@ import User from '#models/user'
 import LoginHistory from '#models/login_history'
 import Team from '#models/team'
 import SubscriptionTier from '#models/subscription_tier'
+import Product from '#models/product'
+import Price from '#models/price'
 import SubscriptionService from '#services/subscription_service'
 
 export default class AdminController {
@@ -296,7 +298,7 @@ export default class AdminController {
    * List all available subscription tiers
    */
   async listTiers({ response }: HttpContext): Promise<void> {
-    const tiers = await SubscriptionTier.getActiveTiers()
+    const tiers = await SubscriptionTier.query().orderBy('level', 'asc')
 
     response.json({
       data: tiers.map((tier) => ({
@@ -309,7 +311,397 @@ export default class AdminController {
         yearlyDiscountPercent: tier.yearlyDiscountPercent,
         features: tier.features,
         isActive: tier.isActive,
+        createdAt: tier.createdAt.toISO(),
+        updatedAt: tier.updatedAt?.toISO() ?? null,
       })),
+    })
+  }
+
+  /**
+   * Create a new subscription tier
+   */
+  async createTier({ request, response }: HttpContext): Promise<void> {
+    const data = request.only([
+      'slug',
+      'name',
+      'level',
+      'maxTeamMembers',
+      'priceMonthly',
+      'yearlyDiscountPercent',
+      'features',
+      'isActive',
+    ])
+
+    // Check if slug already exists
+    const existing = await SubscriptionTier.findBySlug(data.slug)
+    if (existing) {
+      return response.conflict({
+        error: 'ConflictError',
+        message: 'A tier with this slug already exists',
+      })
+    }
+
+    const tier = await SubscriptionTier.create({
+      slug: data.slug,
+      name: data.name,
+      level: data.level ?? 0,
+      maxTeamMembers: data.maxTeamMembers ?? null,
+      priceMonthly: data.priceMonthly ?? null,
+      yearlyDiscountPercent: data.yearlyDiscountPercent ?? null,
+      features: data.features ?? null,
+      isActive: data.isActive ?? true,
+    })
+
+    response.created({
+      data: {
+        id: tier.id,
+        slug: tier.slug,
+        name: tier.name,
+        level: tier.level,
+        maxTeamMembers: tier.maxTeamMembers,
+        priceMonthly: tier.priceMonthly,
+        yearlyDiscountPercent: tier.yearlyDiscountPercent,
+        features: tier.features,
+        isActive: tier.isActive,
+      },
+      message: 'Tier created successfully',
+    })
+  }
+
+  /**
+   * Update a subscription tier
+   */
+  async updateTier({ params, request, response }: HttpContext): Promise<void> {
+    const tier = await SubscriptionTier.findOrFail(params.id)
+    const data = request.only([
+      'name',
+      'level',
+      'maxTeamMembers',
+      'priceMonthly',
+      'yearlyDiscountPercent',
+      'features',
+      'isActive',
+    ])
+
+    // Note: slug cannot be updated to maintain references
+    if (data.name !== undefined) tier.name = data.name
+    if (data.level !== undefined) tier.level = data.level
+    if (data.maxTeamMembers !== undefined) tier.maxTeamMembers = data.maxTeamMembers
+    if (data.priceMonthly !== undefined) tier.priceMonthly = data.priceMonthly
+    if (data.yearlyDiscountPercent !== undefined)
+      tier.yearlyDiscountPercent = data.yearlyDiscountPercent
+    if (data.features !== undefined) tier.features = data.features
+    if (data.isActive !== undefined) tier.isActive = data.isActive
+
+    await tier.save()
+
+    response.json({
+      data: {
+        id: tier.id,
+        slug: tier.slug,
+        name: tier.name,
+        level: tier.level,
+        maxTeamMembers: tier.maxTeamMembers,
+        priceMonthly: tier.priceMonthly,
+        yearlyDiscountPercent: tier.yearlyDiscountPercent,
+        features: tier.features,
+        isActive: tier.isActive,
+      },
+      message: 'Tier updated successfully',
+    })
+  }
+
+  // ==========================================
+  // Product Management (Tier <-> Stripe Product)
+  // ==========================================
+
+  /**
+   * List all products with their prices
+   */
+  async listProducts({ response }: HttpContext): Promise<void> {
+    const products = await Product.query()
+      .preload('tier')
+      .preload('prices')
+      .orderBy('tierId', 'asc')
+
+    response.json({
+      data: products.map((product) => ({
+        id: product.id,
+        tierId: product.tierId,
+        tierSlug: product.tier.slug,
+        tierName: product.tier.name,
+        provider: product.provider,
+        providerProductId: product.providerProductId,
+        prices: product.prices.map((price) => ({
+          id: price.id,
+          interval: price.interval,
+          currency: price.currency,
+          unitAmount: price.unitAmount,
+          taxBehavior: price.taxBehavior,
+          isActive: price.isActive,
+          providerPriceId: price.providerPriceId,
+        })),
+        createdAt: product.createdAt.toISO(),
+        updatedAt: product.updatedAt?.toISO() ?? null,
+      })),
+    })
+  }
+
+  /**
+   * Create a new product (link tier to Stripe product)
+   */
+  async createProduct({ request, response }: HttpContext): Promise<void> {
+    const { tierId, provider, providerProductId } = request.only([
+      'tierId',
+      'provider',
+      'providerProductId',
+    ])
+
+    if (!tierId || !provider || !providerProductId) {
+      return response.badRequest({
+        error: 'ValidationError',
+        message: 'tierId, provider, and providerProductId are required',
+      })
+    }
+
+    // Check if tier exists
+    const tier = await SubscriptionTier.find(tierId)
+    if (!tier) {
+      return response.notFound({
+        error: 'NotFoundError',
+        message: 'Tier not found',
+      })
+    }
+
+    // Check if product already exists for this tier and provider
+    const existing = await Product.findByTierAndProvider(tierId, provider)
+    if (existing) {
+      return response.conflict({
+        error: 'ConflictError',
+        message: 'A product already exists for this tier and provider',
+      })
+    }
+
+    const product = await Product.create({
+      tierId,
+      provider,
+      providerProductId,
+    })
+    await product.load('tier')
+
+    response.created({
+      data: {
+        id: product.id,
+        tierId: product.tierId,
+        tierSlug: product.tier.slug,
+        tierName: product.tier.name,
+        provider: product.provider,
+        providerProductId: product.providerProductId,
+      },
+      message: 'Product created successfully',
+    })
+  }
+
+  /**
+   * Update a product
+   */
+  async updateProduct({ params, request, response }: HttpContext): Promise<void> {
+    const product = await Product.findOrFail(params.id)
+    const { providerProductId } = request.only(['providerProductId'])
+
+    if (providerProductId !== undefined) {
+      product.providerProductId = providerProductId
+    }
+
+    await product.save()
+    await product.load('tier')
+
+    response.json({
+      data: {
+        id: product.id,
+        tierId: product.tierId,
+        tierSlug: product.tier.slug,
+        tierName: product.tier.name,
+        provider: product.provider,
+        providerProductId: product.providerProductId,
+      },
+      message: 'Product updated successfully',
+    })
+  }
+
+  /**
+   * Delete a product
+   */
+  async deleteProduct({ params, response }: HttpContext): Promise<void> {
+    const product = await Product.findOrFail(params.id)
+
+    // This will cascade delete associated prices
+    await product.delete()
+
+    response.json({
+      message: 'Product and associated prices deleted successfully',
+    })
+  }
+
+  // ==========================================
+  // Price Management
+  // ==========================================
+
+  /**
+   * List all prices
+   */
+  async listPrices({ request, response }: HttpContext): Promise<void> {
+    const productId = request.input('productId')
+
+    let query = Price.query().preload('product', (q) => q.preload('tier'))
+
+    if (productId) {
+      query = query.where('productId', productId)
+    }
+
+    const prices = await query.orderBy('productId', 'asc').orderBy('interval', 'asc')
+
+    response.json({
+      data: prices.map((price) => ({
+        id: price.id,
+        productId: price.productId,
+        tierSlug: price.product.tier.slug,
+        tierName: price.product.tier.name,
+        provider: price.provider,
+        providerPriceId: price.providerPriceId,
+        interval: price.interval,
+        currency: price.currency,
+        unitAmount: price.unitAmount,
+        taxBehavior: price.taxBehavior,
+        isActive: price.isActive,
+        createdAt: price.createdAt.toISO(),
+        updatedAt: price.updatedAt?.toISO() ?? null,
+      })),
+    })
+  }
+
+  /**
+   * Create a new price
+   */
+  async createPrice({ request, response }: HttpContext): Promise<void> {
+    const data = request.only([
+      'productId',
+      'provider',
+      'providerPriceId',
+      'interval',
+      'currency',
+      'unitAmount',
+      'taxBehavior',
+      'isActive',
+    ])
+
+    if (
+      !data.productId ||
+      !data.provider ||
+      !data.providerPriceId ||
+      !data.interval ||
+      !data.currency ||
+      data.unitAmount === undefined
+    ) {
+      return response.badRequest({
+        error: 'ValidationError',
+        message:
+          'productId, provider, providerPriceId, interval, currency, and unitAmount are required',
+      })
+    }
+
+    // Check if product exists
+    const product = await Product.find(data.productId)
+    if (!product) {
+      return response.notFound({
+        error: 'NotFoundError',
+        message: 'Product not found',
+      })
+    }
+
+    // Check if price already exists for this provider price ID
+    const existing = await Price.findByProviderPriceId(data.provider, data.providerPriceId)
+    if (existing) {
+      return response.conflict({
+        error: 'ConflictError',
+        message: 'A price with this provider price ID already exists',
+      })
+    }
+
+    const price = await Price.create({
+      productId: data.productId,
+      provider: data.provider,
+      providerPriceId: data.providerPriceId,
+      interval: data.interval,
+      currency: data.currency.toLowerCase(),
+      unitAmount: data.unitAmount,
+      taxBehavior: data.taxBehavior ?? 'exclusive',
+      isActive: data.isActive ?? true,
+    })
+
+    await price.load('product', (q) => q.preload('tier'))
+
+    response.created({
+      data: {
+        id: price.id,
+        productId: price.productId,
+        tierSlug: price.product.tier.slug,
+        tierName: price.product.tier.name,
+        provider: price.provider,
+        providerPriceId: price.providerPriceId,
+        interval: price.interval,
+        currency: price.currency,
+        unitAmount: price.unitAmount,
+        taxBehavior: price.taxBehavior,
+        isActive: price.isActive,
+      },
+      message: 'Price created successfully',
+    })
+  }
+
+  /**
+   * Update a price
+   */
+  async updatePrice({ params, request, response }: HttpContext): Promise<void> {
+    const price = await Price.findOrFail(params.id)
+    const data = request.only(['providerPriceId', 'unitAmount', 'taxBehavior', 'isActive'])
+
+    // Note: interval and currency should not be changed after creation
+    if (data.providerPriceId !== undefined) price.providerPriceId = data.providerPriceId
+    if (data.unitAmount !== undefined) price.unitAmount = data.unitAmount
+    if (data.taxBehavior !== undefined) price.taxBehavior = data.taxBehavior
+    if (data.isActive !== undefined) price.isActive = data.isActive
+
+    await price.save()
+    await price.load('product', (q) => q.preload('tier'))
+
+    response.json({
+      data: {
+        id: price.id,
+        productId: price.productId,
+        tierSlug: price.product.tier.slug,
+        tierName: price.product.tier.name,
+        provider: price.provider,
+        providerPriceId: price.providerPriceId,
+        interval: price.interval,
+        currency: price.currency,
+        unitAmount: price.unitAmount,
+        taxBehavior: price.taxBehavior,
+        isActive: price.isActive,
+      },
+      message: 'Price updated successfully',
+    })
+  }
+
+  /**
+   * Delete a price
+   */
+  async deletePrice({ params, response }: HttpContext): Promise<void> {
+    const price = await Price.findOrFail(params.id)
+    await price.delete()
+
+    response.json({
+      message: 'Price deleted successfully',
     })
   }
 }

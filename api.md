@@ -71,6 +71,19 @@ Toutes les routes sont préfixées par `/api/v1`.
 *   `POST /invitations/:token/accept` - Accepter une invitation.
 *   `POST /invitations/:token/decline` - Refuser une invitation.
 
+#### Facturation (Billing)
+*   `GET /billing/tiers` - Lister les niveaux d'abonnement avec leurs prix (public).
+*   `POST /billing/checkout` - Créer une session de paiement Stripe.
+*   `POST /billing/portal` - Créer une session de portail client Stripe.
+*   `GET /billing/subscription` - Obtenir l'abonnement actuel de l'utilisateur/équipe.
+*   `POST /billing/cancel` - Annuler l'abonnement actuel.
+
+---
+
+### Webhooks (Signature verification, pas d'authentification)
+
+*   `POST /webhooks/stripe` - Recevoir les événements Stripe (checkout.session.completed, customer.subscription.updated, customer.subscription.deleted, invoice.payment_failed, invoice.payment_succeeded).
+
 ---
 
 ### Routes Administrateur (Nécessitent les droits d'administrateur)
@@ -83,3 +96,20 @@ Toutes les routes sont préfixées par `/api/v1`.
 *   `DELETE /admin/users/:id` - Supprimer un utilisateur.
 *   `GET /admin/teams` - Lister toutes les équipes.
 *   `PUT /admin/teams/:id/tier` - Mettre à jour le niveau d'abonnement d'une équipe.
+
+#### Gestion des niveaux d'abonnement (Subscription Tiers)
+*   `GET /admin/tiers` - Lister tous les niveaux d'abonnement.
+*   `POST /admin/tiers` - Créer un nouveau niveau d'abonnement.
+*   `PUT /admin/tiers/:id` - Mettre à jour un niveau d'abonnement.
+
+#### Gestion des produits (Products - lien Tier <-> Stripe Product)
+*   `GET /admin/products` - Lister tous les produits.
+*   `POST /admin/products` - Créer un produit (lier un tier à un produit Stripe).
+*   `PUT /admin/products/:id` - Mettre à jour un produit.
+*   `DELETE /admin/products/:id` - Supprimer un produit.
+
+#### Gestion des prix (Prices)
+*   `GET /admin/prices` - Lister tous les prix.
+*   `POST /admin/prices` - Créer un prix (lier à un produit).
+*   `PUT /admin/prices/:id` - Mettre à jour un prix (activer/désactiver).
+*   `DELETE /admin/prices/:id` - Supprimer un prix.

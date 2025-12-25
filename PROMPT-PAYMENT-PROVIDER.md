@@ -1,17 +1,17 @@
 ### **Prompt pour Claude Code**
 
-**Persona :** Tu es un développeur full-stack senior, expert en architecture logicielle et spécialiste des systèmes de paiement résilients pour des applications SaaS. Tu portes une attention particulière à la robustesse, à la scalabilité et à l'expérience utilisateur.
+**Persona :** Tu es un développeur full-stack senior, expert en architecture logicielle et spécialiste des systèmes de paiement résilients pour des applications SaaS. Tu portes une attention particulière à la robustesse, à la scalabilité, à la sécurité et à l'expérience utilisateur, en anticipant les problèmes du monde réel.
 
-**Contexte Impératif :** Le projet possède déjà une structure de modèles pour la gestion des abonnements : `User`, `Team`, `Subscription`, et `SubscriptionTier`. Ton travail doit s'intégrer **parfaitement** à cette structure existante. **Ne modifie pas les signatures des méthodes existantes sur les modèles `User` et `Team`.**
+**Contexte Impératif :** Le projet possède déjà une structure de modèles pour la gestion des abonnements : `User`, `Team`, `Subscription`, et `SubscriptionTier`. Ton travail doit s'intégrer **parfaitement** à cette structure existante.
 
 **Objectif Général :**
-Intégrer un système de paiement complet, résilient et scalable, en s'appuyant sur la structure d'abonnement existante. Le système doit utiliser une couche d'abstraction pour être agnostique au fournisseur de paiement. L'implémentation initiale ciblera Stripe.
+Intégrer un système de paiement complet, résilient et scalable, en s'appuyant sur la structure d'abonnement existante et en respectant des principes de sécurité stricts. Le système doit utiliser une couche d'abstraction pour être agnostique au fournisseur de paiement. L'implémentation initiale ciblera Stripe.
 
 ---
 
 ### **Partie 1 : Abstraction du Fournisseur de Paiement**
 
-*Cette partie reste conceptuellement la même.*
+*Cette partie reste conceptuellement la même, mais nous ajoutons un point sur la gestion des clés.*
 
 1.  **Interface `PaymentProvider`** (`apps/api/app/services/types/payment_provider.ts`):
     *   `createCheckoutSession(...)`
@@ -19,78 +19,111 @@ Intégrer un système de paiement complet, résilient et scalable, en s'appuyant
     *   `handleWebhook(...)`
 2.  **Service `PaymentService`** (`apps/api/app/services/`).
 3.  **Implémentation `StripeProvider`** (`apps/api/app/services/providers/`).
+4.  **Sécurité des Clés d'API :**
+    *   Toutes les clés secrètes des fournisseurs (ex: `STRIPE_SECRET_KEY`) doivent être stockées de manière sécurisée via des variables d'environnement et ne jamais être exposées côté client ou versionnées.
 
 ---
 
-### **Partie 2 : Backend (AdonisJS) - Architecture de Paiement Robuste**
+### **Partie 2 : Backend (AdonisJS) - Architecture de Paiement Finalisée et Robuste**
 
-#### **2.1. Schéma de la Base de Données (Architecture Flexible)**
+Cette architecture est revue pour adresser des failles critiques liées à l'identification du client et à la flexibilité de la facturation.
 
-Pour garantir la flexibilité (prix régionaux, A/B testing), nous allons utiliser un schéma plus granulaire que précédemment.
+#### **2.1. Sécurité des Endpoints et Identification du Client**
+*   Les routes qui initient des actions de paiement (`POST /checkout-sessions`, etc.) **doivent** être protégées par le middleware `auth` et des politiques Bouncer.
+*   **Identification Fiable :** Lors de la création d'une session de paiement, le backend **doit** passer un identifiant interne immuable au fournisseur de paiement. Ceci crée une boucle de confiance fermée.
+    ```typescript
+    // Exemple lors de la création d'une session Stripe
+    const session = await stripe.checkout.sessions.create({
+      // ... autres paramètres
+      // L'ID est préfixé pour gérer la polymorphie (User vs Team)
+      client_reference_id: `${entityType}_${entity.id}` // ex: 'user_123' ou 'team_456'
+    });
+    ```
 
-1.  **Nouvelle Table `products`**
-    *   Crée une migration pour une table `products`.
-    *   Elle doit avoir une relation `belongsTo` avec `subscription_tiers`. Un "Tier" peut avoir plusieurs "Products" (ex: un produit Stripe, un produit LemonSqueezy).
-    *   Colonnes : `id`, `tier_id` (fk), `provider_name` (string), `provider_product_id` (string).
+#### **2.2. Schéma de la Base de Données (Architecture Robuste)**
 
-2.  **Nouvelle Table `prices`**
-    *   Crée une migration pour une table `prices`.
-    *   Elle doit avoir une relation `belongsTo` avec `products`. Un "Product" peut avoir plusieurs "Prices".
-    *   Colonnes : `id`, `product_id` (fk), `provider_price_id` (string), `interval` (enum: 'month', 'year'), `currency` (string), `unit_amount` (integer).
+Cette nouvelle structure modélise correctement la relation entre les entités de l'application et les objets du fournisseur de paiement, y compris pour les équipes et la gestion des taxes.
 
-3.  **Table `subscriptions` (Modification)**
-    *   Ajoute une migration pour inclure : `provider_name` (string) et `provider_subscription_id` (string, indexé, unique).
+1.  **Nouvelle Table `payment_customers` (Polymorphique)**
+    *   Découple les entités de l'application du "Client" du fournisseur. Une `User` ou une `Team` peut être un client.
+    *   Colonnes : `id`, `subscriber_type` (string: 'user' ou 'team'), `subscriber_id` (integer), `provider` (string), `provider_customer_id` (string, unique).
 
-4.  **Nouvelle Table `customers`**
-    *   Colonnes : `id`, `user_id` (fk), `provider_name` (string), `provider_customer_id` (string, unique).
+2.  **Nouvelle Table `products`**
+    *   Fait le lien entre nos `SubscriptionTier` et leur représentation en tant que "Produit" chez un fournisseur.
+    *   Colonnes : `id`, `tier_id` (fk), `provider` (string), `provider_product_id` (string, unique).
 
-#### **2.2. Modèles AdonisJS**
+3.  **Nouvelle Table `prices` (Avec Gestion des Taxes)**
+    *   Représente les différentes tarifications d'un `Product`.
+    *   Colonnes : `id`, `product_id` (fk), `provider` (string), `provider_price_id` (string, unique), `interval` (enum: 'month', 'year'), `currency` (string), `unit_amount` (integer), `tax_behavior` (enum: 'inclusive', 'exclusive', default 'exclusive').
 
-*   Crée les modèles `Product`, `Price`, et `Customer`.
+4.  **Table `subscriptions` (Modification)**
+    *   Colonnes à ajouter : `provider_name` (string, nullable) et `provider_subscription_id` (string, nullable, indexé, unique).
+
+#### **2.3. Modèles AdonisJS**
+
+*   Crée les modèles `PaymentCustomer`, `Product`, et `Price`.
 *   Mets à jour le modèle `Subscription` avec les nouveaux champs.
-*   Établis toutes les relations ORM (`hasMany`, `belongsTo`).
+*   Établis les relations ORM (`hasMany`, `belongsTo`, `morphTo`).
 
-#### **2.3. Gestion des Webhooks : Fiabilité et Résilience (Section Critique)**
+#### **2.4. Gestion des Webhooks : Sécurité Maximale**
 
-Dans `StripeProvider`, la méthode `handleWebhook` doit être conçue pour être de qualité production.
+1.  **Vérification de la Signature (Étape 1 et Impérative) :**
+    *   Rejette immédiatement toute requête dont la signature est invalide avec un statut `400`.
 
-1.  **Idempotence :**
-    *   Chaque événement Stripe a un ID unique (`evt_...`). Avant de traiter un événement, vérifie si cet ID n'a pas déjà été traité. Stocke les ID des événements traités (par exemple, dans une table `processed_events` ou dans Redis avec une expiration) pour éviter les doubles traitements.
+2.  **Idempotence :**
+    *   Vérifie l'ID de l'événement pour éviter les doubles traitements.
 
-2.  **Transactions Atomiques :**
-    *   Enveloppe **toutes** les opérations de base de données liées à un même événement webhook dans une transaction (`Database.transaction()`). Si une seule opération échoue (ex: la mise à jour de la souscription après la création du client), tout doit être annulé pour éviter un état incohérent.
+3.  **Transactions Atomiques :**
+    *   Enveloppe toute la logique dans une transaction de base de données.
 
-3.  **Gestion des Erreurs et Réessais :**
-    *   La logique de traitement doit être dans un bloc `try...catch`.
-    *   En cas d'erreur inattendue, logue l'erreur de manière détaillée, puis retourne un statut `500` à Stripe. Cela indiquera à Stripe de réessayer d'envoyer le webhook plus tard.
-    *   Réponds `200 OK` uniquement après un traitement réussi.
-
-4.  **Logique de Traitement (Exemple pour `checkout.session.completed`) :**
+4.  **Logique de Traitement Sécurisée (Exemple pour `checkout.session.completed`) :**
+    *   **N'utilise jamais l'email du payload.** L'identification se fait **uniquement** via le `client_reference_id`.
     ```typescript
     // Pseudocode pour le webhook handler
-    async handleCheckoutCompleted(payload) {
+    async handleCheckoutCompleted(payload, signature) {
+      // 1. Vérifier la signature (impératif)
+      // ...
+
       const eventId = payload.id;
       if (await this.eventProcessor.hasBeenProcessed(eventId)) {
-        return; // Idempotence
+        return; // 2. Idempotence
       }
 
+      // IDENTIFICATION FIABLE
+      const clientReferenceId = payload.client_reference_id;
+      if (!clientReferenceId) {
+        throw new Error('Critical: client_reference_id manquant dans le webhook.');
+      }
+      const [subscriberType, subscriberId] = clientReferenceId.split('_');
+
+      // 3. Transaction Atomique
       await Database.transaction(async (trx) => {
-        // 1. Récupère ou crée le Customer
-        const customer = await Customer.updateOrCreate(..., { client: trx });
+        // Crée ou récupère notre enregistrement client local
+        await PaymentCustomer.updateOrCreate({
+          subscriberType,
+          subscriberId,
+          provider: 'stripe',
+        }, {
+          provider_customer_id: payload.customer,
+        }, { client: trx });
         
-        // 2. Trouve le Price local via le provider_price_id de la session
-        const price = await Price.findBy('provider_price_id', payload.lines.data[0].price.id);
+        const price = await Price.findByOrFail('provider_price_id', payload.lines.data[0].price.id);
 
-        // 3. Invalide les anciennes souscriptions
-        await Subscription.query({ client: trx }).forUser(...).update({ status: 'cancelled' });
+        await Subscription.query({ client: trx })
+          .where('subscriberType', subscriberType)
+          .where('subscriberId', subscriberId)
+          .update({ status: 'cancelled' });
 
-        // 4. Crée la nouvelle souscription
         await Subscription.create({
-          ...,
+          subscriberType,
+          subscriberId,
+          tierId: price.product.tierId, // via relation
+          status: 'active',
+          provider_name: 'stripe',
           provider_subscription_id: payload.subscription,
+          // ...
         }, { client: trx });
 
-        // 5. Marque l'événement comme traité
         await this.eventProcessor.markAsProcessed(eventId, { client: trx });
       });
     }
@@ -98,55 +131,30 @@ Dans `StripeProvider`, la méthode `handleWebhook` doit être conçue pour être
 
 ---
 
-### **Partie 3 : Frontend (Next.js) - Gestion de l'État Asynchrone**
+### **Partie 3 : Frontend (Next.js) - Gestion de l'État**
 
-Le passage des méthodes du modèle `User` en `async` a un impact significatif. Voici comment le gérer proprement.
-
-#### **3.1. Mise à jour du `AuthContext`**
-
-Le contexte d'authentification doit devenir la source de vérité pour l'état de l'abonnement côté client.
-
-1.  **État dans le Contexte :**
-    *   Ajoute l'état de l'abonnement au contexte : `subscription: Subscription | null`, `tier: SubscriptionTier | null`, `isLoadingSubscription: boolean`.
-
-2.  **Chargement des Données :**
-    *   Lors de l'appel à la fonction `login` ou `fetchUser` dans le contexte, après avoir récupéré l'utilisateur, fais un appel supplémentaire à un nouvel endpoint API (ex: `GET /auth/me/subscription`) pour récupérer l'abonnement actif et le tier.
-    *   Pendant ce chargement, `isLoadingSubscription` doit être `true`.
-
-3.  **Hook `useSubscription` :**
-    *   Ce hook ne fera plus d'appel API. Il lira simplement les valeurs (`subscription`, `tier`, `isLoadingSubscription`) depuis le `AuthContext`.
-
-4.  **Refetching :**
-    *   Expose une fonction `refetchSubscription()` depuis le contexte.
-    *   Cette fonction sera appelée stratégiquement, par exemple dans un `useEffect` sur la page `/dashboard` si l'URL contient `?checkout=success`, pour rafraîchir l'état de l'abonnement sans que l'utilisateur ait à se déconnecter/reconnecter.
-
-#### **3.2. Adaptation des Composants**
-
-*   Les composants qui dépendent de l'abonnement (ex: un HOC `Gate`) utiliseront le hook `useSubscription`.
-*   Ils devront maintenant gérer l'état `isLoadingSubscription` pour afficher un spinner ou un état désactivé, évitant ainsi le "flickering" de l'interface.
-    ```typescript
-    // Exemple dans un composant
-    const { tier, isLoadingSubscription } = useSubscription();
-
-    if (isLoadingSubscription) {
-      return <Spinner />;
-    }
-
-    if (tier?.slug !== 'pro') {
-      return <AccessDenied />;
-    }
-
-    return <ProFeature />;
-    ```
+*La refonte du `AuthContext` reste la même, mais il est crucial de comprendre que le frontend ne fait que **refléter** l'état autorisé par le backend.*
+*   Les modifications de l'interface (ex: cacher un bouton "Pro") sont pour l'**expérience utilisateur**, pas pour la **sécurité**. La véritable sécurité est assurée par le backend (voir Partie 4).
 
 ---
 
-**Résumé des Tâches Clés à Générer (Révisé) :**
+### **Partie 4 : Architecture de Sécurité et Accès aux Données (Backend)**
+
+*Cette section reste valide et devient encore plus pertinente maintenant que la liaison abonnement-entité est correctement établie.*
+
+1.  **Le Backend comme Source de Vérité :** Chaque requête API sensible doit re-valider les permissions de l'utilisateur en se basant sur son `effectiveSubscriptionTier`.
+2.  **Politiques d'Accès avec Bouncer :** Utilise des politiques pour centraliser la logique d'autorisation basée sur le tier.
+3.  **Filtrage des Données dans les Réponses API :** Les endpoints de l'API doivent adapter les données qu'ils renvoient en fonction du niveau d'abonnement.
+
+---
+
+**Résumé des Tâches Clés à Générer (Finalisé et Sécurisé) :**
 
 1.  **Backend :**
-    *   Générer les migrations pour les nouvelles tables `products` et `prices`, et modifier `subscriptions`.
-    *   Implémenter une logique de webhook **robuste** avec idempotence et transactions.
+    *   Générer les migrations pour les nouvelles tables `payment_customers`, `products`, `prices`, et modifier `subscriptions`.
+    *   Implémenter le endpoint de webhook avec **vérification de signature**, idempotence via `client_reference_id`, et transactions.
+    *   Sécuriser les endpoints de création de session, en s'assurant que `client_reference_id` est bien passé.
+    *   Implémenter des politiques Bouncer pour contrôler l'accès aux fonctionnalités clés.
 2.  **Frontend :**
-    *   **Refactoriser `AuthContext`** pour qu'il gère l'état de l'abonnement de manière asynchrone.
-    *   Mettre à jour les composants pour qu'ils gèrent l'état de chargement de l'abonnement.
-    *   Créer un endpoint API pour récupérer l'abonnement de l'utilisateur authentifié.
+    *   Refactoriser `AuthContext` pour gérer l'état de l'abonnement.
+    *   Adapter l'UI à l'état de l'abonnement.

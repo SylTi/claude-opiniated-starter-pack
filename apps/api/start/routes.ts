@@ -17,6 +17,8 @@ const OAuthController = () => import('#controllers/oauth_controller')
 const AdminController = () => import('#controllers/admin_controller')
 const DashboardController = () => import('#controllers/dashboard_controller')
 const TeamsController = () => import('#controllers/teams_controller')
+const PaymentController = () => import('#controllers/payment_controller')
+const WebhookController = () => import('#controllers/webhook_controller')
 
 router.get('/', async () => {
   return {
@@ -96,6 +98,23 @@ router
         router.delete('/users/:id', [AdminController, 'deleteUser'])
         router.get('/teams', [AdminController, 'listTeams'])
         router.put('/teams/:id/tier', [AdminController, 'updateTeamTier'])
+
+        // Subscription Tiers Management
+        router.get('/tiers', [AdminController, 'listTiers'])
+        router.post('/tiers', [AdminController, 'createTier'])
+        router.put('/tiers/:id', [AdminController, 'updateTier'])
+
+        // Products Management (Tier <-> Stripe Product)
+        router.get('/products', [AdminController, 'listProducts'])
+        router.post('/products', [AdminController, 'createProduct'])
+        router.put('/products/:id', [AdminController, 'updateProduct'])
+        router.delete('/products/:id', [AdminController, 'deleteProduct'])
+
+        // Prices Management
+        router.get('/prices', [AdminController, 'listPrices'])
+        router.post('/prices', [AdminController, 'createPrice'])
+        router.put('/prices/:id', [AdminController, 'updatePrice'])
+        router.delete('/prices/:id', [AdminController, 'deletePrice'])
       })
       .prefix('/admin')
       .use([middleware.auth(), middleware.admin()])
@@ -139,5 +158,26 @@ router
       })
       .prefix('/invitations')
       .use(middleware.auth())
+
+    // Billing - Public routes (pricing page)
+    router.get('/billing/tiers', [PaymentController, 'getTiers'])
+
+    // Billing - Protected routes
+    router
+      .group(() => {
+        router.post('/checkout', [PaymentController, 'createCheckout'])
+        router.post('/portal', [PaymentController, 'createPortal'])
+        router.get('/subscription', [PaymentController, 'getSubscription'])
+        router.post('/cancel', [PaymentController, 'cancelSubscription'])
+      })
+      .prefix('/billing')
+      .use(middleware.auth())
+
+    // Webhooks - No auth (uses signature verification)
+    router
+      .group(() => {
+        router.post('/stripe', [WebhookController, 'handleStripe']).use(middleware.rawBody())
+      })
+      .prefix('/webhooks')
   })
   .prefix('/api/v1')

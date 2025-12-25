@@ -47,12 +47,14 @@
     "@types/luxon": "^3.7.1",
     "@types/node": "^22.15.18",
     "@types/qrcode": "^1.5.6",
+    "@types/sinon": "^21.0.0",
     "@types/supertest": "^6.0.3",
     "c8": "^10.1.3",
     "eslint": "^9.26.0",
     "hot-hook": "^0.4.0",
     "pino-pretty": "^13.0.0",
     "prettier": "^3.5.3",
+    "sinon": "^21.0.1",
     "supertest": "^7.1.4",
     "ts-node-maintained": "^10.9.5",
     "typescript": "~5.8"
@@ -71,7 +73,8 @@
     "pg": "^8.16.3",
     "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
-    "resend": "^6.6.0"
+    "resend": "^6.6.0",
+    "stripe": "^20.1.0"
   },
   "hotHook": {
     "boundaries": [
@@ -81,9 +84,18 @@
   },
   "prettier": "@adonisjs/prettier-config",
   "c8": {
-    "include": ["app/**/*.ts"],
-    "exclude": ["app/**/*.spec.ts", "tests/**/*"],
-    "reporter": ["text", "html", "lcov"],
+    "include": [
+      "app/**/*.ts"
+    ],
+    "exclude": [
+      "app/**/*.spec.ts",
+      "tests/**/*"
+    ],
+    "reporter": [
+      "text",
+      "html",
+      "lcov"
+    ],
     "report-dir": "coverage"
   }
 }
