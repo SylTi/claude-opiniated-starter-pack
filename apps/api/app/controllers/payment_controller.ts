@@ -1,8 +1,10 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import PaymentService from '#services/payment_service'
+import DiscountCodeService from '#services/discount_code_service'
 import env from '#start/env'
 import type { SubscriberType } from '#models/subscription'
 import Team from '#models/team'
+import DiscountCode from '#models/discount_code'
 
 export default class PaymentController {
   /**
@@ -45,10 +47,11 @@ export default class PaymentController {
    */
   async createCheckout({ request, response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
-    const { priceId, subscriberType, subscriberId } = request.only([
+    const { priceId, subscriberType, subscriberId, discountCode } = request.only([
       'priceId',
       'subscriberType',
       'subscriberId',
+      'discountCode',
     ])
 
     if (!priceId) {
@@ -75,6 +78,24 @@ export default class PaymentController {
       finalSubscriberId = subscriberId
     }
 
+    // Validate discount code if provided
+    let validatedDiscountCode: DiscountCode | null = null
+    if (discountCode) {
+      const discountCodeService = new DiscountCodeService()
+      const validationResult = await discountCodeService.validateCode(
+        discountCode,
+        priceId,
+        user.id
+      )
+      if (!validationResult.valid) {
+        return response.badRequest({
+          error: 'InvalidDiscountCode',
+          message: validationResult.message ?? 'Invalid discount code',
+        })
+      }
+      validatedDiscountCode = validationResult.discountCode ?? null
+    }
+
     const frontendUrl = env.get('FRONTEND_URL', 'http://localhost:3000')
     const successUrl = `${frontendUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`
     const cancelUrl = `${frontendUrl}/billing/cancel`
@@ -88,6 +109,12 @@ export default class PaymentController {
         successUrl,
         cancelUrl
       )
+
+      // Record discount code usage if one was applied
+      if (validatedDiscountCode) {
+        const discountCodeService = new DiscountCodeService()
+        await discountCodeService.recordUsage(validatedDiscountCode.id, user.id, result.sessionId)
+      }
 
       response.json({
         data: {

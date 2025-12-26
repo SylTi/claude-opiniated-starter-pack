@@ -43,6 +43,7 @@ function createMockTier(slug: string, level: number): SubscriptionTierDTO {
     id: level + 1,
     slug,
     name: slug === "free" ? "Free" : slug === "tier1" ? "Tier 1" : "Tier 2",
+    description: `${slug} tier description`,
     level,
     maxTeamMembers: slug === "free" ? 5 : slug === "tier1" ? 20 : null,
     priceMonthly: null,
@@ -62,6 +63,8 @@ function createMockSubscription(tierSlug: string, expiresAt: string | null = nul
     status: "active",
     startsAt: new Date().toISOString(),
     expiresAt,
+    providerName: null,
+    providerSubscriptionId: null,
     createdAt: new Date().toISOString(),
     updatedAt: null,
   };

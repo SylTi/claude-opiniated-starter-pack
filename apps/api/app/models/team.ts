@@ -22,6 +22,12 @@ export default class Team extends BaseModel {
   @column()
   declare maxMembers: number | null
 
+  @column()
+  declare balance: number
+
+  @column()
+  declare balanceCurrency: string
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 
@@ -112,5 +118,34 @@ export default class Team extends BaseModel {
     const max = await this.getEffectiveMaxMembers()
     if (max === null) return true // unlimited
     return currentMemberCount < max
+  }
+
+  /**
+   * Add credit to team's balance
+   */
+  async addCredit(amount: number, currency?: string): Promise<number> {
+    // Only check for currency mismatch if team already has a currency set
+    if (this.balanceCurrency && currency && currency !== this.balanceCurrency) {
+      throw new Error(`Currency mismatch: expected ${this.balanceCurrency}, got ${currency}`)
+    }
+    // Ensure both balance and amount are numbers (they might come as strings from DB)
+    const currentBalance = Number(this.balance) || 0
+    const creditAmount = Number(amount) || 0
+    this.balance = currentBalance + creditAmount
+    if (!this.balanceCurrency) {
+      this.balanceCurrency = currency || 'usd'
+    }
+    await this.save()
+    return this.balance
+  }
+
+  /**
+   * Get team's balance
+   */
+  getBalance(): { balance: number; currency: string } {
+    return {
+      balance: this.balance || 0,
+      currency: this.balanceCurrency || 'usd',
+    }
   }
 }

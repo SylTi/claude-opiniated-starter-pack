@@ -16,6 +16,9 @@ import db from '@adonisjs/lucid/services/db'
  */
 export async function truncateAllTables(): Promise<void> {
   const tables = [
+    'discount_code_usages',
+    'discount_codes',
+    'coupons',
     'processed_webhook_events',
     'prices',
     'products',

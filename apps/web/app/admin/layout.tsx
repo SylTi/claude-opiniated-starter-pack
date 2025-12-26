@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, Users, Loader2 } from "lucide-react";
+import { LayoutDashboard, Users, Loader2, Tag, Ticket } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
 import { toast } from "sonner";
@@ -11,6 +11,8 @@ import { toast } from "sonner";
 const navigation = [
   { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { name: "Users", href: "/admin/users", icon: Users },
+  { name: "Discount Codes", href: "/admin/discount-codes", icon: Tag },
+  { name: "Coupons", href: "/admin/coupons", icon: Ticket },
 ];
 
 export default function AdminLayout({

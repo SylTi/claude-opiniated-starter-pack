@@ -366,4 +366,8 @@ pnpm -r --parallel run dev             # Run in parallel
 - toujours verifier API.md quand on doit ajouter une nouvelle fonctionnalité qui depend de l'existant pour eviter de faire des lectures inutiles dans les fichiers.
 - ne jamais lancer les tests quand on fini une nouvelle fonctionnalité, mais toujours demander a l'utilisateur de le faire en lui affichants les commandes. Pareil pour le coverage.
 - chaque fonctionnalité et element UX doit avoir son test unitaire/fonctionnel/etc qui valide son fonctionnement. 
+- Toujours creer un mock pour les tests necessitant un call a un service exterieur a l'application. Exemple: Mail, Paiements etc.
 - n'ecris jamais de placeholder tests, ecris directement les vrais tests.
+- Always use context7 when I need code generation, setup or configuration steps, or
+library/API documentation. This means you should automatically use the Context7 MCP
+tools to resolve library id and get library docs without me having to explicitly ask.

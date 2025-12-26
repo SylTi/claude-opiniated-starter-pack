@@ -22,6 +22,7 @@ export interface SubscriptionTierDTO {
   id: number;
   slug: string;
   name: string;
+  description: string | null;
   level: number;
   maxTeamMembers: number | null;
   priceMonthly: number | null;

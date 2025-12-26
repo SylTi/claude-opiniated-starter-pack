@@ -2,8 +2,9 @@
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import type { BillingTierDTO, PriceDTO } from '@saas/shared'
-import { Check } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import type { BillingTierDTO, PriceDTO, ValidateDiscountCodeResponse } from '@saas/shared'
+import { Check, Tag } from 'lucide-react'
 
 interface PricingCardProps {
   billingTier: BillingTierDTO
@@ -12,6 +13,7 @@ interface PricingCardProps {
   selectedCurrency: string
   onSubscribe: (priceId: string) => void
   isLoading?: boolean
+  discountValidation?: ValidateDiscountCodeResponse
 }
 
 function formatPrice(amount: number, currency: string): string {
@@ -30,6 +32,7 @@ export function PricingCard({
   selectedCurrency,
   onSubscribe,
   isLoading,
+  discountValidation,
 }: PricingCardProps): React.ReactElement {
   const { tier, prices } = billingTier
   const isCurrentTier = tier.slug === currentTierSlug
@@ -82,7 +85,26 @@ export function PricingCard({
             <div className="text-3xl font-bold">Free</div>
           ) : matchingPrice ? (
             <div>
-              <span className="text-3xl font-bold">{formatPrice(matchingPrice.unitAmount, matchingPrice.currency)}</span>
+              {discountValidation ? (
+                <>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xl text-muted-foreground line-through">
+                      {formatPrice(discountValidation.originalAmount, matchingPrice.currency)}
+                    </span>
+                    <Badge variant="secondary" className="text-xs">
+                      <Tag className="h-3 w-3 mr-1" />
+                      {discountValidation.discountCode?.discountType === 'percent'
+                        ? `${discountValidation.discountCode.discountValue}% OFF`
+                        : `${formatPrice(discountValidation.discountApplied, matchingPrice.currency)} OFF`}
+                    </Badge>
+                  </div>
+                  <span className="text-3xl font-bold text-green-600">
+                    {formatPrice(discountValidation.discountedAmount, matchingPrice.currency)}
+                  </span>
+                </>
+              ) : (
+                <span className="text-3xl font-bold">{formatPrice(matchingPrice.unitAmount, matchingPrice.currency)}</span>
+              )}
               <span className="text-muted-foreground">/{selectedInterval}</span>
               {matchingPrice.taxBehavior === 'exclusive' && (
                 <span className="text-sm text-muted-foreground block">+ applicable taxes</span>
@@ -93,7 +115,7 @@ export function PricingCard({
           )}
         </div>
 
-        {tier.maxTeamMembers !== undefined && tier.maxTeamMembers > 0 && (
+        {tier.maxTeamMembers !== null && tier.maxTeamMembers > 0 && (
           <p className="text-sm text-muted-foreground mb-4">
             Up to {tier.maxTeamMembers} team members
           </p>

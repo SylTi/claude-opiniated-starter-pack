@@ -173,7 +173,7 @@ cd apps/api && node ace test functional
 #### Tous les tests
 pnpm test
 
-#### Coverage
+#### Tous les tests + Coverage
 cd apps/api && node ace test --coverage
 
 

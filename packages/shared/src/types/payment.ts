@@ -64,6 +64,7 @@ export interface CreateCheckoutRequest {
   priceId: number;
   subscriberType?: "user" | "team";
   subscriberId?: number;
+  discountCode?: string;
 }
 
 /**

@@ -21,6 +21,7 @@ function createMockTier(slug: string, level: number): SubscriptionTierDTO {
     id: level + 1,
     slug,
     name: slug === "free" ? "Free" : slug === "tier1" ? "Tier 1" : "Tier 2",
+    description: `${slug} tier description`,
     level,
     maxTeamMembers: slug === "free" ? 5 : slug === "tier1" ? 20 : null,
     priceMonthly: null,
@@ -42,6 +43,8 @@ const mockUser: UserDTO = {
   emailVerified: true,
   mfaEnabled: false,
   avatarUrl: null,
+  balance: 0,
+  balanceCurrency: "usd",
   createdAt: "2024-01-01T00:00:00.000Z",
 };
 

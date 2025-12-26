@@ -10,6 +10,8 @@ export interface TeamDTO {
   ownerId: number | null;
   maxMembers: number | null;
   memberCount?: number;
+  balance: number;
+  balanceCurrency: string;
   createdAt: string;
   updatedAt: string | null;
 }
@@ -112,6 +114,8 @@ export interface AdminTeamDTO {
   ownerId: number | null;
   ownerEmail: string | null;
   memberCount: number;
+  balance: number;
+  balanceCurrency: string;
   createdAt: string;
   updatedAt: string | null;
 }

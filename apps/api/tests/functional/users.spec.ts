@@ -190,7 +190,8 @@ test.group('Admin Users API (Integration - Local DB)', (group) => {
   test('DELETE /api/v1/admin/users/:id requires admin role', async ({ assert }) => {
     const id = uniqueId()
 
-    const regularUser = await User.create({
+    // Create regular user for login (not used directly, but needed for authentication)
+    await User.create({
       email: `user-${id}@example.com`,
       password: 'password123',
       fullName: 'Regular User',

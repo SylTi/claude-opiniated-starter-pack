@@ -81,6 +81,8 @@ export default class AdminController {
           subscriptionExpiresAt: subscription?.expiresAt?.toISO() ?? null,
           currentTeamId: user.currentTeamId,
           currentTeamName: user.currentTeam?.name ?? null,
+          balance: user.balance ?? 0,
+          balanceCurrency: user.balanceCurrency ?? 'usd',
           emailVerified: user.emailVerified,
           emailVerifiedAt: user.emailVerifiedAt?.toISO() ?? null,
           mfaEnabled: user.mfaEnabled,
@@ -239,6 +241,8 @@ export default class AdminController {
           ownerId: team.ownerId,
           ownerEmail: team.owner?.email ?? null,
           memberCount: team.members.length,
+          balance: team.balance ?? 0,
+          balanceCurrency: team.balanceCurrency ?? 'usd',
           createdAt: team.createdAt.toISO(),
           updatedAt: team.updatedAt?.toISO() ?? null,
         }

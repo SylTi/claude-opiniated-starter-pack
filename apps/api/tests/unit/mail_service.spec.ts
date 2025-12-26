@@ -2,11 +2,6 @@ import { test } from '@japa/runner'
 import sinon from 'sinon'
 import MailService from '#services/mail_service'
 
-// Type for accessing private resend property
-type MailServiceWithResend = MailService & {
-  resend: { emails: { send: sinon.SinonStub } } | null
-}
-
 test.group('MailService', (group) => {
   let sendStub: sinon.SinonStub
   let mailService: MailService
@@ -18,10 +13,11 @@ test.group('MailService', (group) => {
     // Create the stub for resend.emails.send
     sendStub = sinon.stub().resolves({ data: { id: 'mock-email-id' }, error: null })
 
-    // Access the private resend property and stub its emails.send method
-    const serviceWithResend = mailService as MailServiceWithResend
-    if (serviceWithResend.resend) {
-      serviceWithResend.resend.emails.send = sendStub
+    // Access the private resend property using Object access and stub its emails.send method
+
+    const resendInstance = (mailService as any).resend
+    if (resendInstance) {
+      resendInstance.emails.send = sendStub
     }
   })
 

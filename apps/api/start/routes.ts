@@ -19,6 +19,8 @@ const DashboardController = () => import('#controllers/dashboard_controller')
 const TeamsController = () => import('#controllers/teams_controller')
 const PaymentController = () => import('#controllers/payment_controller')
 const WebhookController = () => import('#controllers/webhook_controller')
+const DiscountCodesController = () => import('#controllers/discount_codes_controller')
+const CouponsController = () => import('#controllers/coupons_controller')
 
 router.get('/', async () => {
   return {
@@ -115,6 +117,20 @@ router
         router.post('/prices', [AdminController, 'createPrice'])
         router.put('/prices/:id', [AdminController, 'updatePrice'])
         router.delete('/prices/:id', [AdminController, 'deletePrice'])
+
+        // Discount Codes Management
+        router.get('/discount-codes', [DiscountCodesController, 'index'])
+        router.get('/discount-codes/:id', [DiscountCodesController, 'show'])
+        router.post('/discount-codes', [DiscountCodesController, 'store'])
+        router.put('/discount-codes/:id', [DiscountCodesController, 'update'])
+        router.delete('/discount-codes/:id', [DiscountCodesController, 'destroy'])
+
+        // Coupons Management
+        router.get('/coupons', [CouponsController, 'index'])
+        router.get('/coupons/:id', [CouponsController, 'show'])
+        router.post('/coupons', [CouponsController, 'store'])
+        router.put('/coupons/:id', [CouponsController, 'update'])
+        router.delete('/coupons/:id', [CouponsController, 'destroy'])
       })
       .prefix('/admin')
       .use([middleware.auth(), middleware.admin()])
@@ -169,6 +185,10 @@ router
         router.post('/portal', [PaymentController, 'createPortal'])
         router.get('/subscription', [PaymentController, 'getSubscription'])
         router.post('/cancel', [PaymentController, 'cancelSubscription'])
+        // Discount codes and coupons
+        router.post('/validate-discount-code', [DiscountCodesController, 'validate'])
+        router.post('/redeem-coupon', [CouponsController, 'redeem'])
+        router.get('/balance', [CouponsController, 'getBalance'])
       })
       .prefix('/billing')
       .use(middleware.auth())

@@ -55,6 +55,12 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @column()
   declare currentTeamId: number | null
 
+  @column()
+  declare balance: number
+
+  @column()
+  declare balanceCurrency: string
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 
@@ -195,5 +201,34 @@ export default class User extends compose(BaseModel, AuthFinder) {
    */
   setMfaBackupCodes(codes: string[]): void {
     this.mfaBackupCodes = JSON.stringify(codes)
+  }
+
+  /**
+   * Add credit to user's balance
+   */
+  async addCredit(amount: number, currency?: string): Promise<number> {
+    // Only check for currency mismatch if user already has a currency set
+    if (this.balanceCurrency && currency && currency !== this.balanceCurrency) {
+      throw new Error(`Currency mismatch: expected ${this.balanceCurrency}, got ${currency}`)
+    }
+    // Ensure both balance and amount are numbers (they might come as strings from DB)
+    const currentBalance = Number(this.balance) || 0
+    const creditAmount = Number(amount) || 0
+    this.balance = currentBalance + creditAmount
+    if (!this.balanceCurrency) {
+      this.balanceCurrency = currency || 'usd'
+    }
+    await this.save()
+    return this.balance
+  }
+
+  /**
+   * Get user's balance
+   */
+  getBalance(): { balance: number; currency: string } {
+    return {
+      balance: this.balance || 0,
+      currency: this.balanceCurrency || 'usd',
+    }
   }
 }

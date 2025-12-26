@@ -110,6 +110,11 @@ import type {
   BillingSubscriptionDTO,
   SubscriptionTierDTO,
   PriceDTO,
+  DiscountCodeDTO,
+  CouponDTO,
+  ValidateDiscountCodeResponse,
+  RedeemCouponResponse,
+  BalanceDTO,
 } from '@saas/shared'
 
 /**
@@ -131,6 +136,7 @@ export const billingApi = {
     priceId: string
     successUrl: string
     cancelUrl: string
+    discountCode?: string
   }): Promise<CheckoutSessionDTO> {
     const response = await api.post<CheckoutSessionDTO>('/api/v1/billing/checkout', params)
     if (!response.data) {
@@ -166,6 +172,40 @@ export const billingApi = {
    */
   async cancelSubscription(): Promise<void> {
     await api.post('/api/v1/billing/cancel')
+  },
+
+  /**
+   * Validate a discount code
+   */
+  async validateDiscountCode(code: string, priceId: number): Promise<ValidateDiscountCodeResponse> {
+    const response = await api.post<ValidateDiscountCodeResponse>('/api/v1/billing/validate-discount-code', { code, priceId })
+    if (!response.data) {
+      throw new Error('Failed to validate discount code')
+    }
+    return response.data
+  },
+
+  /**
+   * Redeem a coupon
+   */
+  async redeemCoupon(code: string, teamId?: number): Promise<RedeemCouponResponse> {
+    const response = await api.post<RedeemCouponResponse>('/api/v1/billing/redeem-coupon', { code, teamId })
+    if (!response.data) {
+      throw new Error('Failed to redeem coupon')
+    }
+    return response.data
+  },
+
+  /**
+   * Get current balance
+   */
+  async getBalance(teamId?: number): Promise<BalanceDTO> {
+    const endpoint = teamId ? `/api/v1/billing/balance?teamId=${teamId}` : '/api/v1/billing/balance'
+    const response = await api.get<BalanceDTO>(endpoint)
+    if (!response.data) {
+      throw new Error('Failed to get balance')
+    }
+    return response.data
   },
 }
 
@@ -259,5 +299,105 @@ export const adminBillingApi = {
       throw new Error('Failed to update price')
     }
     return response.data
+  },
+}
+
+/**
+ * Admin API for managing discount codes
+ */
+export const adminDiscountCodesApi = {
+  async list(): Promise<DiscountCodeDTO[]> {
+    const response = await api.get<DiscountCodeDTO[]>('/api/v1/admin/discount-codes')
+    return response.data || []
+  },
+
+  async get(id: number): Promise<DiscountCodeDTO> {
+    const response = await api.get<DiscountCodeDTO>(`/api/v1/admin/discount-codes/${id}`)
+    if (!response.data) throw new Error('Failed to get discount code')
+    return response.data
+  },
+
+  async create(data: {
+    code: string
+    description?: string
+    discountType: 'percent' | 'fixed'
+    discountValue: number
+    currency?: string
+    minAmount?: number
+    maxUses?: number
+    maxUsesPerUser?: number
+    expiresAt?: string
+    isActive?: boolean
+  }): Promise<DiscountCodeDTO> {
+    const response = await api.post<DiscountCodeDTO>('/api/v1/admin/discount-codes', data)
+    if (!response.data) throw new Error('Failed to create discount code')
+    return response.data
+  },
+
+  async update(id: number, data: Partial<{
+    code: string
+    description: string | null
+    discountType: 'percent' | 'fixed'
+    discountValue: number
+    currency: string | null
+    minAmount: number | null
+    maxUses: number | null
+    maxUsesPerUser: number | null
+    expiresAt: string | null
+    isActive: boolean
+  }>): Promise<DiscountCodeDTO> {
+    const response = await api.put<DiscountCodeDTO>(`/api/v1/admin/discount-codes/${id}`, data)
+    if (!response.data) throw new Error('Failed to update discount code')
+    return response.data
+  },
+
+  async delete(id: number): Promise<void> {
+    await api.delete(`/api/v1/admin/discount-codes/${id}`)
+  },
+}
+
+/**
+ * Admin API for managing coupons
+ */
+export const adminCouponsApi = {
+  async list(): Promise<CouponDTO[]> {
+    const response = await api.get<CouponDTO[]>('/api/v1/admin/coupons')
+    return response.data || []
+  },
+
+  async get(id: number): Promise<CouponDTO> {
+    const response = await api.get<CouponDTO>(`/api/v1/admin/coupons/${id}`)
+    if (!response.data) throw new Error('Failed to get coupon')
+    return response.data
+  },
+
+  async create(data: {
+    code: string
+    description?: string
+    creditAmount: number
+    currency?: string
+    expiresAt?: string
+    isActive?: boolean
+  }): Promise<CouponDTO> {
+    const response = await api.post<CouponDTO>('/api/v1/admin/coupons', data)
+    if (!response.data) throw new Error('Failed to create coupon')
+    return response.data
+  },
+
+  async update(id: number, data: Partial<{
+    code: string
+    description: string | null
+    creditAmount: number
+    currency: string
+    expiresAt: string | null
+    isActive: boolean
+  }>): Promise<CouponDTO> {
+    const response = await api.put<CouponDTO>(`/api/v1/admin/coupons/${id}`, data)
+    if (!response.data) throw new Error('Failed to update coupon')
+    return response.data
+  },
+
+  async delete(id: number): Promise<void> {
+    await api.delete(`/api/v1/admin/coupons/${id}`)
   },
 }

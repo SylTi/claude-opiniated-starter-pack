@@ -48,7 +48,7 @@ test.group('UserService (Unit - DB Mocked)', (group) => {
     })
 
     assert.isTrue(createStub.calledOnce)
-    const callArgs = createStub.firstCall.args[0]
+    const callArgs = createStub.firstCall.args[0] as Record<string, unknown>
     assert.equal(callArgs.email, 'test@example.com') // Email normalized to lowercase
     assert.equal(callArgs.password, 'securePassword123')
     assert.equal(callArgs.fullName, 'Test User')
@@ -68,7 +68,7 @@ test.group('UserService (Unit - DB Mocked)', (group) => {
     })
 
     assert.isTrue(createStub.calledOnce)
-    const callArgs = createStub.firstCall.args[0]
+    const callArgs = createStub.firstCall.args[0] as Record<string, unknown>
     assert.equal(callArgs.email, 'test@example.com')
   })
 
@@ -81,7 +81,7 @@ test.group('UserService (Unit - DB Mocked)', (group) => {
       password: 'password123',
     })
 
-    const callArgs = createStub.firstCall.args[0]
+    const callArgs = createStub.firstCall.args[0] as Record<string, unknown>
     assert.equal(callArgs.role, 'user')
   })
 
@@ -95,7 +95,7 @@ test.group('UserService (Unit - DB Mocked)', (group) => {
       role: 'admin',
     })
 
-    const callArgs = createStub.firstCall.args[0]
+    const callArgs = createStub.firstCall.args[0] as Record<string, unknown>
     assert.equal(callArgs.role, 'admin')
   })
 
@@ -108,7 +108,7 @@ test.group('UserService (Unit - DB Mocked)', (group) => {
       password: 'password123',
     })
 
-    const callArgs = createStub.firstCall.args[0]
+    const callArgs = createStub.firstCall.args[0] as Record<string, unknown>
     assert.isNull(callArgs.fullName)
   })
 

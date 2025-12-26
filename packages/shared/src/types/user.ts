@@ -19,6 +19,9 @@ export interface UserDTO {
   } | null;
   // Effective subscription tier (team's if in team, personal otherwise)
   effectiveSubscriptionTier: SubscriptionTierDTO;
+  // Cash balance (in cents)
+  balance: number;
+  balanceCurrency: string;
   emailVerified: boolean;
   mfaEnabled: boolean;
   avatarUrl: string | null;
@@ -87,6 +90,8 @@ export interface AdminUserDTO {
   subscriptionExpiresAt: string | null;
   currentTeamId: number | null;
   currentTeamName: string | null;
+  balance: number;
+  balanceCurrency: string;
   emailVerified: boolean;
   emailVerifiedAt: string | null;
   mfaEnabled: boolean;

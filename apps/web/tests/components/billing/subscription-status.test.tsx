@@ -31,8 +31,8 @@ function createMockTier(slug: string, level: number): SubscriptionTierDTO {
 function createMockSubscription(
   tierSlug: string,
   status: SubscriptionDTO['status'],
-  providerName?: string,
-  providerSubscriptionId?: string
+  providerName: string | null = null,
+  providerSubscriptionId: string | null = null
 ): BillingSubscriptionDTO {
   const tier = createMockTier(tierSlug, tierSlug === 'free' ? 0 : tierSlug === 'tier1' ? 1 : 2)
   return {
@@ -89,13 +89,13 @@ describe('SubscriptionStatus', () => {
     expect(screen.getByText('Cancelled')).toHaveClass('bg-red-100')
   })
 
-  it('shows past_due status correctly', () => {
-    const subscription = createMockSubscription('tier1', 'past_due', 'stripe', 'sub_123')
+  it('shows expired status correctly', () => {
+    const subscription = createMockSubscription('tier1', 'expired', 'stripe', 'sub_123')
 
     render(<SubscriptionStatus subscription={subscription} />)
 
-    expect(screen.getByText('Past due')).toBeInTheDocument()
-    expect(screen.getByText('Past due')).toHaveClass('bg-yellow-100')
+    expect(screen.getByText('Expired')).toBeInTheDocument()
+    expect(screen.getByText('Expired')).toHaveClass('bg-gray-100')
   })
 
   it('shows provider info when available', () => {
