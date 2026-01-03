@@ -1,0 +1,12 @@
+- ALWAYS follow best practice when coding.
+- ALWAYS follow this best practices principles:
+  - DRY
+  - SOLID
+  - KISS
+  - YAGNI
+  - Convention over Configuration
+  - Composition over Inheritance
+  - Law of Demeter
+- ALWAYS write a test for a new backend feature.
+- ALWAYS keep function small and concises. If it get too long, refactor into multiples functions.
+- ALWAYS write code that will pass linting and compiling tests

@@ -200,7 +200,7 @@ test.group('Billing API - Checkout', (group) => {
       .post('/api/v1/billing/checkout')
       .set('Cookie', cookies)
       .send({})
-      .expect(400)
+      .expect(422)
 
     assert.exists(response.body.error)
   })
@@ -213,7 +213,7 @@ test.group('Billing API - Checkout', (group) => {
       .post('/api/v1/billing/checkout')
       .set('Cookie', cookies)
       .send({
-        priceId: 'price_nonexistent',
+        priceId: 999999,
         successUrl: 'https://example.com/success',
         cancelUrl: 'https://example.com/cancel',
       })
@@ -354,7 +354,7 @@ test.group('Billing API - Team Owner Authorization', (group) => {
       .post('/api/v1/billing/checkout')
       .set('Cookie', cookies)
       .send({
-        priceId: price.providerPriceId,
+        priceId: price.id,
         subscriberType: 'team',
         subscriberId: team.id,
       })

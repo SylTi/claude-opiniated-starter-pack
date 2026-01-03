@@ -7,6 +7,17 @@ import SubscriptionTier from '#models/subscription_tier'
 import Product from '#models/product'
 import Price from '#models/price'
 import SubscriptionService from '#services/subscription_service'
+import {
+  updateUserTierValidator,
+  updateTeamTierValidator,
+  createTierValidator,
+  updateTierValidator,
+  createProductValidator,
+  updateProductValidator,
+  listPricesValidator,
+  createPriceValidator,
+  updatePriceValidator,
+} from '#validators/admin'
 
 export default class AdminController {
   /**
@@ -180,10 +191,8 @@ export default class AdminController {
    */
   async updateUserTier({ params, request, response }: HttpContext): Promise<void> {
     const user = await User.findOrFail(params.id)
-    const { subscriptionTier, subscriptionExpiresAt } = request.only([
-      'subscriptionTier',
-      'subscriptionExpiresAt',
-    ])
+    const { subscriptionTier, subscriptionExpiresAt } =
+      await request.validateUsing(updateUserTierValidator)
 
     // Validate tier exists
     const tier = await SubscriptionTier.findBySlug(subscriptionTier)
@@ -197,7 +206,7 @@ export default class AdminController {
     // Parse expiration date
     let expiresAt: DateTime | null = null
     if (subscriptionTier !== 'free' && subscriptionExpiresAt) {
-      expiresAt = DateTime.fromISO(subscriptionExpiresAt)
+      expiresAt = DateTime.fromJSDate(subscriptionExpiresAt)
     }
 
     // Use subscription service to update
@@ -259,10 +268,8 @@ export default class AdminController {
    */
   async updateTeamTier({ params, request, response }: HttpContext): Promise<void> {
     const team = await Team.findOrFail(params.id)
-    const { subscriptionTier, subscriptionExpiresAt } = request.only([
-      'subscriptionTier',
-      'subscriptionExpiresAt',
-    ])
+    const { subscriptionTier, subscriptionExpiresAt } =
+      await request.validateUsing(updateTeamTierValidator)
 
     // Validate tier exists
     const tier = await SubscriptionTier.findBySlug(subscriptionTier)
@@ -276,7 +283,7 @@ export default class AdminController {
     // Parse expiration date
     let expiresAt: DateTime | null = null
     if (subscriptionTier !== 'free' && subscriptionExpiresAt) {
-      expiresAt = DateTime.fromISO(subscriptionExpiresAt)
+      expiresAt = DateTime.fromJSDate(subscriptionExpiresAt)
     }
 
     // Use subscription service to update
@@ -325,16 +332,7 @@ export default class AdminController {
    * Create a new subscription tier
    */
   async createTier({ request, response }: HttpContext): Promise<void> {
-    const data = request.only([
-      'slug',
-      'name',
-      'level',
-      'maxTeamMembers',
-      'priceMonthly',
-      'yearlyDiscountPercent',
-      'features',
-      'isActive',
-    ])
+    const data = await request.validateUsing(createTierValidator)
 
     // Check if slug already exists
     const existing = await SubscriptionTier.findBySlug(data.slug)
@@ -377,15 +375,7 @@ export default class AdminController {
    */
   async updateTier({ params, request, response }: HttpContext): Promise<void> {
     const tier = await SubscriptionTier.findOrFail(params.id)
-    const data = request.only([
-      'name',
-      'level',
-      'maxTeamMembers',
-      'priceMonthly',
-      'yearlyDiscountPercent',
-      'features',
-      'isActive',
-    ])
+    const data = await request.validateUsing(updateTierValidator)
 
     // Note: slug cannot be updated to maintain references
     if (data.name !== undefined) tier.name = data.name
@@ -455,18 +445,8 @@ export default class AdminController {
    * Create a new product (link tier to Stripe product)
    */
   async createProduct({ request, response }: HttpContext): Promise<void> {
-    const { tierId, provider, providerProductId } = request.only([
-      'tierId',
-      'provider',
-      'providerProductId',
-    ])
-
-    if (!tierId || !provider || !providerProductId) {
-      return response.badRequest({
-        error: 'ValidationError',
-        message: 'tierId, provider, and providerProductId are required',
-      })
-    }
+    const { tierId, provider, providerProductId } =
+      await request.validateUsing(createProductValidator)
 
     // Check if tier exists
     const tier = await SubscriptionTier.find(tierId)
@@ -511,7 +491,7 @@ export default class AdminController {
    */
   async updateProduct({ params, request, response }: HttpContext): Promise<void> {
     const product = await Product.findOrFail(params.id)
-    const { providerProductId } = request.only(['providerProductId'])
+    const { providerProductId } = await request.validateUsing(updateProductValidator)
 
     if (providerProductId !== undefined) {
       product.providerProductId = providerProductId
@@ -555,7 +535,7 @@ export default class AdminController {
    * List all prices
    */
   async listPrices({ request, response }: HttpContext): Promise<void> {
-    const productId = request.input('productId')
+    const { productId } = await request.validateUsing(listPricesValidator)
 
     let query = Price.query().preload('product', (q) => q.preload('tier'))
 
@@ -588,31 +568,7 @@ export default class AdminController {
    * Create a new price
    */
   async createPrice({ request, response }: HttpContext): Promise<void> {
-    const data = request.only([
-      'productId',
-      'provider',
-      'providerPriceId',
-      'interval',
-      'currency',
-      'unitAmount',
-      'taxBehavior',
-      'isActive',
-    ])
-
-    if (
-      !data.productId ||
-      !data.provider ||
-      !data.providerPriceId ||
-      !data.interval ||
-      !data.currency ||
-      data.unitAmount === undefined
-    ) {
-      return response.badRequest({
-        error: 'ValidationError',
-        message:
-          'productId, provider, providerPriceId, interval, currency, and unitAmount are required',
-      })
-    }
+    const data = await request.validateUsing(createPriceValidator)
 
     // Check if product exists
     const product = await Product.find(data.productId)
@@ -668,7 +624,7 @@ export default class AdminController {
    */
   async updatePrice({ params, request, response }: HttpContext): Promise<void> {
     const price = await Price.findOrFail(params.id)
-    const data = request.only(['providerPriceId', 'unitAmount', 'taxBehavior', 'isActive'])
+    const data = await request.validateUsing(updatePriceValidator)
 
     // Note: interval and currency should not be changed after creation
     if (data.providerPriceId !== undefined) price.providerPriceId = data.providerPriceId

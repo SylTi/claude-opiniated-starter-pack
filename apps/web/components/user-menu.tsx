@@ -39,7 +39,10 @@ export function UserMenu(): React.ReactElement {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+        <button
+          data-testid="user-menu"
+          className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        >
           <Avatar className="h-8 w-8">
             <AvatarImage
               src={user.avatarUrl || undefined}

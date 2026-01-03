@@ -173,10 +173,10 @@ export default function AdminCouponsPage(): React.ReactElement {
     return new Date(dateString).toLocaleDateString();
   };
 
-  const formatAmount = (amount: number, currency: string): string => {
+  const formatAmount = (amount: number, currency: string | undefined): string => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: currency.toUpperCase(),
+      currency: (currency || "usd").toUpperCase(),
     }).format(amount / 100);
   };
 

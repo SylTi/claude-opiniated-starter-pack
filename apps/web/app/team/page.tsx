@@ -245,7 +245,15 @@ export default function TeamManagementPage(): React.ReactElement {
   }
 
   if (!user || !team) {
-    return <></>;
+    // Should have been redirected by useEffect, but show fallback just in case
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <div className="flex flex-col items-center justify-center min-h-[400px] text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin mb-4" />
+          <p>Redirecting...</p>
+        </div>
+      </div>
+    );
   }
 
   const pendingInvitations = invitations.filter(

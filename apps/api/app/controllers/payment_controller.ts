@@ -5,6 +5,24 @@ import env from '#start/env'
 import type { SubscriberType } from '#models/subscription'
 import Team from '#models/team'
 import DiscountCode from '#models/discount_code'
+import {
+  createCheckoutValidator,
+  createPortalValidator,
+  getSubscriptionValidator,
+  cancelSubscriptionValidator,
+} from '#validators/payment'
+
+/**
+ * Validate that a return URL belongs to an allowed host to prevent open redirect attacks.
+ */
+function isValidReturnUrl(url: string, allowedHost: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.host === allowedHost
+  } catch {
+    return false
+  }
+}
 
 export default class PaymentController {
   /**
@@ -47,19 +65,8 @@ export default class PaymentController {
    */
   async createCheckout({ request, response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
-    const { priceId, subscriberType, subscriberId, discountCode } = request.only([
-      'priceId',
-      'subscriberType',
-      'subscriberId',
-      'discountCode',
-    ])
-
-    if (!priceId) {
-      return response.badRequest({
-        error: 'ValidationError',
-        message: 'Price ID is required',
-      })
-    }
+    const { priceId, subscriberType, subscriberId, discountCode } =
+      await request.validateUsing(createCheckoutValidator)
 
     // Determine the subscriber
     let finalSubscriberType: SubscriberType = 'user'
@@ -136,11 +143,8 @@ export default class PaymentController {
    */
   async createPortal({ request, response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
-    const { returnUrl, subscriberType, subscriberId } = request.only([
-      'returnUrl',
-      'subscriberType',
-      'subscriberId',
-    ])
+    const { returnUrl, subscriberType, subscriberId } =
+      await request.validateUsing(createPortalValidator)
 
     // Determine the subscriber
     let finalSubscriberType: SubscriberType = 'user'
@@ -160,7 +164,11 @@ export default class PaymentController {
     }
 
     const frontendUrl = env.get('FRONTEND_URL', 'http://localhost:3000')
-    const finalReturnUrl = returnUrl || `${frontendUrl}/billing`
+    const allowedHost = new URL(frontendUrl).host
+
+    // Validate returnUrl to prevent open redirect attacks
+    const finalReturnUrl =
+      returnUrl && isValidReturnUrl(returnUrl, allowedHost) ? returnUrl : `${frontendUrl}/billing`
 
     try {
       const paymentService = new PaymentService()
@@ -189,8 +197,9 @@ export default class PaymentController {
    */
   async getSubscription({ request, response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
-    const subscriberType = request.input('subscriberType', 'user') as SubscriberType
-    const subscriberId = request.input('subscriberId', user.id) as number
+    const data = await request.validateUsing(getSubscriptionValidator)
+    const subscriberType = (data.subscriberType ?? 'user') as SubscriberType
+    const subscriberId = data.subscriberId ?? user.id
 
     // Verify access if team
     if (subscriberType === 'team') {
@@ -255,7 +264,9 @@ export default class PaymentController {
    */
   async cancelSubscription({ request, response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
-    const { subscriberType, subscriberId } = request.only(['subscriberType', 'subscriberId'])
+    const { subscriberType, subscriberId } = await request.validateUsing(
+      cancelSubscriptionValidator
+    )
 
     // Determine the subscriber
     let finalSubscriberType: SubscriberType = 'user'

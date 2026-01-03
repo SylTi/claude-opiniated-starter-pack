@@ -1,5 +1,20 @@
 import { Resend } from 'resend'
+import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
+
+/**
+ * Escape HTML special characters to prevent HTML injection in emails.
+ */
+function escapeHtml(text: string): string {
+  const map: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#x27;',
+  }
+  return text.replace(/[&<>"']/g, (char) => map[char])
+}
 
 interface EmailOptions {
   to: string | string[]
@@ -60,14 +75,14 @@ export default class MailService {
       })
 
       if (error) {
-        console.error('Resend error:', error)
+        logger.error({ err: error }, 'Resend API error')
         return { success: false, error: error.message }
       }
 
       return { success: true, id: data?.id }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
-      console.error('Mail send error:', message)
+      logger.error({ message }, 'Mail send error')
       return { success: false, error: message }
     }
   }
@@ -81,7 +96,7 @@ export default class MailService {
     userName?: string
   ): Promise<SendResult> {
     const verifyUrl = `${this.frontendUrl}/verify-email?token=${token}`
-    const name = userName || 'there'
+    const name = escapeHtml(userName || 'there')
 
     const html = `
 <!DOCTYPE html>
@@ -139,7 +154,7 @@ If you didn't create an account, you can safely ignore this email.
     userName?: string
   ): Promise<SendResult> {
     const resetUrl = `${this.frontendUrl}/reset-password?token=${token}`
-    const name = userName || 'there'
+    const name = escapeHtml(userName || 'there')
 
     const html = `
 <!DOCTYPE html>
@@ -207,6 +222,11 @@ If you didn't request a password reset, you can safely ignore this email - your 
       day: 'numeric',
     })
 
+    // Escape user-provided values to prevent HTML injection
+    const safeTeamName = escapeHtml(teamName)
+    const safeInviterName = escapeHtml(inviterName)
+    const safeRole = escapeHtml(role)
+
     const html = `
 <!DOCTYPE html>
 <html>
@@ -221,7 +241,7 @@ If you didn't request a password reset, you can safely ignore this email - your 
   </div>
   <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #eee; border-top: none;">
     <p>Hi there,</p>
-    <p><strong>${inviterName}</strong> has invited you to join <strong>${teamName}</strong> as a <strong>${role}</strong>.</p>
+    <p><strong>${safeInviterName}</strong> has invited you to join <strong>${safeTeamName}</strong> as a <strong>${safeRole}</strong>.</p>
     <div style="text-align: center; margin: 30px 0;">
       <a href="${inviteUrl}" style="background: #11998e; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">Accept Invitation</a>
     </div>
@@ -236,7 +256,7 @@ If you didn't request a password reset, you can safely ignore this email - your 
     const text = `
 Hi there,
 
-${inviterName} has invited you to join "${teamName}" as a ${role}.
+${safeInviterName} has invited you to join "${safeTeamName}" as a ${safeRole}.
 
 Click the link below to accept the invitation:
 ${inviteUrl}
@@ -248,7 +268,7 @@ If you don't want to join this team, you can safely ignore this email.
 
     return this.send({
       to: email,
-      subject: `You've been invited to join ${teamName}`,
+      subject: `You've been invited to join ${safeTeamName}`,
       html,
       text,
     })
@@ -265,7 +285,11 @@ If you don't want to join this team, you can safely ignore this email.
     expiredTier: string
   ): Promise<SendResult> {
     const renewUrl = `${this.frontendUrl}/dashboard/billing`
-    const name = userName || 'there'
+
+    // Escape user-provided values to prevent HTML injection
+    const safeName = escapeHtml(userName || 'there')
+    const safeEntityName = escapeHtml(entityName)
+    const safeTier = escapeHtml(expiredTier)
 
     const html = `
 <!DOCTYPE html>
@@ -280,8 +304,8 @@ If you don't want to join this team, you can safely ignore this email.
     <h1 style="color: #333; margin: 0; font-size: 24px;">Subscription Expired</h1>
   </div>
   <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #eee; border-top: none;">
-    <p>Hi ${name},</p>
-    <p>Your <strong>${expiredTier}</strong> subscription for ${entityType === 'team' ? `the team "${entityName}"` : 'your account'} has expired.</p>
+    <p>Hi ${safeName},</p>
+    <p>Your <strong>${safeTier}</strong> subscription for ${entityType === 'team' ? `the team "${safeEntityName}"` : 'your account'} has expired.</p>
     <p>Your account has been downgraded to the free tier. To regain access to premium features, please renew your subscription.</p>
     <div style="text-align: center; margin: 30px 0;">
       <a href="${renewUrl}" style="background: #fcb69f; color: #333; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">Renew Subscription</a>
@@ -293,9 +317,9 @@ If you don't want to join this team, you can safely ignore this email.
 </html>`
 
     const text = `
-Hi ${name},
+Hi ${safeName},
 
-Your ${expiredTier} subscription for ${entityType === 'team' ? `the team "${entityName}"` : 'your account'} has expired.
+Your ${safeTier} subscription for ${entityType === 'team' ? `the team "${safeEntityName}"` : 'your account'} has expired.
 
 Your account has been downgraded to the free tier. To regain access to premium features, please renew your subscription:
 ${renewUrl}

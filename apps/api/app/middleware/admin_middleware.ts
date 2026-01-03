@@ -1,5 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
+import { USER_ROLES } from '#constants/roles'
 
 /**
  * Admin middleware checks if the authenticated user has the admin role.
@@ -16,7 +17,7 @@ export default class AdminMiddleware {
       })
     }
 
-    if (user.role !== 'admin') {
+    if (user.role !== USER_ROLES.ADMIN) {
       return ctx.response.forbidden({
         error: 'Forbidden',
         message: 'Admin access required',

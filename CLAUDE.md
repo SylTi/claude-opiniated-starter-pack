@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Mandatory Rules
+
+**⚠️ CRITICAL: The following rule files MUST ALWAYS be followed without exception:**
+**ALWAYS read and follow all rules in `.claude/rules/*.md` before making changes.**
+
+- [Coding Rules](.claude/rules/coding.md) - Best practices, principles (DRY, SOLID, KISS, YAGNI), testing requirements
+- [Infrastructure Rules](.claude/rules/infrastructure.md) - Docker database usage, documentation maintenance
+- [Migration Rules](.claude/rules/migrations.md) - Database migrations, seed data, never run migrations directly
+- [Test Rules](.claude/rules/test.md) - Test hierarchy (unit → integration → E2E), mocking strategy, API coverage
+
 ## Architecture Overview
 
 This is a **TypeScript monorepo** for a SaaS application using pnpm workspaces.
@@ -361,13 +371,28 @@ pnpm --filter api add package-name     # Install in specific workspace
 pnpm -r run dev                        # Run in all workspaces recursively
 pnpm -r --parallel run dev             # Run in parallel
 ```
+
+### Running E2E
+# Run all E2E tests (Chromium only)
+pnpm run web:e2e
+
+# Run with visible browser
+pnpm run web:e2e:headed
+
+# Run with interactive UI
+pnpm run web:e2e:ui
+
+# Show report
+cd ./apps/web/ && pnpm exec playwright show-report
+
 - toujours utiliser pnpm a la place de npm
 - toujours ajouter a API.md quand on modifie ou ajoute une route.
 - toujours verifier API.md quand on doit ajouter une nouvelle fonctionnalité qui depend de l'existant pour eviter de faire des lectures inutiles dans les fichiers.
 - ne jamais lancer les tests quand on fini une nouvelle fonctionnalité, mais toujours demander a l'utilisateur de le faire en lui affichants les commandes. Pareil pour le coverage.
-- chaque fonctionnalité et element UX doit avoir son test unitaire/fonctionnel/etc qui valide son fonctionnement. 
-- Toujours creer un mock pour les tests necessitant un call a un service exterieur a l'application. Exemple: Mail, Paiements etc.
+- chaque fonctionnalité et element UX doit avoir son test unitaire/fonctionnel/E2E/etc qui valide son fonctionnement. 
+- Toujours creer un mock pour les tests necessitant un call a un service exterieur a l'application. Exemple: Mail, Paiements etc. Ne pas mock la DB pour les E2E ou test d'integration, utilise la db de test.
 - n'ecris jamais de placeholder tests, ecris directement les vrais tests.
+- quand tu dois reparer un test, ne supprime jamais un check qui DOIT exister juste pour que le test pass. Au contraire si c'est une erreur du au code, va fixer le code.
 - Always use context7 when I need code generation, setup or configuration steps, or
 library/API documentation. This means you should automatically use the Context7 MCP
 tools to resolve library id and get library docs without me having to explicitly ask.

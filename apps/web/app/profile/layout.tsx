@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, type ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
+import { type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { User, Shield, Settings, Loader2 } from 'lucide-react'
@@ -14,27 +13,21 @@ const navigation = [
   { name: 'Settings', href: '/profile/settings', icon: Settings },
 ]
 
+/**
+ * Profile layout component.
+ * Authentication is handled by Next.js middleware (middleware.ts).
+ */
 export default function ProfileLayout({ children }: { children: ReactNode }): React.ReactElement {
   const pathname = usePathname()
-  const router = useRouter()
   const { user, isLoading } = useAuth()
 
-  useEffect(() => {
-    if (!isLoading && !user) {
-      router.push('/login')
-    }
-  }, [user, isLoading, router])
-
-  if (isLoading) {
+  // Show loading state while auth context initializes
+  if (isLoading || !user) {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     )
-  }
-
-  if (!user) {
-    return <></>
   }
 
   return (

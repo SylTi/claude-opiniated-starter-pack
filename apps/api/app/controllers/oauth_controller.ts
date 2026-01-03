@@ -1,9 +1,11 @@
 import type { HttpContext } from '@adonisjs/core/http'
+import logger from '@adonisjs/core/services/logger'
 import { DateTime } from 'luxon'
 import env from '#start/env'
 import User from '#models/user'
 import OAuthAccount from '#models/oauth_account'
 import AuthService from '#services/auth_service'
+import { USER_ROLES } from '#constants/roles'
 
 // Supported providers (must match ally config)
 type SupportedProvider = 'google' | 'github'
@@ -79,7 +81,7 @@ export default class OAuthController {
       redirectUrl.searchParams.set('isNewUser', isNewUser.toString())
       response.redirect(redirectUrl.toString())
     } catch (error) {
-      console.error('OAuth callback error:', error)
+      logger.error({ err: error }, 'OAuth callback error')
       return this.redirectWithError(response, 'Authentication failed')
     }
   }
@@ -173,7 +175,7 @@ export default class OAuthController {
       redirectUrl.searchParams.set('provider', provider)
       response.redirect(redirectUrl.toString())
     } catch (error) {
-      console.error('OAuth link callback error:', error)
+      logger.error({ err: error }, 'OAuth link callback error')
       return this.redirectWithError(response, 'Failed to link account')
     }
   }
@@ -300,7 +302,7 @@ export default class OAuthController {
       email: email || `${provider}_${oauthUser.id}@oauth.local`,
       fullName: oauthUser.name,
       avatarUrl: oauthUser.avatarUrl,
-      role: 'user',
+      role: USER_ROLES.USER,
       emailVerified: email !== null, // OAuth emails are considered verified
       password: null, // No password for OAuth-only users
       mfaEnabled: false,

@@ -1,4 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
+import logger from '@adonisjs/core/services/logger'
 import {
   registerValidator,
   loginValidator,
@@ -9,36 +10,45 @@ import {
 } from '#validators/auth'
 import AuthService from '#services/auth_service'
 import MailService from '#services/mail_service'
+import CookieSigningService from '#services/cookie_signing_service'
 import TeamInvitation from '#models/team_invitation'
 import TeamMember from '#models/team_member'
 
 export default class AuthController {
   private authService = new AuthService()
   private mailService = new MailService()
+  private cookieSigning = new CookieSigningService()
 
   /**
    * Register a new user
    * POST /api/v1/auth/register
+   *
+   * Security: Returns generic response to prevent user enumeration.
+   * Adds random timing delay to prevent timing-based attacks.
    */
   async register({ request, response }: HttpContext): Promise<void> {
     const data = await request.validateUsing(registerValidator)
-    const invitationToken = request.input('invitationToken')
 
-    // Check if email already exists
+    // Add random delay (100-300ms) to prevent timing-based enumeration
+    const delay = 100 + Math.random() * 200
+    await new Promise((resolve) => setTimeout(resolve, delay))
+
+    // Check if email already exists - but don't reveal this to the user
     const existingUser = await this.authService.findByEmail(data.email)
     if (existingUser) {
-      response.conflict({
-        error: 'EmailExists',
-        message: 'An account with this email already exists',
+      // Return same generic response as successful registration
+      // to prevent email enumeration attacks
+      response.created({
+        message: 'Registration initiated. Please check your email to verify your account.',
       })
       return
     }
 
     // Check for valid invitation if token is provided
     let invitation: TeamInvitation | null = null
-    if (invitationToken) {
+    if (data.invitationToken) {
       invitation = await TeamInvitation.query()
-        .where('token', invitationToken)
+        .where('token', data.invitationToken)
         .preload('team', (query) => {
           query.preload('members')
         })
@@ -112,21 +122,29 @@ export default class AuthController {
     // Send verification email (non-blocking, don't fail registration if email fails)
     this.mailService
       .sendVerificationEmail(user.email, verificationToken, user.fullName ?? undefined)
-      .catch((err) => console.error('Failed to send verification email:', err))
+      .catch((err) => logger.error({ err }, 'Failed to send verification email'))
 
+    // For new registrations with invitation, we can be more specific
+    // since the invitation token already proves the user was invited
+    if (joinedTeam) {
+      response.created({
+        data: {
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+          role: user.role,
+          currentTeamId: user.currentTeamId,
+          joinedTeam,
+          emailVerified: user.emailVerified,
+        },
+        message: `Registration successful. You have been added to team "${joinedTeam.name}".`,
+      })
+      return
+    }
+
+    // Generic response for regular registration to prevent enumeration
     response.created({
-      data: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        role: user.role,
-        currentTeamId: user.currentTeamId,
-        joinedTeam,
-        emailVerified: user.emailVerified,
-      },
-      message: joinedTeam
-        ? `Registration successful. You have been added to team "${joinedTeam.name}".`
-        : 'Registration successful. Please check your email to verify your account.',
+      message: 'Registration initiated. Please check your email to verify your account.',
     })
   }
 
@@ -177,6 +195,18 @@ export default class AuthController {
 
       // Login the user
       await auth.use('web').login(user)
+
+      // Set signed user info cookie for frontend middleware optimization
+      // This avoids API calls on every admin route request
+      // Uses JWT (jose) - only contains role, no PII
+      const signedUserInfo = await this.cookieSigning.encrypt({ role: user.role })
+      response.cookie('user-info', signedUserInfo, {
+        httpOnly: false, // Must be readable by Next.js middleware (server-side)
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 2 * 60 * 60, // 2 hours, matches session age
+        path: '/',
+      })
 
       // Record successful login
       await this.authService.recordLoginAttempt(
@@ -239,6 +269,10 @@ export default class AuthController {
    */
   async logout({ response, auth }: HttpContext): Promise<void> {
     await auth.use('web').logout()
+
+    // Clear the user info cookie
+    response.clearCookie('user-info')
+
     response.ok({
       message: 'Logout successful',
     })
@@ -293,7 +327,7 @@ export default class AuthController {
       // Send password reset email (non-blocking)
       this.mailService
         .sendPasswordResetEmail(user.email, token, user.fullName ?? undefined)
-        .catch((err) => console.error('Failed to send password reset email:', err))
+        .catch((err) => logger.error({ err }, 'Failed to send password reset email'))
     }
 
     response.ok({
@@ -364,7 +398,7 @@ export default class AuthController {
     // Send verification email (non-blocking)
     this.mailService
       .sendVerificationEmail(user.email, token, user.fullName ?? undefined)
-      .catch((err) => console.error('Failed to send verification email:', err))
+      .catch((err) => logger.error({ err }, 'Failed to send verification email'))
 
     response.ok({
       message: 'Verification email has been sent',

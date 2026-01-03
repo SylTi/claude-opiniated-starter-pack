@@ -1,0 +1,2 @@
+- local env and test env ALWAYS use the docker databases.
+- ALWAYS keep documentation and README.md files up to date.

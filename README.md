@@ -205,6 +205,20 @@ node ace make:model ModelName # Crée un nouveau modèle
 node ace make:controller ControllerName # Crée un controller
 ```
 
+# Typecheck both apps
+```bash
+pnpm --filter api run typecheck
+pnpm --filter web run typecheck
+```
+
+### Running tests
+```bash
+cd apps/api
+NODE_ENV=test node ace migration:fresh
+NODE_ENV=test node ace db:seed
+node ace test functional
+```
+
 ### Packages
 ```bash
 # Shared types

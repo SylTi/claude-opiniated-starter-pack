@@ -28,6 +28,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
   type AdminUserDTO,
@@ -41,6 +49,11 @@ export default function AdminUsersPage(): React.ReactElement {
   const [users, setUsers] = useState<AdminUserDTO[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; userId: number | null; email: string }>({
+    open: false,
+    userId: null,
+    email: "",
+  });
 
   const fetchUsers = useCallback(async (): Promise<void> => {
     try {
@@ -100,18 +113,22 @@ export default function AdminUsersPage(): React.ReactElement {
     }
   }
 
-  async function handleDeleteUser(
-    userId: number,
-    email: string,
-  ): Promise<void> {
-    if (!confirm(`Are you sure you want to delete user ${email}?`)) {
-      return;
-    }
+  function openDeleteDialog(userId: number, email: string): void {
+    setDeleteDialog({ open: true, userId, email });
+  }
 
-    setActionLoading(userId);
+  function closeDeleteDialog(): void {
+    setDeleteDialog({ open: false, userId: null, email: "" });
+  }
+
+  async function handleConfirmDelete(): Promise<void> {
+    if (!deleteDialog.userId) return;
+
+    setActionLoading(deleteDialog.userId);
     try {
-      await api.delete(`/api/v1/admin/users/${userId}`);
+      await api.delete(`/api/v1/admin/users/${deleteDialog.userId}`);
       toast.success("User deleted successfully");
+      closeDeleteDialog();
       fetchUsers();
     } catch (error) {
       if (error instanceof ApiError) {
@@ -180,6 +197,7 @@ export default function AdminUsersPage(): React.ReactElement {
   }
 
   return (
+    <>
     <Card>
         <CardHeader>
           <CardTitle>User Management</CardTitle>
@@ -300,7 +318,7 @@ export default function AdminUsersPage(): React.ReactElement {
                           <Button
                             size="sm"
                             variant="destructive"
-                            onClick={() => handleDeleteUser(u.id, u.email)}
+                            onClick={() => openDeleteDialog(u.id, u.email)}
                             disabled={actionLoading === u.id}
                           >
                             Delete
@@ -315,5 +333,25 @@ export default function AdminUsersPage(): React.ReactElement {
           </Table>
         </CardContent>
     </Card>
+
+    <Dialog open={deleteDialog.open} onOpenChange={(open) => !open && closeDeleteDialog()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete User</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete user {deleteDialog.email}? This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={closeDeleteDialog}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={handleConfirmDelete} disabled={actionLoading !== null}>
+            {actionLoading !== null ? "Deleting..." : "Delete"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

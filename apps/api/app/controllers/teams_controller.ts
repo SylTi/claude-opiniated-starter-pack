@@ -1,4 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
+import logger from '@adonisjs/core/services/logger'
 import { DateTime } from 'luxon'
 import Team from '#models/team'
 import TeamMember from '#models/team_member'
@@ -7,6 +8,14 @@ import User from '#models/user'
 import string from '@adonisjs/core/helpers/string'
 import env from '#start/env'
 import MailService from '#services/mail_service'
+import db from '@adonisjs/lucid/services/db'
+import {
+  createTeamValidator,
+  updateTeamValidator,
+  addMemberValidator,
+  sendInvitationValidator,
+} from '#validators/team'
+import { TEAM_ROLES } from '#constants/roles'
 
 export default class TeamsController {
   private mailService = new MailService()
@@ -35,42 +44,49 @@ export default class TeamsController {
    */
   async store({ auth, request, response }: HttpContext): Promise<void> {
     const user = auth.user!
-    const { name } = request.only(['name'])
+    const { name } = await request.validateUsing(createTeamValidator)
 
-    if (!name || name.trim().length === 0) {
-      return response.badRequest({
-        error: 'ValidationError',
-        message: 'Team name is required',
-      })
-    }
+    // Use transaction to prevent race conditions
+    const team = await db.transaction(async (trx) => {
+      // Generate unique slug (lowercase for URL-friendly format)
+      const baseSlug = string.slug(name).toLowerCase()
+      let slug = baseSlug
 
-    // Generate unique slug (lowercase for URL-friendly format)
-    const baseSlug = string.slug(name).toLowerCase()
-    let slug = baseSlug
-    let slugExists = await Team.findBy('slug', slug)
-    let counter = 1
-    while (slugExists) {
-      slug = `${baseSlug}-${counter}`
-      slugExists = await Team.findBy('slug', slug)
-      counter++
-    }
+      // Check if slug exists within transaction
+      const existingTeam = await Team.query({ client: trx }).where('slug', slug).first()
 
-    const team = await Team.create({
-      name: name.trim(),
-      slug,
-      ownerId: user.id,
+      if (existingTeam) {
+        // Add random suffix to avoid collision
+        slug = `${baseSlug}-${string.random(4).toLowerCase()}`
+      }
+
+      // Create team
+      const newTeam = await Team.create(
+        {
+          name: name.trim(),
+          slug,
+          ownerId: user.id,
+        },
+        { client: trx }
+      )
+
+      // Add creator as owner
+      await TeamMember.create(
+        {
+          userId: user.id,
+          teamId: newTeam.id,
+          role: TEAM_ROLES.OWNER,
+        },
+        { client: trx }
+      )
+
+      // Set as current team
+      user.currentTeamId = newTeam.id
+      user.useTransaction(trx)
+      await user.save()
+
+      return newTeam
     })
-
-    // Add creator as owner
-    await TeamMember.create({
-      userId: user.id,
-      teamId: team.id,
-      role: 'owner',
-    })
-
-    // Set as current team
-    user.currentTeamId = team.id
-    await user.save()
 
     response.created({
       data: {
@@ -156,10 +172,10 @@ export default class TeamsController {
     }
 
     const team = await Team.findOrFail(teamId)
-    const { name } = request.only(['name'])
+    const data = await request.validateUsing(updateTeamValidator)
 
-    if (name && name.trim().length > 0) {
-      team.name = name.trim()
+    if (data.name !== undefined) {
+      team.name = data.name
     }
 
     await team.save()
@@ -215,6 +231,7 @@ export default class TeamsController {
 
   /**
    * Add member to team
+   * Uses transaction with row locking to prevent race conditions
    */
   async addMember({ auth, params, request, response }: HttpContext): Promise<void> {
     const user = auth.user!
@@ -233,14 +250,7 @@ export default class TeamsController {
       })
     }
 
-    const { email, role = 'member' } = request.only(['email', 'role'])
-
-    if (!email) {
-      return response.badRequest({
-        error: 'ValidationError',
-        message: 'Email is required',
-      })
-    }
+    const { email, role = TEAM_ROLES.MEMBER } = await request.validateUsing(addMemberValidator)
 
     const newMember = await User.findBy('email', email)
     if (!newMember) {
@@ -250,73 +260,76 @@ export default class TeamsController {
       })
     }
 
-    // Check if already a member of THIS team
-    const existingMembership = await TeamMember.query()
-      .where('userId', newMember.id)
-      .where('teamId', teamId)
-      .first()
+    // Use transaction with row locking to prevent race condition
+    // when multiple requests try to add members simultaneously
+    try {
+      await db.transaction(async (trx) => {
+        // Lock the team row to prevent concurrent modifications
+        const team = await Team.query({ client: trx })
+          .where('id', teamId)
+          .forUpdate()
+          .preload('members')
+          .firstOrFail()
 
-    if (existingMembership) {
-      return response.badRequest({
-        error: 'ValidationError',
-        message: 'User is already a member of this team',
+        // Double-check membership inside transaction
+        const existingMembership = await TeamMember.query({ client: trx })
+          .where('userId', newMember.id)
+          .where('teamId', teamId)
+          .first()
+
+        if (existingMembership) {
+          throw new Error('ALREADY_MEMBER')
+        }
+
+        // Check max members limit (inside transaction with lock)
+        if (!(await team.canAddMember(team.members.length))) {
+          const maxMembers = await team.getEffectiveMaxMembers()
+          throw new Error(`LIMIT_REACHED:${maxMembers}`)
+        }
+
+        // Create member inside transaction
+        await TeamMember.create(
+          {
+            userId: newMember.id,
+            teamId: Number(teamId),
+            role: role ?? TEAM_ROLES.MEMBER,
+          },
+          { client: trx }
+        )
+
+        // Set as current team
+        newMember.currentTeamId = Number(teamId)
+        newMember.useTransaction(trx)
+        await newMember.save()
       })
-    }
 
-    // Check max members limit
-    const team = await Team.query().where('id', teamId).preload('members').firstOrFail()
-
-    if (!(await team.canAddMember(team.members.length))) {
-      const maxMembers = await team.getEffectiveMaxMembers()
-      return response.badRequest({
-        error: 'LimitReached',
-        message: `Team has reached the maximum of ${maxMembers} members. Upgrade your subscription to add more.`,
+      response.created({
+        data: {
+          userId: newMember.id,
+          email: newMember.email,
+          fullName: newMember.fullName,
+          role: role ?? TEAM_ROLES.MEMBER,
+        },
+        message: 'Member added successfully',
       })
-    }
-
-    // User can only be in one team - remove from any existing team
-    if (newMember.currentTeamId) {
-      const oldMembership = await TeamMember.query()
-        .where('userId', newMember.id)
-        .where('teamId', newMember.currentTeamId)
-        .first()
-
-      // Can't remove owner from their team by adding them to another
-      if (oldMembership?.role === 'owner') {
-        return response.badRequest({
-          error: 'ValidationError',
-          message:
-            'User is an owner of another team. They must transfer ownership or delete their team first.',
-        })
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message === 'ALREADY_MEMBER') {
+          return response.badRequest({
+            error: 'ValidationError',
+            message: 'User is already a member of this team',
+          })
+        }
+        if (error.message.startsWith('LIMIT_REACHED:')) {
+          const maxMembers = error.message.split(':')[1]
+          return response.badRequest({
+            error: 'LimitReached',
+            message: `Team has reached the maximum of ${maxMembers} members. Upgrade your subscription to add more.`,
+          })
+        }
       }
-
-      if (oldMembership) {
-        await oldMembership.delete()
-      }
+      throw error
     }
-
-    const validRoles = ['admin', 'member']
-    const memberRole = validRoles.includes(role) ? role : 'member'
-
-    await TeamMember.create({
-      userId: newMember.id,
-      teamId: Number(teamId),
-      role: memberRole,
-    })
-
-    // Set as current team
-    newMember.currentTeamId = Number(teamId)
-    await newMember.save()
-
-    response.created({
-      data: {
-        userId: newMember.id,
-        email: newMember.email,
-        fullName: newMember.fullName,
-        role: memberRole,
-      },
-      message: 'Member added successfully',
-    })
   }
 
   /**
@@ -352,7 +365,7 @@ export default class TeamsController {
     }
 
     // Can't remove owner
-    if (memberToRemove.role === 'owner') {
+    if (memberToRemove.role === TEAM_ROLES.OWNER) {
       return response.badRequest({
         error: 'ValidationError',
         message: 'Cannot remove the team owner',
@@ -393,7 +406,7 @@ export default class TeamsController {
     }
 
     // Owner can't leave
-    if (membership.role === 'owner') {
+    if (membership.role === TEAM_ROLES.OWNER) {
       return response.badRequest({
         error: 'ValidationError',
         message: 'Team owner cannot leave. Transfer ownership first or delete the team.',
@@ -466,14 +479,7 @@ export default class TeamsController {
       })
     }
 
-    const { email, role = 'member' } = request.only(['email', 'role'])
-
-    if (!email) {
-      return response.badRequest({
-        error: 'ValidationError',
-        message: 'Email is required',
-      })
-    }
+    const { email, role = TEAM_ROLES.MEMBER } = await request.validateUsing(sendInvitationValidator)
 
     const team = await Team.query().where('id', teamId).preload('members').firstOrFail()
 
@@ -514,22 +520,6 @@ export default class TeamsController {
           message: 'User is already a member of this team',
         })
       }
-
-      // Check if user is owner of another team
-      if (existingUser.currentTeamId) {
-        const otherMembership = await TeamMember.query()
-          .where('userId', existingUser.id)
-          .where('teamId', existingUser.currentTeamId)
-          .first()
-
-        if (otherMembership?.role === 'owner') {
-          return response.badRequest({
-            error: 'ValidationError',
-            message:
-              'User is an owner of another team. They must transfer ownership or delete their team first.',
-          })
-        }
-      }
     }
 
     // Check for existing pending invitation
@@ -546,8 +536,7 @@ export default class TeamsController {
       })
     }
 
-    const validRoles: Array<'admin' | 'member'> = ['admin', 'member']
-    const inviteRole = validRoles.includes(role) ? role : 'member'
+    const inviteRole = role ?? TEAM_ROLES.MEMBER
 
     const invitation = await TeamInvitation.create({
       teamId: Number(teamId),
@@ -559,9 +548,9 @@ export default class TeamsController {
       expiresAt: DateTime.now().plus({ days: 7 }),
     })
 
-    // Generate invitation link
-    const appUrl = env.get('APP_URL', 'http://localhost:3000')
-    const invitationLink = `${appUrl}/invitations/${invitation.token}`
+    // Generate invitation link using FRONTEND_URL
+    const frontendUrl = env.get('FRONTEND_URL', 'http://localhost:3000')
+    const invitationLink = `${frontendUrl}/invitations/${invitation.token}`
 
     // Send invitation email (non-blocking)
     this.mailService
@@ -573,7 +562,7 @@ export default class TeamsController {
         inviteRole,
         invitation.expiresAt.toJSDate()
       )
-      .catch((err) => console.error('Failed to send team invitation email:', err))
+      .catch((err) => logger.error({ err }, 'Failed to send team invitation email'))
 
     response.created({
       data: {
@@ -728,6 +717,7 @@ export default class TeamsController {
 
   /**
    * Accept invitation (for authenticated users)
+   * Uses transaction with row locking to prevent race conditions
    */
   async acceptInvitation({ auth, params, response }: HttpContext): Promise<void> {
     const user = auth.user!
@@ -764,73 +754,80 @@ export default class TeamsController {
       })
     }
 
-    // Check if already a member
-    const existingMembership = await TeamMember.query()
-      .where('userId', user.id)
-      .where('teamId', invitation.teamId)
-      .first()
+    // Use transaction with row locking to prevent race condition
+    try {
+      await db.transaction(async (trx) => {
+        // Lock the team row to prevent concurrent modifications
+        const team = await Team.query({ client: trx })
+          .where('id', invitation.teamId)
+          .forUpdate()
+          .preload('members')
+          .firstOrFail()
 
-    if (existingMembership) {
-      invitation.status = 'accepted'
-      await invitation.save()
-      return response.badRequest({
-        error: 'AlreadyMember',
-        message: 'You are already a member of this team',
+        // Double-check membership inside transaction
+        const existingMembership = await TeamMember.query({ client: trx })
+          .where('userId', user.id)
+          .where('teamId', invitation.teamId)
+          .first()
+
+        if (existingMembership) {
+          invitation.status = 'accepted'
+          invitation.useTransaction(trx)
+          await invitation.save()
+          throw new Error('ALREADY_MEMBER')
+        }
+
+        // Check team member limit (inside transaction with lock)
+        if (!(await team.canAddMember(team.members.length))) {
+          throw new Error('LIMIT_REACHED')
+        }
+
+        // Add user to team
+        await TeamMember.create(
+          {
+            userId: user.id,
+            teamId: invitation.teamId,
+            role: invitation.role,
+          },
+          { client: trx }
+        )
+
+        // Update user
+        user.currentTeamId = invitation.teamId
+        user.useTransaction(trx)
+        await user.save()
+
+        // Mark invitation as accepted
+        invitation.status = 'accepted'
+        invitation.useTransaction(trx)
+        await invitation.save()
       })
-    }
 
-    // Check if user is owner of another team
-    if (user.currentTeamId) {
-      const currentMembership = await TeamMember.query()
-        .where('userId', user.id)
-        .where('teamId', user.currentTeamId)
-        .first()
-
-      if (currentMembership?.role === 'owner') {
-        return response.badRequest({
-          error: 'ValidationError',
-          message:
-            'You are the owner of another team. Transfer ownership or delete your team first.',
-        })
-      }
-
-      // Remove from current team
-      if (currentMembership) {
-        await currentMembership.delete()
-      }
-    }
-
-    // Check team member limit
-    if (!(await invitation.team.canAddMember(invitation.team.members.length))) {
-      return response.badRequest({
-        error: 'LimitReached',
-        message: 'This team has reached its member limit',
+      response.json({
+        data: {
+          teamId: invitation.teamId,
+          teamName: invitation.team.name,
+          role: invitation.role,
+        },
+        message: 'You have joined the team successfully',
       })
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message === 'ALREADY_MEMBER') {
+          return response.badRequest({
+            error: 'AlreadyMember',
+            message: 'You are already a member of this team',
+          })
+        }
+        if (error.message === 'LIMIT_REACHED') {
+          return response.badRequest({
+            error: 'LimitReached',
+            message: 'This team has reached its member limit',
+          })
+        }
+      }
+      throw error
     }
-
-    // Add user to team
-    await TeamMember.create({
-      userId: user.id,
-      teamId: invitation.teamId,
-      role: invitation.role,
-    })
-
-    // Update user
-    user.currentTeamId = invitation.teamId
-    await user.save()
-
-    // Mark invitation as accepted
-    invitation.status = 'accepted'
-    await invitation.save()
-
-    response.json({
-      data: {
-        teamId: invitation.teamId,
-        teamName: invitation.team.name,
-        role: invitation.role,
-      },
-      message: 'You have joined the team successfully',
-    })
   }
 
   /**

@@ -3,6 +3,13 @@ import { DateTime } from 'luxon'
 import Coupon from '#models/coupon'
 import CouponService from '#services/coupon_service'
 import Team from '#models/team'
+import db from '@adonisjs/lucid/services/db'
+import {
+  createCouponValidator,
+  updateCouponValidator,
+  redeemCouponValidator,
+  getBalanceValidator,
+} from '#validators/coupon'
 
 export default class CouponsController {
   /**
@@ -63,45 +70,38 @@ export default class CouponsController {
    * POST /api/v1/admin/coupons
    */
   async store({ request, response }: HttpContext): Promise<void> {
-    const data = request.only([
-      'code',
-      'description',
-      'creditAmount',
-      'currency',
-      'expiresAt',
-      'isActive',
-    ])
+    const data = await request.validateUsing(createCouponValidator)
 
-    if (!data.code || data.creditAmount === undefined) {
-      return response.badRequest({
-        error: 'ValidationError',
-        message: 'code and creditAmount are required',
-      })
-    }
+    // Use transaction to prevent race conditions
+    const coupon = await db.transaction(async (trx) => {
+      const code = data.code.toUpperCase()
 
-    if (data.creditAmount <= 0) {
-      return response.badRequest({
-        error: 'ValidationError',
-        message: 'creditAmount must be greater than 0',
-      })
-    }
+      // Check if code exists within transaction
+      const existingCoupon = await Coupon.query({ client: trx }).where('code', code).first()
 
-    const existingCoupon = await Coupon.findByCode(data.code)
-    if (existingCoupon) {
+      if (existingCoupon) {
+        return null // Signal conflict
+      }
+
+      return await Coupon.create(
+        {
+          code,
+          description: data.description ?? null,
+          creditAmount: data.creditAmount,
+          currency: data.currency?.toLowerCase() ?? 'usd',
+          expiresAt: data.expiresAt ? DateTime.fromJSDate(data.expiresAt) : null,
+          isActive: data.isActive ?? true,
+        },
+        { client: trx }
+      )
+    })
+
+    if (!coupon) {
       return response.conflict({
         error: 'ConflictError',
         message: 'A coupon with this code already exists',
       })
     }
-
-    const coupon = await Coupon.create({
-      code: data.code.toUpperCase(),
-      description: data.description ?? null,
-      creditAmount: data.creditAmount,
-      currency: data.currency?.toLowerCase() ?? 'usd',
-      expiresAt: data.expiresAt ? DateTime.fromISO(data.expiresAt) : null,
-      isActive: data.isActive ?? true,
-    })
 
     response.created({
       data: {
@@ -127,14 +127,7 @@ export default class CouponsController {
    */
   async update({ params, request, response }: HttpContext): Promise<void> {
     const coupon = await Coupon.findOrFail(params.id)
-    const data = request.only([
-      'code',
-      'description',
-      'creditAmount',
-      'currency',
-      'expiresAt',
-      'isActive',
-    ])
+    const data = await request.validateUsing(updateCouponValidator)
 
     if (coupon.isRedeemed()) {
       return response.badRequest({
@@ -158,7 +151,7 @@ export default class CouponsController {
     if (data.creditAmount !== undefined) coupon.creditAmount = data.creditAmount
     if (data.currency !== undefined) coupon.currency = data.currency?.toLowerCase() ?? 'usd'
     if (data.expiresAt !== undefined) {
-      coupon.expiresAt = data.expiresAt ? DateTime.fromISO(data.expiresAt) : null
+      coupon.expiresAt = data.expiresAt ? DateTime.fromJSDate(data.expiresAt) : null
     }
     if (data.isActive !== undefined) coupon.isActive = data.isActive
 
@@ -201,14 +194,7 @@ export default class CouponsController {
    */
   async redeem({ request, response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
-    const { code, teamId } = request.only(['code', 'teamId'])
-
-    if (!code) {
-      return response.badRequest({
-        error: 'ValidationError',
-        message: 'code is required',
-      })
-    }
+    const { code, teamId } = await request.validateUsing(redeemCouponValidator)
 
     // Check team ownership before redemption
     if (teamId) {
@@ -260,7 +246,7 @@ export default class CouponsController {
    */
   async getBalance({ request, response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
-    const teamId = request.input('teamId')
+    const { teamId } = await request.validateUsing(getBalanceValidator)
 
     const service = new CouponService()
 

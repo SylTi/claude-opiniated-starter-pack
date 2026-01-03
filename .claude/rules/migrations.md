@@ -1,0 +1,4 @@
+- You must write the migrations
+- You never run them, prompt the user with the correct cmd to do it instead.
+- You must always keep the test seed up to date with the latests changes.
+- Before running any integration or E2E tests, you MUST truncate all the tables and populate with the latest seed. Since you can't run any migration yourself, if you need to run this kind of test, prompt the user with the correct commands to reset the database and to run import of seed data.

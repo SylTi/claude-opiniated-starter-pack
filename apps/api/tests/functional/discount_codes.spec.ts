@@ -150,7 +150,7 @@ test.group('Admin Discount Codes API - Create', (group) => {
         discountValue: 25,
         maxUses: 100,
         maxUsesPerUser: 1,
-        expiresAt: '2025-12-31',
+        expiresAt: '2027-12-31',
       })
       .expect(201)
 
@@ -221,10 +221,9 @@ test.group('Admin Discount Codes API - Create', (group) => {
       .post('/api/v1/admin/discount-codes')
       .set('Cookie', cookies)
       .send({})
-      .expect(400)
+      .expect(422)
 
-    assert.exists(response.body.error)
-    assert.equal(response.body.error, 'ValidationError')
+    assert.exists(response.body.errors)
   })
 })
 

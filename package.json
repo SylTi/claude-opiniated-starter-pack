@@ -2,6 +2,7 @@
   "name": "saas-monorepo",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "pnpm -r --parallel run dev",
     "build": "pnpm -r run build",
@@ -20,9 +21,17 @@
     "web:test:coverage": "pnpm --filter web run test:coverage",
     "api:test": "pnpm --filter api run test",
     "api:test:coverage": "pnpm --filter api run test:coverage",
+    "web:e2e": "pnpm --filter web run e2e",
+    "web:e2e:ui": "pnpm --filter web run e2e:ui",
+    "web:e2e:headed": "pnpm --filter web run e2e:headed",
+    "web:e2e:install": "pnpm --filter web run e2e:install",
+    "web:e2e:report": "pnpm --filter web run e2e:report",
     "prepare": "husky"
   },
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.51.0",
+    "@typescript-eslint/parser": "^8.51.0",
+    "eslint": "^9.39.2",
     "husky": "^9.1.7",
     "lint-staged": "^15.3.0",
     "typescript": "^5.6.3"

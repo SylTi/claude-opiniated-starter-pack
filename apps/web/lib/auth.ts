@@ -2,7 +2,7 @@
  * Auth utilities and API calls
  */
 
-import { api, ApiError } from "./api";
+import { api, ApiError, API_BASE_URL } from "./api";
 import type {
   UserDTO,
   LoginDTO,
@@ -12,8 +12,6 @@ import type {
   LoginHistoryDTO,
   OAuthAccountDTO,
 } from "@saas/shared";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3333";
 
 // Auth API endpoints
 export const authApi = {

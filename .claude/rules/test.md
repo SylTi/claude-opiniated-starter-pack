@@ -1,0 +1,5 @@
+- ALWAYS write test for the lowest ressource usage possible: unit tests -> integration test -> E2E test. This mean if you can test something fully with a unit test, don't write an integration test or an E2E test.
+- ALWAYS create Mocks for unit tests.
+- NEVER create Mocks for integration or E2E tests.
+- E2E tests are slow to run, keep them only for user journey.
+- All API routes MUST be covered with unit tests.

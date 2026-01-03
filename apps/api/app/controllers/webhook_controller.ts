@@ -1,5 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import PaymentService from '#services/payment_service'
+import logger from '@adonisjs/core/services/logger'
 
 export default class WebhookController {
   /**
@@ -39,12 +40,16 @@ export default class WebhookController {
         message: result.message,
       })
     } catch (error) {
-      // Log error but return 400 to Stripe
-      console.error('Webhook error:', error)
+      // Log detailed error internally for debugging
+      logger.error(
+        { err: error, signature: signature?.substring(0, 20) + '...' },
+        'Stripe webhook processing failed'
+      )
 
+      // Return generic error to Stripe to avoid leaking internal details
       return response.badRequest({
         error: 'WebhookError',
-        message: error instanceof Error ? error.message : 'Webhook processing failed',
+        message: 'Webhook processing failed',
       })
     }
   }

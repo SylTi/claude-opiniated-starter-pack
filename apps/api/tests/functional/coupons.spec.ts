@@ -105,8 +105,10 @@ test.group('Admin Coupons API - List', (group) => {
     assert.isArray(response.body.data)
     assert.equal(response.body.data.length, 2)
 
-    const redeemed = response.body.data.find((c: { code: string }) => c.code === `REDEEMED${id}`)
-    assert.exists(redeemed.redeemedByUserId)
+    const redeemed = response.body.data.find(
+      (c: { code: string }) => c.code === `REDEEMED${id}`.toUpperCase()
+    )
+    assert.exists(redeemed?.redeemedByUserId)
     assert.exists(redeemed.redeemedByUserEmail)
   })
 })
@@ -130,7 +132,7 @@ test.group('Admin Coupons API - Create', (group) => {
         description: 'Gift coupon',
         creditAmount: 5000,
         currency: 'usd',
-        expiresAt: '2025-12-31',
+        expiresAt: '2027-12-31',
       })
       .expect(201)
 
@@ -181,10 +183,9 @@ test.group('Admin Coupons API - Create', (group) => {
       .post('/api/v1/admin/coupons')
       .set('Cookie', cookies)
       .send({})
-      .expect(400)
+      .expect(422)
 
-    assert.exists(response.body.error)
-    assert.equal(response.body.error, 'ValidationError')
+    assert.exists(response.body.errors)
   })
 })
 

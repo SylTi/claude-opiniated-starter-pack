@@ -9,6 +9,12 @@
 
 import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
+import {
+  loginThrottle,
+  registerThrottle,
+  forgotPasswordThrottle,
+  adminThrottle,
+} from '#start/limiter'
 
 const UsersController = () => import('#controllers/users_controller')
 const AuthController = () => import('#controllers/auth_controller')
@@ -34,13 +40,17 @@ router
     router.get('/users', [UsersController, 'index'])
     router.get('/users/:id', [UsersController, 'show'])
 
-    // Auth - Public routes
+    // Auth - Public routes (with rate limiting)
     router
       .group(() => {
-        router.post('/register', [AuthController, 'register'])
-        router.post('/login', [AuthController, 'login'])
-        router.post('/forgot-password', [AuthController, 'forgotPassword'])
-        router.post('/reset-password', [AuthController, 'resetPassword'])
+        router.post('/register', [AuthController, 'register']).use(registerThrottle)
+        router.post('/login', [AuthController, 'login']).use(loginThrottle)
+        router
+          .post('/forgot-password', [AuthController, 'forgotPassword'])
+          .use(forgotPasswordThrottle)
+        router
+          .post('/reset-password', [AuthController, 'resetPassword'])
+          .use(forgotPasswordThrottle)
         router.get('/verify-email/:token', [AuthController, 'verifyEmail'])
       })
       .prefix('/auth')
@@ -133,7 +143,7 @@ router
         router.delete('/coupons/:id', [CouponsController, 'destroy'])
       })
       .prefix('/admin')
-      .use([middleware.auth(), middleware.admin()])
+      .use([middleware.auth(), middleware.admin(), adminThrottle])
 
     // Dashboard - Protected routes (any logged-in user)
     router

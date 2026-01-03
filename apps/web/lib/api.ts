@@ -2,7 +2,31 @@
  * API client for communicating with the backend
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333'
+/**
+ * Get API URL with safe fallback for development only.
+ * Throws in production if NEXT_PUBLIC_API_URL is not set.
+ */
+function getApiUrl(): string {
+  const url = process.env.NEXT_PUBLIC_API_URL
+
+  if (!url) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'Configuration Error: NEXT_PUBLIC_API_URL is required in production. ' +
+        'Set this environment variable before deploying.'
+      )
+    }
+    // Safe fallback for development only
+    return 'http://localhost:3333'
+  }
+
+  return url
+}
+
+const API_BASE_URL = getApiUrl()
+
+// Export for use in other modules (e.g., auth.ts for OAuth URLs)
+export { API_BASE_URL }
 
 export interface ApiResponse<T> {
   data?: T

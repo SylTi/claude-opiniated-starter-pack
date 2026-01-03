@@ -3,6 +3,12 @@ import { DateTime } from 'luxon'
 import DiscountCode from '#models/discount_code'
 import DiscountCodeUsage from '#models/discount_code_usage'
 import DiscountCodeService from '#services/discount_code_service'
+import db from '@adonisjs/lucid/services/db'
+import {
+  createDiscountCodeValidator,
+  updateDiscountCodeValidator,
+  validateDiscountCodeValidator,
+} from '#validators/discount_code'
 
 export default class DiscountCodesController {
   /**
@@ -75,61 +81,50 @@ export default class DiscountCodesController {
    * POST /api/v1/admin/discount-codes
    */
   async store({ request, response }: HttpContext): Promise<void> {
-    const data = request.only([
-      'code',
-      'description',
-      'discountType',
-      'discountValue',
-      'currency',
-      'minAmount',
-      'maxUses',
-      'maxUsesPerUser',
-      'expiresAt',
-      'isActive',
-    ])
+    const data = await request.validateUsing(createDiscountCodeValidator)
 
-    if (!data.code || !data.discountType || data.discountValue === undefined) {
-      return response.badRequest({
-        error: 'ValidationError',
-        message: 'code, discountType, and discountValue are required',
-      })
-    }
-
-    if (!['percent', 'fixed'].includes(data.discountType)) {
-      return response.badRequest({
-        error: 'ValidationError',
-        message: 'discountType must be "percent" or "fixed"',
-      })
-    }
-
-    if (data.discountType === 'percent' && (data.discountValue < 0 || data.discountValue > 100)) {
+    // Validate percentage range
+    if (data.discountType === 'percent' && data.discountValue > 100) {
       return response.badRequest({
         error: 'ValidationError',
         message: 'Percentage discount must be between 0 and 100',
       })
     }
 
-    const existingCode = await DiscountCode.findByCode(data.code)
-    if (existingCode) {
+    // Use transaction to prevent race conditions
+    const discountCode = await db.transaction(async (trx) => {
+      const existingCode = await DiscountCode.query({ client: trx })
+        .where('code', data.code)
+        .first()
+
+      if (existingCode) {
+        return null // Signal conflict
+      }
+
+      return await DiscountCode.create(
+        {
+          code: data.code, // Already transformed to uppercase by validator
+          description: data.description ?? null,
+          discountType: data.discountType,
+          discountValue: data.discountValue,
+          currency: data.currency?.toLowerCase() ?? null,
+          minAmount: data.minAmount ?? null,
+          maxUses: data.maxUses ?? null,
+          maxUsesPerUser: data.maxUsesPerUser ?? null,
+          expiresAt: data.expiresAt ? DateTime.fromJSDate(data.expiresAt) : null,
+          isActive: data.isActive ?? true,
+          timesUsed: 0,
+        },
+        { client: trx }
+      )
+    })
+
+    if (!discountCode) {
       return response.conflict({
         error: 'ConflictError',
         message: 'A discount code with this code already exists',
       })
     }
-
-    const discountCode = await DiscountCode.create({
-      code: data.code.toUpperCase(),
-      description: data.description ?? null,
-      discountType: data.discountType,
-      discountValue: data.discountValue,
-      currency: data.currency?.toLowerCase() ?? null,
-      minAmount: data.minAmount ?? null,
-      maxUses: data.maxUses ?? null,
-      maxUsesPerUser: data.maxUsesPerUser ?? null,
-      expiresAt: data.expiresAt ? DateTime.fromISO(data.expiresAt) : null,
-      isActive: data.isActive ?? true,
-      timesUsed: 0,
-    })
 
     response.created({
       data: {
@@ -158,18 +153,7 @@ export default class DiscountCodesController {
    */
   async update({ params, request, response }: HttpContext): Promise<void> {
     const discountCode = await DiscountCode.findOrFail(params.id)
-    const data = request.only([
-      'code',
-      'description',
-      'discountType',
-      'discountValue',
-      'currency',
-      'minAmount',
-      'maxUses',
-      'maxUsesPerUser',
-      'expiresAt',
-      'isActive',
-    ])
+    const data = await request.validateUsing(updateDiscountCodeValidator)
 
     if (data.code !== undefined) {
       const existingCode = await DiscountCode.findByCode(data.code)
@@ -179,7 +163,7 @@ export default class DiscountCodesController {
           message: 'A discount code with this code already exists',
         })
       }
-      discountCode.code = data.code.toUpperCase()
+      discountCode.code = data.code // Already transformed to uppercase by validator
     }
 
     if (data.description !== undefined) discountCode.description = data.description
@@ -190,7 +174,7 @@ export default class DiscountCodesController {
     if (data.maxUses !== undefined) discountCode.maxUses = data.maxUses
     if (data.maxUsesPerUser !== undefined) discountCode.maxUsesPerUser = data.maxUsesPerUser
     if (data.expiresAt !== undefined) {
-      discountCode.expiresAt = data.expiresAt ? DateTime.fromISO(data.expiresAt) : null
+      discountCode.expiresAt = data.expiresAt ? DateTime.fromJSDate(data.expiresAt) : null
     }
     if (data.isActive !== undefined) discountCode.isActive = data.isActive
 
@@ -236,14 +220,7 @@ export default class DiscountCodesController {
    */
   async validate({ request, response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
-    const { code, priceId } = request.only(['code', 'priceId'])
-
-    if (!code || !priceId) {
-      return response.badRequest({
-        error: 'ValidationError',
-        message: 'code and priceId are required',
-      })
-    }
+    const { code, priceId } = await request.validateUsing(validateDiscountCodeValidator)
 
     const service = new DiscountCodeService()
     const result = await service.validateCode(code, priceId, user.id)

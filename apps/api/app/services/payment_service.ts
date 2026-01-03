@@ -172,6 +172,14 @@ export default class PaymentService {
     // For team, use the owner's info for billing
     const team = await Team.query().where('id', subscriberId).preload('owner').firstOrFail()
 
+    // Defensive check for zombie teams (teams without owner)
+    // This should not happen with the RESTRICT constraint, but handle gracefully
+    if (!team.owner) {
+      throw new Error(
+        `Team ${team.id} has no owner. This is a data integrity issue that must be resolved.`
+      )
+    }
+
     return {
       type: 'team',
       id: team.id,

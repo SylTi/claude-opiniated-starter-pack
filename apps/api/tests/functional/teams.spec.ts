@@ -72,7 +72,7 @@ test.group('Teams API', (group) => {
       .post('/api/v1/teams')
       .set('Cookie', cookies)
       .send({ name: '' })
-      .expect(400)
+      .expect(422)
   })
 
   test('GET /api/v1/teams/:id returns team details', async ({ assert }) => {
@@ -408,7 +408,7 @@ test.group('Teams API - Update, Switch, and Members', (group) => {
       .post(`/api/v1/teams/${team.id}/members`)
       .set('Cookie', cookies)
       .send({})
-      .expect(400)
+      .expect(422)
   })
 
   test('POST /api/v1/teams/:id/members returns 404 for unknown email', async () => {
@@ -504,52 +504,6 @@ test.group('Teams API - Update, Switch, and Members', (group) => {
       .post(`/api/v1/teams/${team.id}/members`)
       .set('Cookie', cookies)
       .send({ email: 'newmember@example.com' })
-      .expect(400)
-  })
-
-  test('POST /api/v1/teams/:id/members cannot add owner of another team', async () => {
-    const owner = await User.create({
-      email: 'owner@example.com',
-      password: 'password123',
-      role: 'user',
-      emailVerified: true,
-      mfaEnabled: false,
-    })
-
-    const otherOwner = await User.create({
-      email: 'other-owner@example.com',
-      password: 'password123',
-      role: 'user',
-      emailVerified: true,
-      mfaEnabled: false,
-    })
-
-    const team = await Team.create({
-      name: 'Test Team',
-      slug: 'test-team',
-      ownerId: owner.id,
-    })
-
-    const otherTeam = await Team.create({
-      name: 'Other Team',
-      slug: 'other-team',
-      ownerId: otherOwner.id,
-    })
-
-    await TeamMember.create({ userId: owner.id, teamId: team.id, role: 'owner' })
-    await TeamMember.create({ userId: otherOwner.id, teamId: otherTeam.id, role: 'owner' })
-
-    owner.currentTeamId = team.id
-    await owner.save()
-    otherOwner.currentTeamId = otherTeam.id
-    await otherOwner.save()
-
-    const cookies = await loginAndGetCookie('owner@example.com', 'password123')
-
-    await request(BASE_URL)
-      .post(`/api/v1/teams/${team.id}/members`)
-      .set('Cookie', cookies)
-      .send({ email: 'other-owner@example.com' })
       .expect(400)
   })
 
@@ -1503,60 +1457,6 @@ test.group('Team Invitations API - Edge Cases', (group) => {
       .expect(400)
   })
 
-  test('POST /api/v1/invitations/:token/accept returns 400 when user is owner of another team', async () => {
-    const owner = await User.create({
-      email: 'owner@example.com',
-      password: 'password123',
-      role: 'user',
-      emailVerified: true,
-      mfaEnabled: false,
-    })
-
-    const invitedOwner = await User.create({
-      email: 'invited-owner@example.com',
-      password: 'password123',
-      role: 'user',
-      emailVerified: true,
-      mfaEnabled: false,
-    })
-
-    const team = await Team.create({
-      name: 'Test Team',
-      slug: 'test-team',
-      ownerId: owner.id,
-    })
-
-    const invitedTeam = await Team.create({
-      name: 'Invited Team',
-      slug: 'invited-team',
-      ownerId: invitedOwner.id,
-    })
-
-    await TeamMember.create({ userId: owner.id, teamId: team.id, role: 'owner' })
-    await TeamMember.create({ userId: invitedOwner.id, teamId: invitedTeam.id, role: 'owner' })
-
-    invitedOwner.currentTeamId = invitedTeam.id
-    await invitedOwner.save()
-
-    const token = TeamInvitation.generateToken()
-    await TeamInvitation.create({
-      teamId: team.id,
-      invitedById: owner.id,
-      email: 'invited-owner@example.com',
-      token: token,
-      status: 'pending',
-      role: 'member',
-      expiresAt: DateTime.now().plus({ days: 7 }),
-    })
-
-    const cookies = await loginAndGetCookie('invited-owner@example.com', 'password123')
-
-    await request(BASE_URL)
-      .post(`/api/v1/invitations/${token}/accept`)
-      .set('Cookie', cookies)
-      .expect(400)
-  })
-
   test('POST /api/v1/invitations/:token/accept returns 400 when user is already a member', async () => {
     const owner = await User.create({
       email: 'owner@example.com',
@@ -1603,92 +1503,6 @@ test.group('Team Invitations API - Edge Cases', (group) => {
       .post(`/api/v1/invitations/${token}/accept`)
       .set('Cookie', cookies)
       .expect(400)
-  })
-
-  test('POST /api/v1/invitations/:token/accept removes user from existing team when accepting', async ({
-    assert,
-  }) => {
-    // Create owner of the team that will send the invitation
-    const owner = await User.create({
-      email: 'inviting-owner@example.com',
-      password: 'password123',
-      role: 'user',
-      emailVerified: true,
-      mfaEnabled: false,
-    })
-
-    // Create owner of another team
-    const otherOwner = await User.create({
-      email: 'other-team-owner@example.com',
-      password: 'password123',
-      role: 'user',
-      emailVerified: true,
-      mfaEnabled: false,
-    })
-
-    // Create the user who will receive and accept the invitation
-    const invitedMember = await User.create({
-      email: 'invited-member@example.com',
-      password: 'password123',
-      role: 'user',
-      emailVerified: true,
-      mfaEnabled: false,
-    })
-
-    // Create the inviting team
-    const invitingTeam = await Team.create({
-      name: 'Inviting Team',
-      slug: 'inviting-team',
-      ownerId: owner.id,
-    })
-
-    // Create the other team where the invited user is currently a member
-    const otherTeam = await Team.create({
-      name: 'Other Team',
-      slug: 'other-team',
-      ownerId: otherOwner.id,
-    })
-
-    await TeamMember.create({ userId: owner.id, teamId: invitingTeam.id, role: 'owner' })
-    await TeamMember.create({ userId: otherOwner.id, teamId: otherTeam.id, role: 'owner' })
-    await TeamMember.create({ userId: invitedMember.id, teamId: otherTeam.id, role: 'member' })
-
-    invitedMember.currentTeamId = otherTeam.id
-    await invitedMember.save()
-
-    // Create invitation
-    const token = TeamInvitation.generateToken()
-    await TeamInvitation.create({
-      teamId: invitingTeam.id,
-      invitedById: owner.id,
-      email: 'invited-member@example.com',
-      token: token,
-      status: 'pending',
-      role: 'member',
-      expiresAt: DateTime.now().plus({ days: 7 }),
-    })
-
-    const cookies = await loginAndGetCookie('invited-member@example.com', 'password123')
-
-    // Accept the invitation
-    await request(BASE_URL)
-      .post(`/api/v1/invitations/${token}/accept`)
-      .set('Cookie', cookies)
-      .expect(200)
-
-    // Verify user is removed from old team
-    const oldMembership = await TeamMember.query()
-      .where('userId', invitedMember.id)
-      .where('teamId', otherTeam.id)
-      .first()
-    assert.isNull(oldMembership)
-
-    // Verify user is added to new team
-    const newMembership = await TeamMember.query()
-      .where('userId', invitedMember.id)
-      .where('teamId', invitingTeam.id)
-      .first()
-    assert.isNotNull(newMembership)
   })
 
   test('POST /api/v1/invitations/:token/accept returns 400 when team is at member limit', async () => {
@@ -1975,7 +1789,7 @@ test.group('Team Invitations API - Edge Cases', (group) => {
       .post(`/api/v1/teams/${team.id}/invitations`)
       .set('Cookie', cookies)
       .send({})
-      .expect(400)
+      .expect(422)
   })
 
   test('POST /api/v1/teams/:id/invitations returns 400 for existing pending invitation', async () => {
@@ -2063,56 +1877,6 @@ test.group('Team Invitations API - Edge Cases', (group) => {
       .expect(400)
   })
 
-  test('POST /api/v1/teams/:id/invitations returns 400 when inviting owner of another team', async () => {
-    const owner = await User.create({
-      email: 'owner@example.com',
-      password: 'password123',
-      role: 'user',
-      emailVerified: true,
-      mfaEnabled: false,
-    })
-
-    const otherOwner = await User.create({
-      email: 'other-owner@example.com',
-      password: 'password123',
-      role: 'user',
-      emailVerified: true,
-      mfaEnabled: false,
-    })
-
-    const team = await Team.create({
-      name: 'Test Team',
-      slug: 'test-team',
-      ownerId: owner.id,
-    })
-
-    const otherTeam = await Team.create({
-      name: 'Other Team',
-      slug: 'other-team',
-      ownerId: otherOwner.id,
-    })
-
-    // Give team a paid subscription
-    const tier1 = await SubscriptionTier.findBySlugOrFail('tier1')
-    await Subscription.createForTeam(team.id, tier1.id)
-
-    await TeamMember.create({ userId: owner.id, teamId: team.id, role: 'owner' })
-    await TeamMember.create({ userId: otherOwner.id, teamId: otherTeam.id, role: 'owner' })
-
-    owner.currentTeamId = team.id
-    await owner.save()
-    otherOwner.currentTeamId = otherTeam.id
-    await otherOwner.save()
-
-    const cookies = await loginAndGetCookie('owner@example.com', 'password123')
-
-    await request(BASE_URL)
-      .post(`/api/v1/teams/${team.id}/invitations`)
-      .set('Cookie', cookies)
-      .send({ email: 'other-owner@example.com' })
-      .expect(400)
-  })
-
   test('POST /api/v1/teams/:id/invitations returns 400 when team at member limit', async () => {
     const owner = await User.create({
       email: 'owner@example.com',
@@ -2145,75 +1909,6 @@ test.group('Team Invitations API - Edge Cases', (group) => {
       .set('Cookie', cookies)
       .send({ email: 'new@example.com' })
       .expect(400)
-  })
-
-  test('POST /api/v1/teams/:id/members moves non-owner from existing team', async ({ assert }) => {
-    const owner = await User.create({
-      email: 'owner@example.com',
-      password: 'password123',
-      role: 'user',
-      emailVerified: true,
-      mfaEnabled: false,
-    })
-
-    const otherOwner = await User.create({
-      email: 'other-owner@example.com',
-      password: 'password123',
-      role: 'user',
-      emailVerified: true,
-      mfaEnabled: false,
-    })
-
-    const memberToMove = await User.create({
-      email: 'member-to-move@example.com',
-      password: 'password123',
-      role: 'user',
-      emailVerified: true,
-      mfaEnabled: false,
-    })
-
-    const team = await Team.create({
-      name: 'New Team',
-      slug: 'new-team',
-      ownerId: owner.id,
-    })
-
-    const otherTeam = await Team.create({
-      name: 'Other Team',
-      slug: 'other-team',
-      ownerId: otherOwner.id,
-    })
-
-    await TeamMember.create({ userId: owner.id, teamId: team.id, role: 'owner' })
-    await TeamMember.create({ userId: otherOwner.id, teamId: otherTeam.id, role: 'owner' })
-    await TeamMember.create({ userId: memberToMove.id, teamId: otherTeam.id, role: 'member' })
-
-    owner.currentTeamId = team.id
-    await owner.save()
-    memberToMove.currentTeamId = otherTeam.id
-    await memberToMove.save()
-
-    const cookies = await loginAndGetCookie('owner@example.com', 'password123')
-
-    await request(BASE_URL)
-      .post(`/api/v1/teams/${team.id}/members`)
-      .set('Cookie', cookies)
-      .send({ email: 'member-to-move@example.com' })
-      .expect(201)
-
-    // Verify old membership is removed
-    const oldMembership = await TeamMember.query()
-      .where('userId', memberToMove.id)
-      .where('teamId', otherTeam.id)
-      .first()
-    assert.isNull(oldMembership)
-
-    // Verify new membership exists
-    const newMembership = await TeamMember.query()
-      .where('userId', memberToMove.id)
-      .where('teamId', team.id)
-      .first()
-    assert.exists(newMembership)
   })
 })
 

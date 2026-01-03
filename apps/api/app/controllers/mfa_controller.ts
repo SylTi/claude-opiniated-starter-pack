@@ -1,5 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import { verifyMfaValidator } from '#validators/auth'
+import { verifyMfaValidator, enableMfaValidator } from '#validators/auth'
 import MfaService from '#services/mfa_service'
 
 export default class MfaController {
@@ -38,16 +38,7 @@ export default class MfaController {
    */
   async enable({ request, response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
-    const { code } = await request.validateUsing(verifyMfaValidator)
-    const { secret, backupCodes } = request.only(['secret', 'backupCodes'])
-
-    if (!secret || !backupCodes) {
-      response.badRequest({
-        error: 'MissingData',
-        message: 'Secret and backup codes are required',
-      })
-      return
-    }
+    const { code, secret, backupCodes } = await request.validateUsing(enableMfaValidator)
 
     if (user.mfaEnabled) {
       response.badRequest({
