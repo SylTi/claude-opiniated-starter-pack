@@ -25,6 +25,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -312,6 +313,11 @@ export default function AdminCouponsPage(): React.ReactElement {
             <DialogTitle>
               {editingCoupon ? "Edit Coupon" : "Create Coupon"}
             </DialogTitle>
+            <DialogDescription>
+              {editingCoupon
+                ? "Update details for this coupon."
+                : "Create a single-use coupon for account credits."}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>

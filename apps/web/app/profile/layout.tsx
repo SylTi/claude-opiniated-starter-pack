@@ -15,7 +15,7 @@ const navigation = [
 
 /**
  * Profile layout component.
- * Authentication is handled by Next.js middleware (middleware.ts).
+ * Authentication is handled by Next.js proxy (proxy.ts).
  */
 export default function ProfileLayout({ children }: { children: ReactNode }): React.ReactElement {
   const pathname = usePathname()

@@ -24,7 +24,10 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
 
   // Reporter to use
-  reporter: [["html", { outputFolder: "playwright-report" }], ["list"]],
+  reporter: [
+              ["html", { outputFolder: "playwright-report" }], 
+              ["list", { printSteps: true }]
+            ],
 
   // Shared settings for all the projects
   use: {
@@ -59,11 +62,18 @@ export default defineConfig({
   // Output folder for test artifacts
   outputDir: "test-results",
 
-  // Run production build before starting the tests
+  // Start production server (build happens in e2e script)
   webServer: {
-    command: "pnpm run build && pnpm run start",
+    command: "pnpm run start",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
-    timeout: 180 * 1000, // More time for build + start
+    timeout: 300 * 1000, // More time for build + start on slower FS
+    env: {
+      NEXT_PUBLIC_API_URL: "http://localhost:3333",
+      USER_COOKIE_SECRET:
+        process.env.USER_COOKIE_SECRET ??
+        process.env.APP_KEY ??
+        "test_key_for_testing_only_change_in_production",
+    },
   },
 });

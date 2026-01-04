@@ -193,7 +193,7 @@ pnpm run web:dev     # Démarre Next.js en dev
 pnpm run web:build   # Build pour production
 pnpm run web:test    # Exécute les tests Vitest
 ```
-
+3
 ### Backend (apps/api)
 ```bash
 pnpm run api:dev     # Démarre AdonisJS en dev
@@ -209,6 +209,17 @@ node ace make:controller ControllerName # Crée un controller
 ```bash
 pnpm --filter api run typecheck
 pnpm --filter web run typecheck
+```
+### Running e2e
+First shell:
+```bash
+cd apps/api
+NODE_ENV=test node ace migration:fresh --seed
+NODE_ENV=test node ace serve
+```
+Second shell:
+```bash
+pnpm --filter web run e2e
 ```
 
 ### Running tests

@@ -8,6 +8,9 @@ global.fetch = mockFetch;
 describe("api client", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    if (typeof document !== "undefined") {
+      document.cookie = "XSRF-TOKEN=test-xsrf";
+    }
   });
 
   describe("api.get", () => {
@@ -23,7 +26,10 @@ describe("api client", () => {
         "http://localhost:3333/api/v1/users",
         expect.objectContaining({
           method: "GET",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
           credentials: "include",
         })
       );
@@ -94,7 +100,11 @@ describe("api client", () => {
         "http://localhost:3333/api/v1/auth/login",
         expect.objectContaining({
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-XSRF-TOKEN": "test-xsrf",
+          },
           credentials: "include",
           body: JSON.stringify(body),
         })
@@ -113,6 +123,11 @@ describe("api client", () => {
         "http://localhost:3333/api/v1/auth/logout",
         expect.objectContaining({
           method: "POST",
+          headers: expect.objectContaining({
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-XSRF-TOKEN": "test-xsrf",
+          }),
           body: undefined,
         })
       );
@@ -160,7 +175,11 @@ describe("api client", () => {
         "http://localhost:3333/api/v1/users/1",
         expect.objectContaining({
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-XSRF-TOKEN": "test-xsrf",
+          },
           credentials: "include",
           body: JSON.stringify(body),
         })
@@ -179,6 +198,11 @@ describe("api client", () => {
         "http://localhost:3333/api/v1/users/1/activate",
         expect.objectContaining({
           method: "PUT",
+          headers: expect.objectContaining({
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-XSRF-TOKEN": "test-xsrf",
+          }),
           body: undefined,
         })
       );
@@ -225,7 +249,11 @@ describe("api client", () => {
         "http://localhost:3333/api/v1/users/1",
         expect.objectContaining({
           method: "DELETE",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-XSRF-TOKEN": "test-xsrf",
+          },
           credentials: "include",
         })
       );

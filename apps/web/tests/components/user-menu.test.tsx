@@ -181,6 +181,41 @@ describe("UserMenu Component", () => {
 
       expect(mockLogout).toHaveBeenCalled();
     });
+
+    it("redirects to login after logout", async () => {
+      const user = userEvent.setup();
+      mockLogout.mockResolvedValue(undefined);
+      render(<UserMenu />);
+
+      await user.click(screen.getByRole("button"));
+      await user.click(screen.getByText("Log out"));
+
+      expect(mockPush).toHaveBeenCalledWith("/login");
+    });
+
+    it("opens menu with keyboard activation", async () => {
+      const user = userEvent.setup();
+      render(<UserMenu />);
+
+      const trigger = screen.getByRole("button");
+      trigger.focus();
+      await user.keyboard("{Enter}");
+
+      expect(screen.getByRole("menuitem", { name: "Profile" })).toBeInTheDocument();
+      expect(screen.getByRole("menuitem", { name: "Security" })).toBeInTheDocument();
+    });
+
+    it("closes menu on Escape key", async () => {
+      const user = userEvent.setup();
+      render(<UserMenu />);
+
+      await user.click(screen.getByRole("button"));
+      expect(screen.getByText("Profile")).toBeInTheDocument();
+
+      await user.keyboard("{Escape}");
+
+      expect(screen.queryByText("Profile")).not.toBeInTheDocument();
+    });
   });
 
   describe("when admin user is authenticated", () => {

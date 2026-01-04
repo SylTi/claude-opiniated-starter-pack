@@ -87,16 +87,37 @@ screen.getByTestId('submit-button')
 
 ```bash
 # Tous les tests (run once)
-npm test
+pnpm run web:test
 
 # Watch mode (re-run on changes)
-npm run test:watch
+pnpm run web:test:watch
 
 # UI mode (interface graphique)
-npm run test:ui
+pnpm run web:test:ui
 
 # Coverage
-npm test -- --coverage
+pnpm run web:test:coverage
+```
+
+## E2E (Playwright)
+
+Les E2E utilisent un build de production (`pnpm run build && pnpm run start`).
+
+```bash
+# Pré-requis: base de données de test + seed
+pnpm run docker:test:up
+export NEXT_PUBLIC_API_URL=http://localhost:3333
+cd apps/api
+NODE_ENV=test node ace migration:fresh
+NODE_ENV=test node ace db:seed
+
+# Lancer l'API en test (dans un autre terminal)
+NODE_ENV=test pnpm --filter api run dev
+
+# Lancer les E2E
+pnpm run web:e2e
+pnpm run web:e2e:headed
+pnpm run web:e2e:ui
 ```
 
 ## Bonnes Pratiques

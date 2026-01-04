@@ -11,27 +11,27 @@ export default class LoginHistory extends BaseModel {
   @column({ isPrimary: true })
   declare id: number
 
-  @column()
+  @column({ columnName: 'user_id' })
   declare userId: number
 
-  @column()
+  @column({ columnName: 'ip_address' })
   declare ipAddress: string | null
 
-  @column()
+  @column({ columnName: 'user_agent' })
   declare userAgent: string | null
 
-  @column()
+  @column({ columnName: 'login_method' })
   declare loginMethod: LoginMethod
 
   @column()
   declare success: boolean
 
-  @column()
+  @column({ columnName: 'failure_reason' })
   declare failureReason: string | null
 
-  @column.dateTime({ autoCreate: true })
+  @column.dateTime({ columnName: 'created_at', autoCreate: true })
   declare createdAt: DateTime
 
-  @belongsTo(() => User)
+  @belongsTo(() => User, { foreignKey: 'userId' })
   declare user: BelongsTo<typeof User>
 }

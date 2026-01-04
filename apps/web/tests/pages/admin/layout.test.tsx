@@ -1,19 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import AdminLayout from "@/app/admin/layout";
-import type { SubscriptionTier } from "@saas/shared";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { decryptUserCookie } from "@/lib/cookie-signing";
 
-// Mock next/navigation
-const mockPush = vi.fn();
-const mockPathname = vi.fn();
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({
-    push: mockPush,
-  }),
-  usePathname: () => mockPathname(),
+vi.mock("next/headers", () => ({
+  cookies: vi.fn(),
 }));
 
-// Mock next/link
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn(),
+  usePathname: () => "/admin/dashboard",
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     children,
@@ -24,175 +24,68 @@ vi.mock("next/link", () => ({
   }) => <a href={href}>{children}</a>,
 }));
 
-// Mock auth context
-const mockUseAuth = vi.fn();
-vi.mock("@/contexts/auth-context", () => ({
-  useAuth: () => mockUseAuth(),
+vi.mock("@/lib/cookie-signing", () => ({
+  decryptUserCookie: vi.fn(),
 }));
-
-// Mock sonner toast
-vi.mock("sonner", () => ({
-  toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-  },
-}));
-
-interface MockUser {
-  id: number;
-  email: string;
-  fullName: string | null;
-  role: string;
-  subscriptionTier: SubscriptionTier;
-  emailVerified: boolean;
-  mfaEnabled: boolean;
-}
 
 describe("Admin Layout", () => {
+  const mockCookies = vi.mocked(cookies);
+  const mockRedirect = vi.mocked(redirect);
+  const mockDecrypt = vi.mocked(decryptUserCookie);
+
   beforeEach(() => {
     vi.clearAllMocks();
-    mockPathname.mockReturnValue("/admin/dashboard");
-  });
-
-  describe("when user is not authenticated", () => {
-    beforeEach(() => {
-      mockUseAuth.mockReturnValue({
-        user: null,
-        isLoading: false,
-      });
-    });
-
-    it("redirects to login", async () => {
-      render(
-        <AdminLayout>
-          <div>Admin Content</div>
-        </AdminLayout>
-      );
-
-      await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith("/login");
-      });
+    mockRedirect.mockImplementation(() => {
+      throw new Error("NEXT_REDIRECT");
     });
   });
 
-  describe("when user is loading", () => {
-    beforeEach(() => {
-      mockUseAuth.mockReturnValue({
-        user: null,
-        isLoading: true,
-      });
-    });
+  it("redirects to login when no user cookie exists", async () => {
+    mockCookies.mockResolvedValue({
+      get: () => undefined,
+    } as never);
 
-    it("shows loading spinner", () => {
-      render(
-        <AdminLayout>
-          <div>Admin Content</div>
-        </AdminLayout>
-      );
-
-      expect(document.querySelector(".animate-spin")).toBeInTheDocument();
-    });
+    await expect(
+      AdminLayout({ children: <div>Admin Content</div> })
+    ).rejects.toThrow("NEXT_REDIRECT");
+    expect(mockRedirect).toHaveBeenCalledWith("/login");
   });
 
-  describe("when user is not admin", () => {
-    beforeEach(() => {
-      const regularUser: MockUser = {
-        id: 1,
-        email: "user@example.com",
-        fullName: "Regular User",
-        role: "user",
-        subscriptionTier: "free",
-        emailVerified: true,
-        mfaEnabled: false,
-      };
-
-      mockUseAuth.mockReturnValue({
-        user: regularUser,
-        isLoading: false,
-      });
+  it("redirects to dashboard when user is not admin", async () => {
+    mockCookies.mockResolvedValue({
+      get: () => ({ value: "signed-cookie" }),
+    } as never);
+    mockDecrypt.mockResolvedValue({
+      id: 1,
+      role: "user",
     });
 
-    it("redirects to dashboard with error", async () => {
-      const { toast } = await import("sonner");
-      render(
-        <AdminLayout>
-          <div>Admin Content</div>
-        </AdminLayout>
-      );
-
-      await waitFor(() => {
-        expect(toast.error).toHaveBeenCalledWith("Access denied. Admin only.");
-        expect(mockPush).toHaveBeenCalledWith("/dashboard");
-      });
-    });
-
-    it("does not render content", () => {
-      render(
-        <AdminLayout>
-          <div>Admin Content</div>
-        </AdminLayout>
-      );
-
-      expect(screen.queryByText("Admin Content")).not.toBeInTheDocument();
-    });
+    await expect(
+      AdminLayout({ children: <div>Admin Content</div> })
+    ).rejects.toThrow("NEXT_REDIRECT");
+    expect(mockRedirect).toHaveBeenCalledWith("/dashboard");
   });
 
-  describe("when user is admin", () => {
-    beforeEach(() => {
-      const adminUser: MockUser = {
-        id: 1,
-        email: "admin@example.com",
-        fullName: "Admin User",
-        role: "admin",
-        subscriptionTier: "free",
-        emailVerified: true,
-        mfaEnabled: false,
-      };
-
-      mockUseAuth.mockReturnValue({
-        user: adminUser,
-        isLoading: false,
-      });
+  it("renders admin layout for admin users", async () => {
+    mockCookies.mockResolvedValue({
+      get: () => ({ value: "signed-cookie" }),
+    } as never);
+    mockDecrypt.mockResolvedValue({
+      id: 1,
+      role: "admin",
     });
 
-    it("renders admin panel title", () => {
-      render(
-        <AdminLayout>
-          <div>Admin Content</div>
-        </AdminLayout>
-      );
+    render(await AdminLayout({ children: <div>Admin Content</div> }));
 
-      expect(screen.getByText("Admin Panel")).toBeInTheDocument();
-    });
-
-    it("renders navigation links", () => {
-      render(
-        <AdminLayout>
-          <div>Admin Content</div>
-        </AdminLayout>
-      );
-
-      expect(
-        screen.getByRole("link", { name: /dashboard/i })
-      ).toHaveAttribute("href", "/admin/dashboard");
-      expect(screen.getByRole("link", { name: /users/i })).toHaveAttribute(
-        "href",
-        "/admin/users"
-      );
-    });
-
-    it("renders children content", () => {
-      render(
-        <AdminLayout>
-          <div>Admin Content</div>
-        </AdminLayout>
-      );
-
-      expect(screen.getByText("Admin Content")).toBeInTheDocument();
-    });
-
-    // Note: Navigation highlighting test is skipped because the Link mock
-    // doesn't pass className through, making it impossible to test the
-    // active state styling in jsdom environment
+    expect(screen.getByText("Admin Panel")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /dashboard/i })).toHaveAttribute(
+      "href",
+      "/admin/dashboard"
+    );
+    expect(screen.getByRole("link", { name: /users/i })).toHaveAttribute(
+      "href",
+      "/admin/users"
+    );
+    expect(screen.getByText("Admin Content")).toBeInTheDocument();
   });
 });

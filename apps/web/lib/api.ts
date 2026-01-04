@@ -28,6 +28,35 @@ const API_BASE_URL = getApiUrl()
 // Export for use in other modules (e.g., auth.ts for OAuth URLs)
 export { API_BASE_URL }
 
+function getXsrfToken(): string | null {
+  if (typeof document === 'undefined') {
+    return null
+  }
+  const match = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/)
+  return match ? match[1] : null
+}
+
+async function ensureXsrfToken(): Promise<string | null> {
+  const existing = getXsrfToken()
+  if (existing || typeof window === 'undefined') {
+    return existing
+  }
+
+  try {
+    await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+      credentials: 'include',
+    })
+  } catch {
+    // Ignore: token cookie may still be set even on 401.
+  }
+
+  return getXsrfToken()
+}
+
 export interface ApiResponse<T> {
   data?: T
   message?: string
@@ -71,6 +100,7 @@ export const api = {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
       credentials: 'include',
     })
@@ -82,10 +112,13 @@ export const api = {
    * POST request
    */
   async post<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
+    const xsrfToken = await ensureXsrfToken()
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...(xsrfToken ? { 'X-XSRF-TOKEN': xsrfToken } : {}),
       },
       credentials: 'include',
       body: body ? JSON.stringify(body) : undefined,
@@ -98,10 +131,13 @@ export const api = {
    * PUT request
    */
   async put<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
+    const xsrfToken = await ensureXsrfToken()
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...(xsrfToken ? { 'X-XSRF-TOKEN': xsrfToken } : {}),
       },
       credentials: 'include',
       body: body ? JSON.stringify(body) : undefined,
@@ -114,10 +150,13 @@ export const api = {
    * DELETE request
    */
   async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
+    const xsrfToken = await ensureXsrfToken()
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...(xsrfToken ? { 'X-XSRF-TOKEN': xsrfToken } : {}),
       },
       credentials: 'include',
     })

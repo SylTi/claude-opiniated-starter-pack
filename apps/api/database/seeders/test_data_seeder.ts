@@ -6,6 +6,8 @@ import Team from '#models/team'
 import TeamMember from '#models/team_member'
 import SubscriptionTier from '#models/subscription_tier'
 import Subscription from '#models/subscription'
+import Product from '#models/product'
+import Price from '#models/price'
 import Coupon from '#models/coupon'
 import DiscountCode from '#models/discount_code'
 
@@ -21,6 +23,9 @@ export default class extends BaseSeeder {
 
     // Create subscription tiers
     await this.seedSubscriptionTiers()
+
+    // Create products and prices
+    await this.seedProductsAndPrices()
 
     // Create test users
     const users = await this.seedUsers()
@@ -112,6 +117,15 @@ export default class extends BaseSeeder {
         tier: 'tier2',
       },
       {
+        key: 'adminUser',
+        email: 'admin@test.com',
+        password: 'password123',
+        fullName: 'Admin User',
+        role: 'admin' as const,
+        emailVerified: true,
+        tier: 'tier2',
+      },
+      {
         key: 'teamOwner',
         email: 'owner@test.com',
         password: 'password123',
@@ -178,6 +192,67 @@ export default class extends BaseSeeder {
     }
 
     return users
+  }
+
+  private async seedProductsAndPrices(): Promise<void> {
+    const tierConfigs = [
+      {
+        slug: 'tier1',
+        providerProductId: 'prod_test_tier1',
+        prices: [
+          { providerPriceId: 'price_test_tier1_month', interval: 'month', unitAmount: 1999 },
+          { providerPriceId: 'price_test_tier1_year', interval: 'year', unitAmount: 19990 },
+        ],
+      },
+      {
+        slug: 'tier2',
+        providerProductId: 'prod_test_tier2',
+        prices: [
+          { providerPriceId: 'price_test_tier2_month', interval: 'month', unitAmount: 4999 },
+          { providerPriceId: 'price_test_tier2_year', interval: 'year', unitAmount: 49990 },
+        ],
+      },
+    ]
+
+    for (const config of tierConfigs) {
+      const tier = await SubscriptionTier.findBySlug(config.slug)
+      if (!tier) {
+        console.log(`  Tier not found for product seed: ${config.slug}`)
+        continue
+      }
+
+      let product = await Product.findByTierAndProvider(tier.id, 'stripe')
+      if (!product) {
+        product = await Product.create({
+          tierId: tier.id,
+          provider: 'stripe',
+          providerProductId: config.providerProductId,
+        })
+        console.log(`  Created product for tier: ${config.slug}`)
+      }
+
+      const existingPrices = await Price.query()
+        .where('productId', product.id)
+        .where('provider', 'stripe')
+
+      if (existingPrices.length > 0) {
+        continue
+      }
+
+      for (const price of config.prices) {
+        await Price.create({
+          productId: product.id,
+          provider: 'stripe',
+          providerPriceId: price.providerPriceId,
+          interval: price.interval,
+          currency: 'usd',
+          unitAmount: price.unitAmount,
+          taxBehavior: 'exclusive',
+          isActive: true,
+        })
+      }
+      console.log(`  Created prices for tier: ${config.slug}`)
+    }
   }
 
   private async seedTeams(users: Record<string, User>): Promise<void> {

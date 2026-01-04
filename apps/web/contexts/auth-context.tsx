@@ -22,7 +22,11 @@ export function AuthProvider({ children }: { children: ReactNode }): React.React
   const refreshUser = useCallback(async () => {
     try {
       const userData = await authApi.me()
-      setUser(userData)
+      if (userData?.id) {
+        setUser(userData)
+      } else {
+        setUser(null)
+      }
     } catch {
       setUser(null)
     }
@@ -32,7 +36,11 @@ export function AuthProvider({ children }: { children: ReactNode }): React.React
     const initAuth = async (): Promise<void> => {
       try {
         const userData = await authApi.me()
-        setUser(userData)
+        if (userData?.id) {
+          setUser(userData)
+        } else {
+          setUser(null)
+        }
       } catch {
         setUser(null)
       } finally {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import ProfileLayout from "@/app/profile/layout";
 import type { SubscriptionTier } from "@saas/shared";
 
@@ -54,16 +54,14 @@ describe("Profile Layout", () => {
       });
     });
 
-    it("redirects to login", async () => {
+    it("shows loading spinner while auth resolves", () => {
       render(
         <ProfileLayout>
           <div>Profile Content</div>
         </ProfileLayout>
       );
 
-      await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith("/login");
-      });
+      expect(document.querySelector(".animate-spin")).toBeInTheDocument();
     });
 
     it("does not render content", () => {

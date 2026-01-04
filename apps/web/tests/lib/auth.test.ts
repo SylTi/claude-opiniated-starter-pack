@@ -10,6 +10,7 @@ vi.mock("@/lib/api", () => ({
     put: vi.fn(),
     delete: vi.fn(),
   },
+  API_BASE_URL: "http://localhost:3333",
   ApiError: class ApiError extends Error {
     constructor(
       public statusCode: number,

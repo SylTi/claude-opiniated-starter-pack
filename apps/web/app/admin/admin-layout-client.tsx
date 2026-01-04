@@ -2,26 +2,21 @@
 
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { type LucideIcon } from "lucide-react"
+import { LayoutDashboard, Users, Tag, Ticket } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-interface NavigationItem {
-  name: string;
-  href: string;
-  icon: LucideIcon;
-}
-
-interface AdminLayoutClientProps {
-  navigation: NavigationItem[];
-}
+const navigation = [
+  { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
+  { name: "Users", href: "/admin/users", icon: Users },
+  { name: "Discount Codes", href: "/admin/discount-codes", icon: Tag },
+  { name: "Coupons", href: "/admin/coupons", icon: Ticket },
+]
 
 /**
  * Client component for admin navigation.
  * Handles active state highlighting based on current pathname.
  */
-export function AdminLayoutClient({
-  navigation,
-}: AdminLayoutClientProps): React.ReactElement {
+export function AdminLayoutClient(): React.ReactElement {
   const pathname = usePathname()
 
   return (

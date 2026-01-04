@@ -50,40 +50,50 @@ test.group('Auth API - Registration & Login', (group) => {
 
   test('POST /api/v1/auth/register creates a new user', async ({ assert }) => {
     const id = uniqueId()
+    const email = `register-${id}@example.com`
 
     const response = await request(BASE_URL)
       .post('/api/v1/auth/register')
       .send({
-        email: `register-${id}@example.com`,
+        email,
         password: 'password123',
         fullName: 'New User',
       })
       .expect(201)
 
-    assert.exists(response.body.data.id)
-    assert.equal(response.body.data.email, `register-${id}@example.com`)
-    assert.equal(response.body.data.fullName, 'New User')
-    assert.isFalse(response.body.data.emailVerified)
+    assert.exists(response.body.message)
+
+    const user = await User.findBy('email', email)
+    assert.exists(user)
+    assert.equal(user!.email, email)
+    assert.equal(user!.fullName, 'New User')
+    assert.isFalse(user!.emailVerified)
   })
 
   test('POST /api/v1/auth/register fails with duplicate email', async () => {
     const id = uniqueId()
+    const email = `duplicate-${id}@example.com`
 
     await User.create({
-      email: `duplicate-${id}@example.com`,
+      email,
       password: 'password123',
       role: 'user',
       emailVerified: true,
       mfaEnabled: false,
     })
 
-    await request(BASE_URL)
+    const response = await request(BASE_URL)
       .post('/api/v1/auth/register')
       .send({
-        email: `duplicate-${id}@example.com`,
+        email,
         password: 'password123',
       })
-      .expect(409)
+      .expect(201)
+
+    assert.exists(response.body.message)
+
+    const users = await User.query().where('email', email)
+    assert.equal(users.length, 1)
   })
 
   test('POST /api/v1/auth/login succeeds with valid credentials', async ({ assert }) => {

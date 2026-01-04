@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import AdminCouponsPage from '@/app/admin/coupons/page'
 import type { CouponDTO } from '@saas/shared'
@@ -257,14 +257,15 @@ describe('AdminCouponsPage', () => {
 
   it('shows correct status badges', async () => {
     const coupons: CouponDTO[] = [
-      createMockCoupon({ id: 1, code: 'ACTIVE', isActive: true }),
-      createMockCoupon({ id: 2, code: 'INACTIVE', isActive: false }),
+      createMockCoupon({ id: 1, code: 'ACTIVE', isActive: true, expiresAt: '2100-01-01T00:00:00.000Z' }),
+      createMockCoupon({ id: 2, code: 'INACTIVE', isActive: false, expiresAt: '2100-01-01T00:00:00.000Z' }),
       createMockCoupon({
         id: 3,
         code: 'REDEEMED',
         isActive: false,
         redeemedByUserId: 1,
         redeemedByUserEmail: 'user@example.com',
+        expiresAt: '2100-01-01T00:00:00.000Z',
       }),
       createMockCoupon({
         id: 4,
@@ -277,12 +278,20 @@ describe('AdminCouponsPage', () => {
 
     render(<AdminCouponsPage />)
 
-    await waitFor(() => {
-      expect(screen.getByText('Active')).toBeInTheDocument()
-      expect(screen.getByText('Inactive')).toBeInTheDocument()
-      expect(screen.getByText('Redeemed')).toBeInTheDocument()
-      expect(screen.getByText('Expired')).toBeInTheDocument()
-    })
+    const activeRow = (await screen.findByText('ACTIVE')).closest('tr')
+    const inactiveRow = (await screen.findByText('INACTIVE')).closest('tr')
+    const redeemedRow = (await screen.findByText('REDEEMED')).closest('tr')
+    const expiredRow = (await screen.findByText('EXPIRED')).closest('tr')
+
+    expect(activeRow).not.toBeNull()
+    expect(inactiveRow).not.toBeNull()
+    expect(redeemedRow).not.toBeNull()
+    expect(expiredRow).not.toBeNull()
+
+    expect(within(activeRow as HTMLElement).getByText('Active')).toBeInTheDocument()
+    expect(within(inactiveRow as HTMLElement).getByText('Inactive')).toBeInTheDocument()
+    expect(within(redeemedRow as HTMLElement).getByText('Redeemed')).toBeInTheDocument()
+    expect(within(expiredRow as HTMLElement).getByText('Expired')).toBeInTheDocument()
   })
 
   it('hides toggle button for redeemed coupons', async () => {

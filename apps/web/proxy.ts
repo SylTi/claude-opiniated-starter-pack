@@ -39,7 +39,7 @@ function isStaticOrApi(pathname: string): boolean {
   );
 }
 
-export async function middleware(request: NextRequest): Promise<NextResponse> {
+export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
 
   // Skip static assets and API routes
@@ -52,10 +52,10 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
-  // Check for session cookie
-  const sessionCookie = request.cookies.get("adonis-session");
+  // Check for signed user info cookie (set after successful login)
+  const userInfoCookie = request.cookies.get("user-info");
 
-  if (!sessionCookie) {
+  if (!userInfoCookie?.value) {
     // Redirect to login with return URL
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("returnTo", pathname);
@@ -65,14 +65,6 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   // For admin routes, verify admin role from signed cookie (optimization to avoid API calls)
   // Security: This is only for routing. Actual admin API calls are protected by backend auth middleware.
   if (matchesRoute(pathname, adminRoutes)) {
-    const userInfoCookie = request.cookies.get("user-info");
-
-    if (!userInfoCookie?.value) {
-      // No user info cookie, redirect to dashboard (they're logged in but we don't know their role)
-      // The dashboard will handle checking their actual permissions
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
-
     // Verify and decrypt the JWT cookie
     const userInfo = await decryptUserCookie(userInfoCookie.value);
 

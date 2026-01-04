@@ -870,7 +870,7 @@ test.group('Teams API - Update, Switch, and Members', (group) => {
 
     assert.equal(response.body.data.name, 'My Team')
     assert.notEqual(response.body.data.slug, 'my-team') // Should be different
-    assert.match(response.body.data.slug, /^my-team-\d+$/)
+    assert.match(response.body.data.slug, /^my-team-[a-z0-9]{4}$/)
   })
 })
 

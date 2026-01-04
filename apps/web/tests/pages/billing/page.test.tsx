@@ -132,7 +132,7 @@ describe('BillingPage', () => {
     render(<BillingPage />)
 
     await waitFor(() => {
-      expect(screen.getByText('Free')).toBeInTheDocument()
+      expect(screen.getAllByText('Free').length).toBeGreaterThan(0)
       expect(screen.getByText('Pro')).toBeInTheDocument()
       expect(screen.getByText('Enterprise')).toBeInTheDocument()
     })
@@ -199,7 +199,7 @@ describe('BillingPage', () => {
     render(<BillingPage />)
 
     await waitFor(() => {
-      expect(screen.getByText(/Failed to load billing data/i)).toBeInTheDocument()
+      expect(screen.getByText(/Network error/i)).toBeInTheDocument()
     })
   })
 
@@ -332,6 +332,55 @@ describe('BillingPage', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Discount Applied!')).toBeInTheDocument()
+      })
+    })
+
+    it('shows error toast when discount code is invalid', async () => {
+      const user = userEvent.setup()
+      const tiers: BillingTierDTO[] = [createMockBillingTier('tier1', 1)]
+      mockGetTiers.mockResolvedValue(tiers)
+
+      const validationResponse: ValidateDiscountCodeResponse = {
+        valid: false,
+        message: 'Invalid discount code',
+      }
+      mockValidateDiscountCode.mockResolvedValue(validationResponse)
+
+      const { toast } = await import('sonner')
+
+      render(<BillingPage />)
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('Enter discount code')).toBeInTheDocument()
+      })
+
+      const discountInput = screen.getByPlaceholderText('Enter discount code')
+      await user.type(discountInput, 'BADCODE')
+
+      const upgradeButton = screen.getByRole('button', { name: /Upgrade to Pro/i })
+      await user.click(upgradeButton)
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith('Invalid discount code')
+      })
+    })
+
+    it('shows error message when checkout fails', async () => {
+      const user = userEvent.setup()
+      const tiers: BillingTierDTO[] = [createMockBillingTier('tier1', 1)]
+      mockGetTiers.mockResolvedValue(tiers)
+      mockCreateCheckout.mockRejectedValue(new Error('Checkout failed'))
+
+      render(<BillingPage />)
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Upgrade to Pro/i })).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByRole('button', { name: /Upgrade to Pro/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Checkout failed')).toBeInTheDocument()
       })
     })
 

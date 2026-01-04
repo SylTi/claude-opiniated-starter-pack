@@ -1,16 +1,8 @@
 import { type ReactNode } from "react"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
-import { LayoutDashboard, Users, Tag, Ticket } from "lucide-react"
 import { decryptUserCookie } from "@/lib/cookie-signing"
 import { AdminLayoutClient } from "./admin-layout-client"
-
-const navigation = [
-  { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-  { name: "Users", href: "/admin/users", icon: Users },
-  { name: "Discount Codes", href: "/admin/discount-codes", icon: Tag },
-  { name: "Coupons", href: "/admin/coupons", icon: Ticket },
-]
 
 /**
  * Admin layout component (Server Component).
@@ -51,7 +43,7 @@ export default async function AdminLayout({
                 </h2>
                 <p className="text-sm text-gray-500">Manage your application</p>
               </div>
-              <AdminLayoutClient navigation={navigation} />
+              <AdminLayoutClient />
             </nav>
           </aside>
 

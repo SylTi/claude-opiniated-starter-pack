@@ -61,7 +61,8 @@ done
 echo ""
 echo "🔄 Exécution des migrations de test..."
 cd apps/api
-NODE_ENV=test node ace migration:run
+NODE_ENV=test node ace migration:fresh
+NODE_ENV=test node ace db:seed
 
 echo ""
 echo -e "${GREEN}✅ Setup terminé !${NC}"

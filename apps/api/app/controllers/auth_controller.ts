@@ -13,11 +13,44 @@ import MailService from '#services/mail_service'
 import CookieSigningService from '#services/cookie_signing_service'
 import TeamInvitation from '#models/team_invitation'
 import TeamMember from '#models/team_member'
+import Subscription from '#models/subscription'
+import SubscriptionTier from '#models/subscription_tier'
 
 export default class AuthController {
   private authService = new AuthService()
   private mailService = new MailService()
   private cookieSigning = new CookieSigningService()
+
+  private serializeTier(tier: SubscriptionTier) {
+    return {
+      id: tier.id,
+      slug: tier.slug,
+      name: tier.name,
+      description: null,
+      level: tier.level,
+      maxTeamMembers: tier.maxTeamMembers,
+      priceMonthly: tier.priceMonthly,
+      yearlyDiscountPercent: tier.yearlyDiscountPercent,
+      features: tier.features,
+      isActive: tier.isActive,
+    }
+  }
+
+  private async getEffectiveTier(userId: number, currentTeamId: number | null) {
+    if (currentTeamId) {
+      const teamSubscription = await Subscription.getActiveForTeam(currentTeamId)
+      if (teamSubscription?.tier) {
+        return teamSubscription.tier
+      }
+    }
+
+    const userSubscription = await Subscription.getActiveForUser(userId)
+    if (userSubscription?.tier) {
+      return userSubscription.tier
+    }
+
+    return SubscriptionTier.getFreeTier()
+  }
 
   /**
    * Register a new user
@@ -222,12 +255,16 @@ export default class AuthController {
         await user.load('currentTeam')
       }
 
+      const effectiveTier = await this.getEffectiveTier(user.id, user.currentTeamId)
+
       response.ok({
         data: {
           id: user.id,
           email: user.email,
           fullName: user.fullName,
           role: user.role,
+          balance: user.balance,
+          balanceCurrency: user.balanceCurrency,
           currentTeamId: user.currentTeamId,
           currentTeam: user.currentTeam
             ? {
@@ -236,9 +273,13 @@ export default class AuthController {
                 slug: user.currentTeam.slug,
               }
             : null,
+          effectiveSubscriptionTier: this.serializeTier(effectiveTier),
           emailVerified: user.emailVerified,
           mfaEnabled: user.mfaEnabled,
           avatarUrl: user.avatarUrl,
+          createdAt: user.createdAt.toISO(),
+          updatedAt: user.updatedAt?.toISO() ?? null,
+          subscription: null,
         },
         message: 'Login successful',
       })
@@ -290,12 +331,16 @@ export default class AuthController {
       await user.load('currentTeam')
     }
 
+    const effectiveTier = await this.getEffectiveTier(user.id, user.currentTeamId)
+
     response.ok({
       data: {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        balance: user.balance,
+        balanceCurrency: user.balanceCurrency,
         currentTeamId: user.currentTeamId,
         currentTeam: user.currentTeam
           ? {
@@ -304,10 +349,13 @@ export default class AuthController {
               slug: user.currentTeam.slug,
             }
           : null,
+        effectiveSubscriptionTier: this.serializeTier(effectiveTier),
         emailVerified: user.emailVerified,
         mfaEnabled: user.mfaEnabled,
         avatarUrl: user.avatarUrl,
-        createdAt: user.createdAt,
+        createdAt: user.createdAt.toISO(),
+        updatedAt: user.updatedAt?.toISO() ?? null,
+        subscription: null,
       },
     })
   }

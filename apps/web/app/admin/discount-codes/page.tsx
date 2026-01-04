@@ -25,6 +25,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -296,6 +297,11 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
             <DialogTitle>
               {editingCode ? "Edit Discount Code" : "Create Discount Code"}
             </DialogTitle>
+            <DialogDescription>
+              {editingCode
+                ? "Update details for this discount code."
+                : "Create a new discount code for subscriptions."}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>

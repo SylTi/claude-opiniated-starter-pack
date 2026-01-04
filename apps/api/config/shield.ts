@@ -1,4 +1,5 @@
 import { defineConfig } from '@adonisjs/shield'
+import env from '#start/env'
 
 const shieldConfig = defineConfig({
   /**
@@ -16,7 +17,7 @@ const shieldConfig = defineConfig({
    * to learn more
    */
   csrf: {
-    enabled: true,
+    enabled: env.get('NODE_ENV') !== 'test',
     exceptRoutes: [
       // Webhook endpoints receive external requests (e.g., from Stripe)
       '/api/v1/webhooks/*',

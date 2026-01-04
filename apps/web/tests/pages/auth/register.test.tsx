@@ -33,6 +33,12 @@ vi.mock("@/lib/auth", () => ({
   },
 }));
 
+// Mock auth context
+const mockUseAuth = vi.fn();
+vi.mock("@/contexts/auth-context", () => ({
+  useAuth: () => mockUseAuth(),
+}));
+
 // Mock API error
 vi.mock("@/lib/api", () => ({
   ApiError: class ApiError extends Error {
@@ -49,6 +55,7 @@ vi.mock("@/lib/api", () => ({
 describe("Register Page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUseAuth.mockReturnValue({ isAuthenticated: false, isLoading: false });
   });
 
   describe("rendering", () => {

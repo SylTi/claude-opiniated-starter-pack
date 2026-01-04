@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AdminUsersPage from "@/app/admin/users/page";
 import type { SubscriptionTier, SubscriptionTierDTO, SubscriptionDTO } from "@saas/shared";
@@ -64,8 +64,6 @@ vi.mock("sonner", () => ({
   },
 }));
 
-// Mock window.confirm
-vi.stubGlobal("confirm", vi.fn());
 
 interface MockUser {
   id: number;
@@ -323,10 +321,7 @@ describe("Admin Users Page", () => {
       });
     });
 
-    it("prompts confirmation before deleting user", async () => {
-      const mockConfirm = vi.fn().mockReturnValue(false);
-      vi.stubGlobal("confirm", mockConfirm);
-
+    it("opens delete dialog before deleting user", async () => {
       const user = userEvent.setup();
       render(<AdminUsersPage />);
 
@@ -336,14 +331,14 @@ describe("Admin Users Page", () => {
 
       await user.click(screen.getByRole("button", { name: /delete/i }));
 
-      expect(mockConfirm).toHaveBeenCalledWith(
-        "Are you sure you want to delete user user@example.com?"
-      );
+      const dialog = screen.getByRole("dialog");
+      expect(within(dialog).getByText("Delete User")).toBeInTheDocument();
+      expect(
+        within(dialog).getByText(/delete user user@example.com/i)
+      ).toBeInTheDocument();
     });
 
     it("calls delete API when confirmed", async () => {
-      const mockConfirm = vi.fn().mockReturnValue(true);
-      vi.stubGlobal("confirm", mockConfirm);
       mockApiDelete.mockResolvedValue({ message: "Success" });
 
       const user = userEvent.setup();
@@ -355,15 +350,15 @@ describe("Admin Users Page", () => {
 
       await user.click(screen.getByRole("button", { name: /delete/i }));
 
+      const dialog = screen.getByRole("dialog");
+      await user.click(within(dialog).getByRole("button", { name: /^delete$/i }));
+
       await waitFor(() => {
         expect(mockApiDelete).toHaveBeenCalledWith("/api/v1/admin/users/2");
       });
     });
 
     it("does not call delete API when cancelled", async () => {
-      const mockConfirm = vi.fn().mockReturnValue(false);
-      vi.stubGlobal("confirm", mockConfirm);
-
       const user = userEvent.setup();
       render(<AdminUsersPage />);
 
@@ -372,6 +367,9 @@ describe("Admin Users Page", () => {
       });
 
       await user.click(screen.getByRole("button", { name: /delete/i }));
+
+      const dialog = screen.getByRole("dialog");
+      await user.click(within(dialog).getByRole("button", { name: /cancel/i }));
 
       expect(mockApiDelete).not.toHaveBeenCalled();
     });
@@ -550,8 +548,6 @@ describe("Admin Users Page", () => {
     });
 
     it("shows success toast after deleting user", async () => {
-      const mockConfirm = vi.fn().mockReturnValue(true);
-      vi.stubGlobal("confirm", mockConfirm);
       mockApiDelete.mockResolvedValue({ message: "Success" });
       const { toast } = await import("sonner");
       const user = userEvent.setup();
@@ -562,6 +558,8 @@ describe("Admin Users Page", () => {
       });
 
       await user.click(screen.getByRole("button", { name: /delete/i }));
+      const dialog = screen.getByRole("dialog");
+      await user.click(within(dialog).getByRole("button", { name: /^delete$/i }));
 
       await waitFor(() => {
         expect(toast.success).toHaveBeenCalledWith("User deleted successfully");
@@ -569,8 +567,6 @@ describe("Admin Users Page", () => {
     });
 
     it("shows error toast when delete user fails with ApiError", async () => {
-      const mockConfirm = vi.fn().mockReturnValue(true);
-      vi.stubGlobal("confirm", mockConfirm);
       const { ApiError } = await import("@/lib/api");
       const { toast } = await import("sonner");
       mockApiDelete.mockRejectedValue(new ApiError(400, "ValidationError", "Cannot delete user"));
@@ -582,6 +578,8 @@ describe("Admin Users Page", () => {
       });
 
       await user.click(screen.getByRole("button", { name: /delete/i }));
+      const dialog = screen.getByRole("dialog");
+      await user.click(within(dialog).getByRole("button", { name: /^delete$/i }));
 
       await waitFor(() => {
         expect(toast.error).toHaveBeenCalledWith("Cannot delete user");
@@ -589,8 +587,6 @@ describe("Admin Users Page", () => {
     });
 
     it("shows generic error toast when delete user fails with unknown error", async () => {
-      const mockConfirm = vi.fn().mockReturnValue(true);
-      vi.stubGlobal("confirm", mockConfirm);
       const { toast } = await import("sonner");
       mockApiDelete.mockRejectedValue(new Error("Network error"));
       const user = userEvent.setup();
@@ -601,6 +597,8 @@ describe("Admin Users Page", () => {
       });
 
       await user.click(screen.getByRole("button", { name: /delete/i }));
+      const dialog = screen.getByRole("dialog");
+      await user.click(within(dialog).getByRole("button", { name: /^delete$/i }));
 
       await waitFor(() => {
         expect(toast.error).toHaveBeenCalledWith("Failed to delete user");

@@ -39,7 +39,7 @@ export default class AdminController {
     const activeSessionsThisWeek = await LoginHistory.query()
       .where('createdAt', '>=', sevenDaysAgo.toSQL())
       .where('success', true)
-      .countDistinct('userId as total')
+      .countDistinct('user_id as total')
 
     const usersByRole = await User.query().select('role').count('* as count').groupBy('role')
 

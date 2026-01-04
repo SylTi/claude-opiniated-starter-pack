@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, act } from '@testing-library/react'
 import { fireEvent } from '@testing-library/react'
 import BillingSuccessPage from '@/app/billing/success/page'
 
@@ -39,25 +39,24 @@ describe('BillingSuccessPage', () => {
 
     expect(screen.getByText(/5 seconds/i)).toBeInTheDocument()
 
-    vi.advanceTimersByTime(1000)
-    await waitFor(() => {
-      expect(screen.getByText(/4 seconds/i)).toBeInTheDocument()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
     })
+    expect(screen.getByText(/4 seconds/i)).toBeInTheDocument()
 
-    vi.advanceTimersByTime(1000)
-    await waitFor(() => {
-      expect(screen.getByText(/3 seconds/i)).toBeInTheDocument()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
     })
+    expect(screen.getByText(/3 seconds/i)).toBeInTheDocument()
   })
 
   it('redirects to billing after countdown', async () => {
     render(<BillingSuccessPage />)
 
-    vi.advanceTimersByTime(5000)
-
-    await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/billing')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000)
     })
+    expect(mockPush).toHaveBeenCalledWith('/billing')
   })
 
   it('has button to go to billing immediately', () => {

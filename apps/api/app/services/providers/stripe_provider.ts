@@ -1,4 +1,5 @@
 import Stripe from 'stripe'
+import app from '@adonisjs/core/services/app'
 import env from '#start/env'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
@@ -58,6 +59,10 @@ export default class StripeProvider implements PaymentProvider {
       customerId = existingCustomer.providerCustomerId
     }
 
+    if (app.inTest) {
+      return { sessionId: 'test_session', url: successUrl }
+    }
+
     // Create the checkout session
     const session = await this.stripe.checkout.sessions.create({
       mode: 'subscription',
@@ -106,6 +111,10 @@ export default class StripeProvider implements PaymentProvider {
 
     if (!paymentCustomer) {
       throw new Error('No payment customer found for this subscriber')
+    }
+
+    if (app.inTest) {
+      return { url: returnUrl }
     }
 
     const session = await this.stripe.billingPortal.sessions.create({

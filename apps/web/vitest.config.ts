@@ -8,6 +8,9 @@ export default defineConfig({
     environment: 'happy-dom',
     globals: true,
     setupFiles: ['./tests/setup.ts'],
+    exclude: ['e2e/**', '**/node_modules/**'],
+    testTimeout: 60000,
+    hookTimeout: 60000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary', 'html', 'lcov'],

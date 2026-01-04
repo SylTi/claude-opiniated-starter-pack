@@ -202,7 +202,7 @@ test.group('Billing API - Checkout', (group) => {
       .send({})
       .expect(422)
 
-    assert.exists(response.body.error)
+    assert.exists(response.body.errors)
   })
 
   test('POST /api/v1/billing/checkout rejects invalid price ID', async ({ assert }) => {

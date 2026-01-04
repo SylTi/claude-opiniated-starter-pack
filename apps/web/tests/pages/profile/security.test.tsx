@@ -88,7 +88,10 @@ describe("Security Page", () => {
 
     it("renders nothing when user is null", () => {
       const { container } = render(<SecurityPage />);
-      expect(container.firstChild).toBeNull();
+      return waitFor(() => {
+        expect(mockMfaStatus).toHaveBeenCalled();
+        expect(container.firstChild).toBeNull();
+      });
     });
   });
 
