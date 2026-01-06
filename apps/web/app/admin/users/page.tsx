@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, adminBillingApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -39,14 +39,14 @@ import {
 import { toast } from "sonner";
 import {
   type AdminUserDTO,
-  type SubscriptionTier,
-  SUBSCRIPTION_TIER_LABELS,
+  type SubscriptionTierDTO,
 } from "@saas/shared";
 
 export default function AdminUsersPage(): React.ReactElement {
   const router = useRouter();
   const { user } = useAuth();
   const [users, setUsers] = useState<AdminUserDTO[]>([]);
+  const [tiers, setTiers] = useState<SubscriptionTierDTO[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; userId: number | null; email: string }>({
@@ -55,12 +55,16 @@ export default function AdminUsersPage(): React.ReactElement {
     email: "",
   });
 
-  const fetchUsers = useCallback(async (): Promise<void> => {
+  const fetchData = useCallback(async (): Promise<void> => {
     try {
-      const response = await api.get<AdminUserDTO[]>("/api/v1/admin/users");
-      if (response.data) {
-        setUsers(response.data);
+      const [usersResponse, tiersResponse] = await Promise.all([
+        api.get<AdminUserDTO[]>("/api/v1/admin/users"),
+        adminBillingApi.listTiers(),
+      ]);
+      if (usersResponse.data) {
+        setUsers(usersResponse.data);
       }
+      setTiers(tiersResponse);
     } catch (error) {
       if (error instanceof ApiError) {
         toast.error(error.message);
@@ -76,15 +80,15 @@ export default function AdminUsersPage(): React.ReactElement {
   }, [router]);
 
   useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+    fetchData();
+  }, [fetchData]);
 
   async function handleVerifyEmail(userId: number): Promise<void> {
     setActionLoading(userId);
     try {
       await api.post(`/api/v1/admin/users/${userId}/verify-email`);
       toast.success("Email verified successfully");
-      fetchUsers();
+      fetchData();
     } catch (error) {
       if (error instanceof ApiError) {
         toast.error(error.message);
@@ -101,7 +105,7 @@ export default function AdminUsersPage(): React.ReactElement {
     try {
       await api.post(`/api/v1/admin/users/${userId}/unverify-email`);
       toast.success("Email unverified successfully");
-      fetchUsers();
+      fetchData();
     } catch (error) {
       if (error instanceof ApiError) {
         toast.error(error.message);
@@ -129,7 +133,7 @@ export default function AdminUsersPage(): React.ReactElement {
       await api.delete(`/api/v1/admin/users/${deleteDialog.userId}`);
       toast.success("User deleted successfully");
       closeDeleteDialog();
-      fetchUsers();
+      fetchData();
     } catch (error) {
       if (error instanceof ApiError) {
         toast.error(error.message);
@@ -143,7 +147,7 @@ export default function AdminUsersPage(): React.ReactElement {
 
   async function handleUpdateTier(
     userId: number,
-    tier: SubscriptionTier,
+    tier: string,
   ): Promise<void> {
     setActionLoading(userId);
     try {
@@ -151,7 +155,7 @@ export default function AdminUsersPage(): React.ReactElement {
         subscriptionTier: tier,
       });
       toast.success("Subscription tier updated successfully");
-      fetchUsers();
+      fetchData();
     } catch (error) {
       if (error instanceof ApiError) {
         toast.error(error.message);
@@ -163,17 +167,14 @@ export default function AdminUsersPage(): React.ReactElement {
     }
   }
 
-  function getTierBadgeVariant(
-    tier: SubscriptionTier,
-  ): "default" | "secondary" | "outline" {
-    switch (tier) {
-      case "tier2":
-        return "default";
-      case "tier1":
-        return "secondary";
-      default:
-        return "outline";
-    }
+  function getTierBadgeVariant(level: number): "default" | "secondary" | "outline" {
+    if (level >= 2) return "default";
+    if (level >= 1) return "secondary";
+    return "outline";
+  }
+
+  function getTierBySlug(slug: string): SubscriptionTierDTO | undefined {
+    return tiers.find((tier) => tier.slug === slug);
   }
 
   function formatDate(dateString: string | null): string {
@@ -186,6 +187,8 @@ export default function AdminUsersPage(): React.ReactElement {
       minute: "2-digit",
     });
   }
+
+  const tierOptions = [...tiers].sort((a, b) => a.level - b.level);
 
   if (isLoading) {
     return (
@@ -247,28 +250,41 @@ export default function AdminUsersPage(): React.ReactElement {
                     <TableCell>
                       <Select
                         value={u.subscriptionTier}
-                        onValueChange={(value: SubscriptionTier) =>
+                        onValueChange={(value: string) =>
                           handleUpdateTier(u.id, value)
                         }
-                        disabled={actionLoading === u.id}
+                        disabled={actionLoading === u.id || tierOptions.length === 0}
                       >
-                        <SelectTrigger className="w-[120px]">
+                        <SelectTrigger className="w-[140px]">
                           <SelectValue>
-                            <Badge variant={getTierBadgeVariant(u.subscriptionTier as SubscriptionTier)}>
-                              {SUBSCRIPTION_TIER_LABELS[u.subscriptionTier as SubscriptionTier]}
-                            </Badge>
+                            {(() => {
+                              const tier = getTierBySlug(u.subscriptionTier);
+                              const tierLabel = tier?.name ?? u.subscriptionTier;
+                              const tierLevel = tier?.level ?? 0;
+                              return (
+                                <Badge variant={getTierBadgeVariant(tierLevel)}>
+                                  {tierLabel}
+                                </Badge>
+                              );
+                            })()}
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="free">
-                            <Badge variant="outline">Free</Badge>
-                          </SelectItem>
-                          <SelectItem value="tier1">
-                            <Badge variant="secondary">Tier 1</Badge>
-                          </SelectItem>
-                          <SelectItem value="tier2">
-                            <Badge variant="default">Tier 2</Badge>
-                          </SelectItem>
+                          {tierOptions.length > 0 ? (
+                            tierOptions.map((tier) => (
+                              <SelectItem key={tier.id} value={tier.slug}>
+                                <Badge variant={getTierBadgeVariant(tier.level)}>
+                                  {tier.name}
+                                </Badge>
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value={u.subscriptionTier}>
+                              <Badge variant={getTierBadgeVariant(0)}>
+                                {u.subscriptionTier}
+                              </Badge>
+                            </SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                     </TableCell>

@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { decryptUserCookie } from "@/lib/cookie-signing";
+import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
+import { verifyUserCookie } from "@/lib/cookie-signing"
 
 /**
  * Public routes that don't require authentication
@@ -12,12 +12,12 @@ const publicRoutes = [
   "/forgot-password",
   "/reset-password",
   "/verify-email",
-];
+]
 
 /**
  * Routes that require admin role
  */
-const adminRoutes = ["/admin"];
+const adminRoutes = ["/admin"]
 
 /**
  * Check if path matches any of the given routes
@@ -25,7 +25,7 @@ const adminRoutes = ["/admin"];
 function matchesRoute(pathname: string, routes: string[]): boolean {
   return routes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
-  );
+  )
 }
 
 /**
@@ -36,45 +36,47 @@ function isStaticOrApi(pathname: string): boolean {
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||
     pathname.includes(".") // Files with extensions (favicon.ico, etc.)
-  );
+  )
 }
 
 export async function proxy(request: NextRequest): Promise<NextResponse> {
-  const { pathname } = request.nextUrl;
+  const { pathname } = request.nextUrl
 
   // Skip static assets and API routes
   if (isStaticOrApi(pathname)) {
-    return NextResponse.next();
+    return NextResponse.next()
   }
 
   // Skip public routes
   if (matchesRoute(pathname, publicRoutes)) {
-    return NextResponse.next();
+    return NextResponse.next()
   }
 
   // Check for signed user info cookie (set after successful login)
-  const userInfoCookie = request.cookies.get("user-info");
+  const userInfoCookie = request.cookies.get("user-info")
 
   if (!userInfoCookie?.value) {
     // Redirect to login with return URL
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("returnTo", pathname);
-    return NextResponse.redirect(loginUrl);
+    const loginUrl = new URL("/login", request.url)
+    loginUrl.searchParams.set("returnTo", pathname)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  const userInfo = await verifyUserCookie(userInfoCookie.value)
+  if (!userInfo) {
+    const loginUrl = new URL("/login", request.url)
+    loginUrl.searchParams.set("returnTo", pathname)
+    return NextResponse.redirect(loginUrl)
   }
 
   // For admin routes, verify admin role from signed cookie (optimization to avoid API calls)
   // Security: This is only for routing. Actual admin API calls are protected by backend auth middleware.
-  if (matchesRoute(pathname, adminRoutes)) {
-    // Verify and decrypt the JWT cookie
-    const userInfo = await decryptUserCookie(userInfoCookie.value);
-
-    if (!userInfo || userInfo.role !== "admin") {
-      // Invalid cookie or not an admin, redirect to dashboard
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
+  if (matchesRoute(pathname, adminRoutes) && userInfo.role !== "admin") {
+    // Not an admin, redirect to dashboard
+    return NextResponse.redirect(new URL("/dashboard", request.url))
   }
 
-  return NextResponse.next();
+  return NextResponse.next()
 }
 
 export const config = {
@@ -88,4 +90,4 @@ export const config = {
      */
     "/((?!_next/static|_next/image|favicon.ico|.*\\..*|api).*)",
   ],
-};
+}

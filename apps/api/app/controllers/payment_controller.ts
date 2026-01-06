@@ -5,6 +5,8 @@ import env from '#start/env'
 import type { SubscriberType } from '#models/subscription'
 import Team from '#models/team'
 import DiscountCode from '#models/discount_code'
+import SubscriptionTier from '#models/subscription_tier'
+import Product from '#models/product'
 import {
   createCheckoutValidator,
   createPortalValidator,
@@ -31,32 +33,39 @@ export default class PaymentController {
    */
   async getTiers({ response }: HttpContext): Promise<void> {
     const paymentService = new PaymentService()
-    const products = await paymentService.getBillingTiers()
+    const provider = paymentService.providerName
+    const tiers = await SubscriptionTier.getActiveTiers()
+    const products = await Product.getProductsWithPrices(provider)
+    const productsByTierId = new Map(products.map((product) => [product.tierId, product]))
 
-    // Transform to DTO format
-    const tiers = products.map((product) => ({
-      tier: {
-        id: product.tier.id,
-        slug: product.tier.slug,
-        name: product.tier.name,
-        level: product.tier.level,
-        maxTeamMembers: product.tier.maxTeamMembers,
-        priceMonthly: product.tier.priceMonthly,
-        yearlyDiscountPercent: product.tier.yearlyDiscountPercent,
-        features: product.tier.features,
-        isActive: product.tier.isActive,
-      },
-      prices: product.prices.map((price) => ({
-        id: price.id,
-        interval: price.interval,
-        currency: price.currency,
-        unitAmount: price.unitAmount,
-        taxBehavior: price.taxBehavior,
-        isActive: price.isActive,
-      })),
-    }))
+    const data = tiers.map((tier) => {
+      const product = productsByTierId.get(tier.id)
+      return {
+        tier: {
+          id: tier.id,
+          slug: tier.slug,
+          name: tier.name,
+          description: null,
+          level: tier.level,
+          maxTeamMembers: tier.maxTeamMembers,
+          priceMonthly: tier.priceMonthly,
+          yearlyDiscountPercent: tier.yearlyDiscountPercent,
+          features: tier.features,
+          isActive: tier.isActive,
+        },
+        prices:
+          product?.prices.map((price) => ({
+            id: price.id,
+            interval: price.interval,
+            currency: price.currency,
+            unitAmount: price.unitAmount,
+            taxBehavior: price.taxBehavior,
+            isActive: price.isActive,
+          })) ?? [],
+      }
+    })
 
-    response.json({ data: tiers })
+    response.json({ data })
   }
 
   /**

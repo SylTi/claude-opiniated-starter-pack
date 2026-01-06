@@ -70,7 +70,7 @@ test.group('Auth API - Registration & Login', (group) => {
     assert.isFalse(user!.emailVerified)
   })
 
-  test('POST /api/v1/auth/register fails with duplicate email', async () => {
+  test('POST /api/v1/auth/register fails with duplicate email', async ({ assert }) => {
     const id = uniqueId()
     const email = `duplicate-${id}@example.com`
 

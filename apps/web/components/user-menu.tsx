@@ -12,7 +12,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/auth-context";
-import { SUBSCRIPTION_TIER_LEVELS, type SubscriptionTier } from "@saas/shared";
 
 export function UserMenu(): React.ReactElement {
   const router = useRouter();
@@ -80,7 +79,7 @@ export function UserMenu(): React.ReactElement {
           <Settings className="mr-2 h-4 w-4" />
           <span>Settings</span>
         </DropdownMenuItem>
-        {user.currentTeamId && SUBSCRIPTION_TIER_LEVELS[user.effectiveSubscriptionTier.slug as SubscriptionTier] >= SUBSCRIPTION_TIER_LEVELS["tier1"] && (
+        {user.currentTeamId && user.effectiveSubscriptionTier.level > 0 && (
           <DropdownMenuItem onClick={() => router.push("/team")}>
             <UsersRound className="mr-2 h-4 w-4" />
             <span>Team</span>

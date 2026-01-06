@@ -1,7 +1,7 @@
 import { type ReactNode } from "react"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
-import { decryptUserCookie } from "@/lib/cookie-signing"
+import { verifyUserCookie } from "@/lib/cookie-signing"
 import { AdminLayoutClient } from "./admin-layout-client"
 
 /**
@@ -21,8 +21,8 @@ export default async function AdminLayout({
     redirect("/login")
   }
 
-  // Verify and decrypt the signed cookie
-  const userInfo = await decryptUserCookie(userInfoCookie.value)
+  // Verify the signed cookie
+  const userInfo = await verifyUserCookie(userInfoCookie.value)
 
   // Invalid cookie or not admin = redirect (no flash)
   if (!userInfo || userInfo.role !== "admin") {

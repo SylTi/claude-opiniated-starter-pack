@@ -10,7 +10,7 @@ export interface UserInfoPayload {
 }
 
 /**
- * Service for creating encrypted/signed cookies using jose (JWT).
+ * Service for creating signed cookies using jose (JWT with HS256).
  * Compatible with Next.js Edge Runtime.
  */
 export default class CookieSigningService {
@@ -23,10 +23,10 @@ export default class CookieSigningService {
   }
 
   /**
-   * Create a signed JWT containing user role info
-   * Only encrypts role/status - no PII
+   * Create a signed JWT containing user role info.
+   * Only signs role/status - no PII.
    */
-  async encrypt(payload: UserInfoPayload): Promise<string> {
+  async sign(payload: UserInfoPayload): Promise<string> {
     return new SignJWT(payload)
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
@@ -35,10 +35,10 @@ export default class CookieSigningService {
   }
 
   /**
-   * Verify and decode a JWT
-   * Returns the payload if valid, null if invalid or expired
+   * Verify and decode a JWT.
+   * Returns the payload if valid, null if invalid or expired.
    */
-  async decrypt(token: string): Promise<UserInfoPayload | null> {
+  async verify(token: string): Promise<UserInfoPayload | null> {
     try {
       const { payload } = await jwtVerify(token, this.encodedKey, {
         algorithms: ['HS256'],

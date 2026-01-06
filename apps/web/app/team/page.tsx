@@ -56,9 +56,6 @@ import {
   type TeamMemberDTO,
   type TeamInvitationDTO,
   type SubscriptionDTO,
-  SUBSCRIPTION_TIER_LABELS,
-  SUBSCRIPTION_TIER_LEVELS,
-  type SubscriptionTier,
 } from "@saas/shared";
 
 interface TeamData {
@@ -148,8 +145,7 @@ export default function TeamManagementPage(): React.ReactElement {
       }
 
       // Check if user has paid subscription
-      const effectiveTier = user.effectiveSubscriptionTier.slug as SubscriptionTier;
-      if (SUBSCRIPTION_TIER_LEVELS[effectiveTier] < SUBSCRIPTION_TIER_LEVELS["tier1"]) {
+      if (user.effectiveSubscriptionTier.level <= 0) {
         toast.error("Team management requires a paid subscription");
         router.push("/dashboard");
         return;
@@ -272,7 +268,7 @@ export default function TeamManagementPage(): React.ReactElement {
         </p>
         <div className="flex items-center gap-2 mt-2">
           <Badge variant="secondary">
-            {team.subscription ? SUBSCRIPTION_TIER_LABELS[team.subscription.tier.slug as SubscriptionTier] : "Free"}
+            {team.subscription?.tier.name ?? user.effectiveSubscriptionTier.name}
           </Badge>
           <span className="text-sm text-muted-foreground">
             {team.members.length} member{team.members.length !== 1 ? "s" : ""}

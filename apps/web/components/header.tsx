@@ -6,7 +6,8 @@ import { UserMenu } from "@/components/user-menu";
 import { useAuth } from "@/contexts/auth-context";
 
 export function Header(): React.ReactElement {
-  const { user, isLoading } = useAuth();
+  const { user, hasUserInfoCookie, userRole } = useAuth();
+  const isPendingUser = !!hasUserInfoCookie && !user;
 
   return (
     <header className="border-b bg-white">
@@ -16,9 +17,7 @@ export function Header(): React.ReactElement {
         </Link>
 
         <nav className="flex items-center gap-4">
-          {isLoading ? (
-            <div className="h-8 w-8 animate-pulse rounded-full bg-gray-200" />
-          ) : user ? (
+          {user ? (
             <>
               <Link href="/dashboard">
                 <Button variant="ghost">Dashboard</Button>
@@ -29,6 +28,21 @@ export function Header(): React.ReactElement {
                 </Link>
               )}
               <UserMenu />
+            </>
+          ) : isPendingUser ? (
+            <>
+              <Link href="/dashboard">
+                <Button variant="ghost">Dashboard</Button>
+              </Link>
+              {userRole === "admin" && (
+                <Link href="/admin/dashboard">
+                  <Button variant="ghost">Admin</Button>
+                </Link>
+              )}
+              <div
+                aria-hidden="true"
+                className="h-8 w-8 rounded-full bg-gray-200"
+              />
             </>
           ) : (
             <>

@@ -8,6 +8,8 @@ interface AuthContextType {
   user: UserDTO | null
   isLoading: boolean
   isAuthenticated: boolean
+  hasUserInfoCookie: boolean
+  userRole: UserDTO['role'] | null
   login: (email: string, password: string, mfaCode?: string) => Promise<{ requiresMfa?: boolean }>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
@@ -15,17 +17,39 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: ReactNode }): React.ReactElement {
+export function AuthProvider({
+  children,
+  initialHasUserInfoCookie = false,
+  initialUserRole = null,
+}: {
+  children: ReactNode
+  initialHasUserInfoCookie?: boolean
+  initialUserRole?: UserDTO['role'] | null
+}): React.ReactElement {
   const [user, setUser] = useState<UserDTO | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [hasUserInfoCookie, setHasUserInfoCookie] = useState(initialHasUserInfoCookie)
+  const [userRole, setUserRole] = useState<UserDTO['role'] | null>(initialUserRole)
+
+  const clearUserInfoCookie = (): void => {
+    if (typeof document === 'undefined') {
+      return
+    }
+    document.cookie = 'user-info=; Max-Age=0; path=/'
+    setHasUserInfoCookie(false)
+    setUserRole(null)
+  }
 
   const refreshUser = useCallback(async () => {
     try {
       const userData = await authApi.me()
       if (userData?.id) {
         setUser(userData)
+        setHasUserInfoCookie(true)
+        setUserRole(userData.role)
       } else {
         setUser(null)
+        clearUserInfoCookie()
       }
     } catch {
       setUser(null)
@@ -38,8 +62,11 @@ export function AuthProvider({ children }: { children: ReactNode }): React.React
         const userData = await authApi.me()
         if (userData?.id) {
           setUser(userData)
+          setHasUserInfoCookie(true)
+          setUserRole(userData.role)
         } else {
           setUser(null)
+          clearUserInfoCookie()
         }
       } catch {
         setUser(null)
@@ -65,6 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }): React.React
 
       if (result.user) {
         setUser(result.user)
+        setHasUserInfoCookie(true)
+        setUserRole(result.user.role)
       }
 
       return {}
@@ -75,12 +104,15 @@ export function AuthProvider({ children }: { children: ReactNode }): React.React
   const logout = useCallback(async () => {
     await authApi.logout()
     setUser(null)
+    clearUserInfoCookie()
   }, [])
 
   const value: AuthContextType = {
     user,
     isLoading,
     isAuthenticated: !!user,
+    hasUserInfoCookie,
+    userRole,
     login,
     logout,
     refreshUser,

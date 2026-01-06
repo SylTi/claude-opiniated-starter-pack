@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { billingApi, ApiError } from '@/lib/api'
 import type { BalanceDTO } from '@saas/shared'
@@ -24,7 +24,7 @@ export function BalanceCard({ teamId }: BalanceCardProps): React.ReactElement {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchBalance = async (): Promise<void> => {
+  const fetchBalance = useCallback(async (): Promise<void> => {
     try {
       setIsLoading(true)
       setError(null)
@@ -39,11 +39,11 @@ export function BalanceCard({ teamId }: BalanceCardProps): React.ReactElement {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [teamId])
 
   useEffect(() => {
     fetchBalance()
-  }, [teamId])
+  }, [fetchBalance])
 
   if (isLoading) {
     return (

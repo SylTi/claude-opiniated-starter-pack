@@ -8,7 +8,7 @@ function createMockTier(slug: string, level: number): SubscriptionTierDTO {
   return {
     id: level + 1,
     slug,
-    name: slug === "free" ? "Free" : slug === "tier1" ? "Tier 1" : "Tier 2",
+    name: slug === "free" ? "Free" : slug === "tier1" ? "Pro" : "Enterprise",
     description: `${slug} tier description`,
     level,
     maxTeamMembers: slug === "free" ? 5 : slug === "tier1" ? 20 : null,
@@ -38,12 +38,16 @@ const mockApiGet = vi.fn();
 const mockApiPost = vi.fn();
 const mockApiPut = vi.fn();
 const mockApiDelete = vi.fn();
+const mockAdminBillingListTiers = vi.fn();
 vi.mock("@/lib/api", () => ({
   api: {
     get: (...args: unknown[]) => mockApiGet(...args),
     post: (...args: unknown[]) => mockApiPost(...args),
     put: (...args: unknown[]) => mockApiPut(...args),
     delete: (...args: unknown[]) => mockApiDelete(...args),
+  },
+  adminBillingApi: {
+    listTiers: (...args: unknown[]) => mockAdminBillingListTiers(...args),
   },
   ApiError: class ApiError extends Error {
     statusCode: number;
@@ -112,6 +116,12 @@ const mockUsers = [
   },
 ];
 
+const mockTiers = [
+  createMockTier("free", 0),
+  createMockTier("tier1", 1),
+  createMockTier("tier2", 2),
+];
+
 describe("Admin Users Page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -131,6 +141,8 @@ describe("Admin Users Page", () => {
     mockUseAuth.mockReturnValue({
       user: adminUser,
     });
+
+    mockAdminBillingListTiers.mockResolvedValue(mockTiers);
   });
 
   describe("loading state", () => {
@@ -444,7 +456,7 @@ describe("Admin Users Page", () => {
       });
 
       // Should show tier badges
-      expect(screen.getByText("Tier 2")).toBeInTheDocument();
+      expect(screen.getByText("Enterprise")).toBeInTheDocument();
       expect(screen.getByText("Free")).toBeInTheDocument();
     });
   });
@@ -622,7 +634,7 @@ describe("Admin Users Page", () => {
       });
 
       // The tier badge should be visible
-      expect(screen.getByText("Tier 1")).toBeInTheDocument();
+      expect(screen.getByText("Pro")).toBeInTheDocument();
     });
   });
 

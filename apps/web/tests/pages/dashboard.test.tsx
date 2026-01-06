@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import DashboardPage from "@/app/dashboard/page";
-import type { SubscriptionTier, SubscriptionTierDTO, SubscriptionDTO } from "@saas/shared";
+import type { SubscriptionTier, SubscriptionTierDTO, SubscriptionDTO, BillingTierDTO } from "@saas/shared";
 
 // Mock next/navigation
 const mockPush = vi.fn();
@@ -26,9 +26,13 @@ vi.mock("@/contexts/auth-context", () => ({
 
 // Mock the API
 const mockApiGet = vi.fn();
+const mockBillingGetTiers = vi.fn();
 vi.mock("@/lib/api", () => ({
   api: {
     get: (...args: unknown[]) => mockApiGet(...args),
+  },
+  billingApi: {
+    getTiers: (...args: unknown[]) => mockBillingGetTiers(...args),
   },
   ApiError: class ApiError extends Error {
     statusCode: number;
@@ -50,16 +54,23 @@ vi.mock("sonner", () => ({
 }));
 
 function createMockTier(slug: string, level: number): SubscriptionTierDTO {
+  const features =
+    slug === "free"
+      ? { storage: "1GB", support: "community" }
+      : slug === "tier1"
+      ? { analytics: true, support: "email" }
+      : { sso: true, support: "priority" };
+
   return {
     id: level + 1,
     slug,
-    name: slug === "free" ? "Free" : slug === "tier1" ? "Tier 1" : "Tier 2",
+    name: slug === "free" ? "Free" : slug === "tier1" ? "Pro" : "Enterprise",
     description: `${slug} tier description`,
     level,
     maxTeamMembers: slug === "free" ? 5 : slug === "tier1" ? 20 : null,
     priceMonthly: null,
     yearlyDiscountPercent: null,
-    features: null,
+    features,
     isActive: true,
   };
 }
@@ -118,10 +129,26 @@ const mockStats = {
   ],
 };
 
+const mockBillingTiers: BillingTierDTO[] = [
+  {
+    tier: createMockTier("free", 0),
+    prices: [],
+  },
+  {
+    tier: createMockTier("tier1", 1),
+    prices: [],
+  },
+  {
+    tier: createMockTier("tier2", 2),
+    prices: [],
+  },
+];
+
 describe("Dashboard Page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPush.mockClear();
+    mockBillingGetTiers.mockResolvedValue(mockBillingTiers);
   });
 
   describe("when user is not authenticated", () => {
@@ -178,6 +205,7 @@ describe("Dashboard Page", () => {
       });
 
       mockApiGet.mockResolvedValue({ data: mockStats });
+      mockBillingGetTiers.mockResolvedValue(mockBillingTiers);
     });
 
     it("displays welcome message with user name", async () => {
@@ -225,8 +253,8 @@ describe("Dashboard Page", () => {
       await waitFor(() => {
         expect(screen.getByText("Features by Subscription")).toBeInTheDocument();
         expect(screen.getByText("Free Features")).toBeInTheDocument();
-        expect(screen.getByText("Tier 1 Features")).toBeInTheDocument();
-        expect(screen.getByText("Tier 2 Features")).toBeInTheDocument();
+        expect(screen.getByText("Pro Features")).toBeInTheDocument();
+        expect(screen.getByText("Enterprise Features")).toBeInTheDocument();
       });
     });
 
@@ -244,11 +272,8 @@ describe("Dashboard Page", () => {
       render(<DashboardPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("Basic Dashboard")).toBeInTheDocument();
-        expect(screen.getByText("Profile Management")).toBeInTheDocument();
-        // Security Settings appears in both quick actions and tier features
-        const securityElements = screen.getAllByText("Security Settings");
-        expect(securityElements.length).toBeGreaterThan(0);
+        expect(screen.getByText("1GB storage")).toBeInTheDocument();
+        expect(screen.getByText("community support")).toBeInTheDocument();
       });
     });
 
@@ -256,7 +281,7 @@ describe("Dashboard Page", () => {
       render(<DashboardPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("Upgrade to Tier 1 to unlock")).toBeInTheDocument();
+        expect(screen.getByText("Upgrade to Pro to unlock")).toBeInTheDocument();
       });
     });
   });
@@ -320,8 +345,8 @@ describe("Dashboard Page", () => {
       render(<DashboardPage />);
 
       await waitFor(() => {
-        // Tier 1 appears multiple times on page
-        const tier1Elements = screen.getAllByText("Tier 1");
+        // Pro appears multiple times on page
+        const tier1Elements = screen.getAllByText("Pro");
         expect(tier1Elements.length).toBeGreaterThan(0);
       });
     });
@@ -355,9 +380,8 @@ describe("Dashboard Page", () => {
       render(<DashboardPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("Advanced Analytics")).toBeInTheDocument();
-        expect(screen.getByText("Priority Support")).toBeInTheDocument();
-        expect(screen.getByText("API Access")).toBeInTheDocument();
+        expect(screen.getByText("Analytics")).toBeInTheDocument();
+        expect(screen.getByText("email support")).toBeInTheDocument();
       });
     });
 
@@ -365,7 +389,7 @@ describe("Dashboard Page", () => {
       render(<DashboardPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("Upgrade to Tier 2 to unlock")).toBeInTheDocument();
+        expect(screen.getByText("Upgrade to Enterprise to unlock")).toBeInTheDocument();
       });
     });
 
@@ -413,18 +437,17 @@ describe("Dashboard Page", () => {
       render(<DashboardPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("White-label Solution")).toBeInTheDocument();
-        expect(screen.getByText("Dedicated Account Manager")).toBeInTheDocument();
-        expect(screen.getByText("Custom Integrations")).toBeInTheDocument();
+        expect(screen.getByText("Sso")).toBeInTheDocument();
+        expect(screen.getByText("priority support")).toBeInTheDocument();
       });
     });
 
-    it("displays Tier 2 badge", async () => {
+    it("displays Enterprise badge", async () => {
       render(<DashboardPage />);
 
       await waitFor(() => {
-        // Tier 2 appears multiple times on page
-        const tier2Elements = screen.getAllByText("Tier 2");
+        // Enterprise appears multiple times on page
+        const tier2Elements = screen.getAllByText("Enterprise");
         expect(tier2Elements.length).toBeGreaterThan(0);
       });
     });

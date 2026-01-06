@@ -64,16 +64,10 @@ export default defineConfig({
 
   // Start production server (build happens in e2e script)
   webServer: {
-    command: "pnpm run start",
+    command:
+      "NODE_ENV=test dotenv -e .env.test -- pnpm run build && NODE_ENV=test dotenv -e .env.test -- pnpm run start",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 300 * 1000, // More time for build + start on slower FS
-    env: {
-      NEXT_PUBLIC_API_URL: "http://localhost:3333",
-      USER_COOKIE_SECRET:
-        process.env.USER_COOKIE_SECRET ??
-        process.env.APP_KEY ??
-        "test_key_for_testing_only_change_in_production",
-    },
   },
 });

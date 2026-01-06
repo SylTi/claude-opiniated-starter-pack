@@ -21,6 +21,7 @@ const AuthController = () => import('#controllers/auth_controller')
 const MfaController = () => import('#controllers/mfa_controller')
 const OAuthController = () => import('#controllers/oauth_controller')
 const AdminController = () => import('#controllers/admin_controller')
+const AdminTiersController = () => import('#controllers/admin_tiers_controller')
 const DashboardController = () => import('#controllers/dashboard_controller')
 const TeamsController = () => import('#controllers/teams_controller')
 const PaymentController = () => import('#controllers/payment_controller')
@@ -112,9 +113,10 @@ router
         router.put('/teams/:id/tier', [AdminController, 'updateTeamTier'])
 
         // Subscription Tiers Management
-        router.get('/tiers', [AdminController, 'listTiers'])
-        router.post('/tiers', [AdminController, 'createTier'])
-        router.put('/tiers/:id', [AdminController, 'updateTier'])
+        router.get('/tiers', [AdminTiersController, 'index'])
+        router.post('/tiers', [AdminTiersController, 'store'])
+        router.put('/tiers/:id', [AdminTiersController, 'update'])
+        router.delete('/tiers/:id', [AdminTiersController, 'destroy'])
 
         // Products Management (Tier <-> Stripe Product)
         router.get('/products', [AdminController, 'listProducts'])

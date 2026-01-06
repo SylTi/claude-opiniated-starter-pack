@@ -89,6 +89,7 @@ Le frontend est configuré par défaut pour se connecter à `http://localhost:33
 Si nécessaire, créer `apps/web/.env.local` :
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:3333
+USER_COOKIE_SECRET=your-app-key-from-apps/api/.env
 ```
 
 ## Démarrage

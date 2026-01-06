@@ -19,7 +19,7 @@ async function globalSetup(config: FullConfig): Promise<void> {
       console.log(`Server is running at ${baseUrl}`)
     }
   } catch (error) {
-    console.warn(`Warning: Could not connect to ${baseUrl}. Make sure the dev server is running.`)
+    console.warn(`Warning: Could not connect to ${baseUrl}. Make sure the dev server is running.`, error)
   }
 
   // Add any global setup logic here

@@ -186,7 +186,6 @@ describe('AdminCouponsPage', () => {
   })
 
   it('prevents editing redeemed coupons', async () => {
-    const user = userEvent.setup()
     const coupons: CouponDTO[] = [
       createMockCoupon({
         redeemedByUserId: 1,

@@ -10,11 +10,9 @@ import { CouponRedemption } from '@/components/billing/coupon-redemption'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import type { BillingTierDTO, BillingSubscriptionDTO, ValidateDiscountCodeResponse } from '@saas/shared'
-import { Loader2, Tag, X, CheckCircle } from 'lucide-react'
+import { Tag, X, CheckCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
 function formatAmount(amount: number, currency: string): string {

@@ -30,11 +30,61 @@ All responses follow this format:
 
 ### Get Subscription Tiers
 
-Get all available subscription tiers with their prices.
+Get all available subscription tiers with their prices. Tiers without active prices return an empty `prices` array.
 
 ```
 GET /api/v1/billing/tiers
 ```
+
+---
+
+## Admin
+
+### List Subscription Tiers
+
+```
+GET /api/v1/admin/tiers
+```
+
+**Authentication:** Admin required
+
+### Create Subscription Tier
+
+```
+POST /api/v1/admin/tiers
+```
+
+**Authentication:** Admin required
+
+**Request Body:**
+```json
+{
+  "slug": "pro",
+  "name": "Pro",
+  "level": 1,
+  "maxTeamMembers": 5,
+  "priceMonthly": 999,
+  "yearlyDiscountPercent": 20,
+  "features": { "support": "email" },
+  "isActive": true
+}
+```
+
+### Update Subscription Tier
+
+```
+PUT /api/v1/admin/tiers/:id
+```
+
+**Authentication:** Admin required
+
+### Delete Subscription Tier
+
+```
+DELETE /api/v1/admin/tiers/:id
+```
+
+**Authentication:** Admin required
 
 **Authentication:** Not required
 

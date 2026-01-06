@@ -10,8 +10,6 @@ import SubscriptionService from '#services/subscription_service'
 import {
   updateUserTierValidator,
   updateTeamTierValidator,
-  createTierValidator,
-  updateTierValidator,
   createProductValidator,
   updateProductValidator,
   listPricesValidator,
@@ -302,106 +300,6 @@ export default class AdminController {
         subscriptionExpiresAt: subscription.expiresAt?.toISO() ?? null,
       },
       message: 'Team subscription tier has been updated successfully',
-    })
-  }
-
-  /**
-   * List all available subscription tiers
-   */
-  async listTiers({ response }: HttpContext): Promise<void> {
-    const tiers = await SubscriptionTier.query().orderBy('level', 'asc')
-
-    response.json({
-      data: tiers.map((tier) => ({
-        id: tier.id,
-        slug: tier.slug,
-        name: tier.name,
-        level: tier.level,
-        maxTeamMembers: tier.maxTeamMembers,
-        priceMonthly: tier.priceMonthly,
-        yearlyDiscountPercent: tier.yearlyDiscountPercent,
-        features: tier.features,
-        isActive: tier.isActive,
-        createdAt: tier.createdAt.toISO(),
-        updatedAt: tier.updatedAt?.toISO() ?? null,
-      })),
-    })
-  }
-
-  /**
-   * Create a new subscription tier
-   */
-  async createTier({ request, response }: HttpContext): Promise<void> {
-    const data = await request.validateUsing(createTierValidator)
-
-    // Check if slug already exists
-    const existing = await SubscriptionTier.findBySlug(data.slug)
-    if (existing) {
-      return response.conflict({
-        error: 'ConflictError',
-        message: 'A tier with this slug already exists',
-      })
-    }
-
-    const tier = await SubscriptionTier.create({
-      slug: data.slug,
-      name: data.name,
-      level: data.level ?? 0,
-      maxTeamMembers: data.maxTeamMembers ?? null,
-      priceMonthly: data.priceMonthly ?? null,
-      yearlyDiscountPercent: data.yearlyDiscountPercent ?? null,
-      features: data.features ?? null,
-      isActive: data.isActive ?? true,
-    })
-
-    response.created({
-      data: {
-        id: tier.id,
-        slug: tier.slug,
-        name: tier.name,
-        level: tier.level,
-        maxTeamMembers: tier.maxTeamMembers,
-        priceMonthly: tier.priceMonthly,
-        yearlyDiscountPercent: tier.yearlyDiscountPercent,
-        features: tier.features,
-        isActive: tier.isActive,
-      },
-      message: 'Tier created successfully',
-    })
-  }
-
-  /**
-   * Update a subscription tier
-   */
-  async updateTier({ params, request, response }: HttpContext): Promise<void> {
-    const tier = await SubscriptionTier.findOrFail(params.id)
-    const data = await request.validateUsing(updateTierValidator)
-
-    // Note: slug cannot be updated to maintain references
-    if (data.name !== undefined) tier.name = data.name
-    if (data.level !== undefined) tier.level = data.level
-    if (data.maxTeamMembers !== undefined) tier.maxTeamMembers = data.maxTeamMembers
-    if (data.priceMonthly !== undefined) tier.priceMonthly = data.priceMonthly
-    if (data.yearlyDiscountPercent !== undefined)
-      tier.yearlyDiscountPercent = data.yearlyDiscountPercent
-    if (data.features !== undefined) tier.features = data.features
-    if (data.isActive !== undefined) tier.isActive = data.isActive
-
-    await tier.save()
-
-    response.json({
-      data: {
-        id: tier.id,
-        slug: tier.slug,
-        name: tier.name,
-        level: tier.level,
-        maxTeamMembers: tier.maxTeamMembers,
-        priceMonthly: tier.priceMonthly,
-        yearlyDiscountPercent: tier.yearlyDiscountPercent,
-        features: tier.features,
-        isActive: tier.isActive,
-      },
-      message: 'Tier updated successfully',
     })
   }
 

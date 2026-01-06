@@ -6,6 +6,8 @@ import User from '#models/user'
 export type OAuthProvider = 'google' | 'github' | 'microsoft'
 
 export default class OAuthAccount extends BaseModel {
+  static table = 'oauth_accounts'
+
   @column({ isPrimary: true })
   declare id: number
 

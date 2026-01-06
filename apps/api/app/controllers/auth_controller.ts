@@ -232,7 +232,7 @@ export default class AuthController {
       // Set signed user info cookie for frontend middleware optimization
       // This avoids API calls on every admin route request
       // Uses JWT (jose) - only contains role, no PII
-      const signedUserInfo = await this.cookieSigning.encrypt({ role: user.role })
+      const signedUserInfo = await this.cookieSigning.sign({ role: user.role })
       response.cookie('user-info', signedUserInfo, {
         httpOnly: false, // Must be readable by Next.js middleware (server-side)
         secure: process.env.NODE_ENV === 'production',

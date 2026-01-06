@@ -290,10 +290,12 @@ export const adminBillingApi = {
   async createTier(data: {
     name: string
     slug: string
-    description?: string
     level: number
     features?: Record<string, unknown>
     maxTeamMembers?: number
+    priceMonthly?: number
+    yearlyDiscountPercent?: number
+    isActive?: boolean
   }): Promise<SubscriptionTierDTO> {
     const response = await api.post<SubscriptionTierDTO>('/api/v1/admin/tiers', data)
     if (!response.data) {
@@ -309,9 +311,12 @@ export const adminBillingApi = {
     id: number,
     data: {
       name?: string
-      description?: string
-      features?: Record<string, unknown>
-      maxTeamMembers?: number
+      level?: number
+      features?: Record<string, unknown> | null
+      maxTeamMembers?: number | null
+      priceMonthly?: number | null
+      yearlyDiscountPercent?: number | null
+      isActive?: boolean
     }
   ): Promise<SubscriptionTierDTO> {
     const response = await api.put<SubscriptionTierDTO>(`/api/v1/admin/tiers/${id}`, data)
@@ -319,6 +324,13 @@ export const adminBillingApi = {
       throw new Error('Failed to update tier')
     }
     return response.data
+  },
+
+  /**
+   * Delete a tier
+   */
+  async deleteTier(id: number): Promise<void> {
+    await api.delete(`/api/v1/admin/tiers/${id}`)
   },
 
   /**

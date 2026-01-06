@@ -20,7 +20,7 @@ function createMockTier(slug: string, level: number): SubscriptionTierDTO {
   return {
     id: level + 1,
     slug,
-    name: slug === "free" ? "Free" : slug === "tier1" ? "Tier 1" : "Tier 2",
+    name: slug === "free" ? "Free" : slug === "tier1" ? "Pro" : "Enterprise",
     description: `${slug} tier description`,
     level,
     maxTeamMembers: slug === "free" ? 5 : slug === "tier1" ? 20 : null,
@@ -41,6 +41,8 @@ describe("Header Component", () => {
       mockUseAuth.mockReturnValue({
         user: null,
         isLoading: false,
+        hasUserInfoCookie: false,
+        userRole: null,
       });
     });
 
@@ -78,19 +80,46 @@ describe("Header Component", () => {
       mockUseAuth.mockReturnValue({
         user: null,
         isLoading: true,
+        hasUserInfoCookie: false,
+        userRole: null,
       });
     });
 
-    it("displays loading placeholder", () => {
-      render(<Header />);
-      const placeholder = document.querySelector(".animate-pulse");
-      expect(placeholder).toBeInTheDocument();
-    });
-
-    it("does not display Sign in button while loading", () => {
+    it("displays Sign in button", () => {
       render(<Header />);
       expect(
+        screen.getByRole("button", { name: "Sign in" }),
+      ).toBeInTheDocument();
+    });
+
+    it("displays Get started button", () => {
+      render(<Header />);
+      expect(
+        screen.getByRole("button", { name: "Get started" }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  describe("when user cookie exists but user is not loaded", () => {
+    beforeEach(() => {
+      mockUseAuth.mockReturnValue({
+        user: null,
+        isLoading: false,
+        hasUserInfoCookie: true,
+        userRole: "user",
+      });
+    });
+
+    it("shows authenticated links without auth buttons", () => {
+      render(<Header />);
+      expect(
+        screen.getByRole("button", { name: "Dashboard" }),
+      ).toBeInTheDocument();
+      expect(
         screen.queryByRole("button", { name: "Sign in" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Get started" }),
       ).not.toBeInTheDocument();
     });
   });
@@ -116,6 +145,8 @@ describe("Header Component", () => {
       mockUseAuth.mockReturnValue({
         user: regularUser,
         isLoading: false,
+        hasUserInfoCookie: true,
+        userRole: "user",
         logout: vi.fn(),
       });
     });
@@ -170,6 +201,8 @@ describe("Header Component", () => {
       mockUseAuth.mockReturnValue({
         user: adminUser,
         isLoading: false,
+        hasUserInfoCookie: true,
+        userRole: "admin",
         logout: vi.fn(),
       });
     });
@@ -215,6 +248,8 @@ describe("Header Component", () => {
       mockUseAuth.mockReturnValue({
         user: guestUser,
         isLoading: false,
+        hasUserInfoCookie: true,
+        userRole: "guest",
         logout: vi.fn(),
       });
     });

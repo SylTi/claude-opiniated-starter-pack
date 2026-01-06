@@ -23,7 +23,7 @@ function createMockTier(slug: string, level: number): SubscriptionTierDTO {
   return {
     id: level + 1,
     slug,
-    name: slug === "free" ? "Free" : slug === "tier1" ? "Tier 1" : "Tier 2",
+    name: slug === "free" ? "Free" : slug === "tier1" ? "Pro" : "Enterprise",
     description: `${slug} tier description`,
     level,
     maxTeamMembers: slug === "free" ? 5 : slug === "tier1" ? 20 : null,

@@ -92,14 +92,20 @@ test.group('Billing API - Tiers', (group) => {
     assert.isTrue(response.body.data.length >= 2)
 
     // Check structure
-    const tierWithProduct = response.body.data.find(
-      (t: { products: unknown[] }) => t.products && t.products.length > 0
+    const tierWithPrices = response.body.data.find(
+      (t: { prices: unknown[] }) => t.prices && t.prices.length > 0
     )
-    if (tierWithProduct) {
-      assert.exists(tierWithProduct.name)
-      assert.exists(tierWithProduct.slug)
-      assert.isArray(tierWithProduct.products)
+    if (tierWithPrices) {
+      assert.exists(tierWithPrices.tier)
+      assert.exists(tierWithPrices.tier.name)
+      assert.exists(tierWithPrices.tier.slug)
+      assert.isArray(tierWithPrices.prices)
     }
+
+    const freeTier = response.body.data.find(
+      (t: { tier: { slug: string } }) => t.tier?.slug === 'free'
+    )
+    assert.exists(freeTier)
   })
 
   test('GET /api/v1/billing/tiers is public (no auth required)', async ({ assert }) => {

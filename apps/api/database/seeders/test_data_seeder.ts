@@ -7,7 +7,7 @@ import TeamMember from '#models/team_member'
 import SubscriptionTier from '#models/subscription_tier'
 import Subscription from '#models/subscription'
 import Product from '#models/product'
-import Price from '#models/price'
+import Price, { type PriceInterval } from '#models/price'
 import Coupon from '#models/coupon'
 import DiscountCode from '#models/discount_code'
 
@@ -195,7 +195,11 @@ export default class extends BaseSeeder {
   }
 
   private async seedProductsAndPrices(): Promise<void> {
-    const tierConfigs = [
+    const tierConfigs: Array<{
+      slug: string
+      providerProductId: string
+      prices: Array<{ providerPriceId: string; interval: PriceInterval; unitAmount: number }>
+    }> = [
       {
         slug: 'tier1',
         providerProductId: 'prod_test_tier1',

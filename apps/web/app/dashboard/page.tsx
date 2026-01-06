@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/auth-context";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, billingApi } from "@/lib/api";
 import { toast } from "sonner";
 import {
   User,
@@ -34,9 +34,8 @@ import {
   Building2,
 } from "lucide-react";
 import {
-  type SubscriptionTier,
-  SUBSCRIPTION_TIER_LABELS,
-  SUBSCRIPTION_TIER_LEVELS,
+  type BillingTierDTO,
+  type SubscriptionTierDTO,
 } from "@saas/shared";
 
 interface UserStats {
@@ -45,7 +44,7 @@ interface UserStats {
   lastLoginAt: string | null;
   emailVerified: boolean;
   mfaEnabled: boolean;
-  subscriptionTier: SubscriptionTier;
+  subscriptionTier: SubscriptionTierDTO;
   connectedOAuthAccounts: number;
   recentActivity: Array<{
     method: string;
@@ -55,38 +54,51 @@ interface UserStats {
   }>;
 }
 
-function hasAccessToTier(
-  userTier: SubscriptionTier,
-  requiredTier: SubscriptionTier
-): boolean {
-  return SUBSCRIPTION_TIER_LEVELS[userTier] >= SUBSCRIPTION_TIER_LEVELS[requiredTier];
+function hasAccessToLevel(userLevel: number, requiredLevel: number): boolean {
+  return userLevel >= requiredLevel;
 }
 
 function getTierBadgeVariant(
-  tier: SubscriptionTier
+  level: number
 ): "default" | "secondary" | "destructive" | "outline" {
-  switch (tier) {
-    case "tier2":
-      return "default";
-    case "tier1":
-      return "secondary";
-    default:
-      return "outline";
-  }
+  if (level >= 2) return "default";
+  if (level >= 1) return "secondary";
+  return "outline";
+}
+
+function formatTierFeatures(features: Record<string, unknown> | null): string[] {
+  if (!features) return [];
+  return Object.entries(features).reduce<string[]>((acc, [key, value]) => {
+    if (typeof value === "boolean") {
+      if (value) {
+        acc.push(key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()));
+      }
+    } else if (typeof value === "number") {
+      acc.push(`${value} ${key.replace(/_/g, " ")}`);
+    } else if (typeof value === "string") {
+      acc.push(`${value} ${key.replace(/_/g, " ")}`.trim());
+    }
+    return acc;
+  }, []);
 }
 
 export default function DashboardPage(): React.ReactElement {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const [stats, setStats] = useState<UserStats | null>(null);
+  const [tiers, setTiers] = useState<BillingTierDTO[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchStats = useCallback(async (): Promise<void> => {
+  const fetchDashboardData = useCallback(async (): Promise<void> => {
     try {
-      const response = await api.get<UserStats>("/api/v1/dashboard/stats");
-      if (response.data) {
-        setStats(response.data);
+      const [statsResponse, tiersResponse] = await Promise.all([
+        api.get<UserStats>("/api/v1/dashboard/stats"),
+        billingApi.getTiers(),
+      ]);
+      if (statsResponse.data) {
+        setStats(statsResponse.data);
       }
+      setTiers(tiersResponse);
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.statusCode === 401) {
@@ -109,9 +121,9 @@ export default function DashboardPage(): React.ReactElement {
     }
 
     if (user) {
-      fetchStats();
+      fetchDashboardData();
     }
-  }, [user, authLoading, router, fetchStats]);
+  }, [user, authLoading, router, fetchDashboardData]);
 
   if (authLoading || isLoading) {
     return (
@@ -126,6 +138,11 @@ export default function DashboardPage(): React.ReactElement {
   if (!user) {
     return <></>;
   }
+
+  const sortedTiers = [...tiers].sort((a, b) => a.tier.level - b.tier.level);
+  const freeTierLevel =
+    sortedTiers.find((tier) => tier.tier.slug === "free")?.tier.level ?? 0;
+  const hasPaidTier = user.effectiveSubscriptionTier.level > freeTierLevel;
 
   function formatDate(dateString: string | null): string {
     if (!dateString) return "Never";
@@ -236,8 +253,8 @@ export default function DashboardPage(): React.ReactElement {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">Plan:</span>
-                    <Badge variant={getTierBadgeVariant(user.effectiveSubscriptionTier.slug as SubscriptionTier)}>
-                      {SUBSCRIPTION_TIER_LABELS[user.effectiveSubscriptionTier.slug as SubscriptionTier]}
+                    <Badge variant={getTierBadgeVariant(user.effectiveSubscriptionTier.level)}>
+                      {user.effectiveSubscriptionTier.name}
                     </Badge>
                   </div>
                   {user.currentTeam?.subscription?.expiresAt && (
@@ -263,7 +280,7 @@ export default function DashboardPage(): React.ReactElement {
                     <div className="text-sm text-muted-foreground">
                       Slug: {user.currentTeam.slug}
                     </div>
-                    {hasAccessToTier(user.effectiveSubscriptionTier.slug as SubscriptionTier, "tier1") && (
+                    {hasPaidTier && (
                       <Link href="/team">
                         <Button variant="link" size="sm" className="p-0 h-auto">
                           Manage Team <ArrowRight className="h-3 w-3 ml-1" />
@@ -374,8 +391,8 @@ export default function DashboardPage(): React.ReactElement {
             <h2 className="text-2xl font-bold">Features by Subscription</h2>
             <p className="text-muted-foreground">
               Your current plan:{" "}
-              <Badge variant={getTierBadgeVariant(user.effectiveSubscriptionTier.slug as SubscriptionTier)}>
-                {SUBSCRIPTION_TIER_LABELS[user.effectiveSubscriptionTier.slug as SubscriptionTier]}
+              <Badge variant={getTierBadgeVariant(user.effectiveSubscriptionTier.level)}>
+                {user.effectiveSubscriptionTier.name}
               </Badge>
               {user.currentTeam && (
                 <span className="ml-2 text-sm">(via {user.currentTeam.name})</span>
@@ -384,154 +401,103 @@ export default function DashboardPage(): React.ReactElement {
           </div>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
-          {/* Free Tier Section */}
+        {sortedTiers.length === 0 ? (
           <Card className="border-2 border-gray-200">
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Star className="h-5 w-5 text-gray-500" />
-                  <CardTitle>Free Features</CardTitle>
-                </div>
-                <Badge variant="outline">Free</Badge>
-              </div>
+              <CardTitle>Subscription tiers unavailable</CardTitle>
               <CardDescription>
-                Basic features available to all users
+                We couldn&apos;t load tier details right now. Please refresh.
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              {hasAccessToTier(user.effectiveSubscriptionTier.slug as SubscriptionTier, "free") ? (
-                <div className="space-y-4">
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <h4 className="font-medium mb-2">Basic Dashboard</h4>
-                    <p className="text-sm text-muted-foreground">
-                      View your account statistics and recent activity.
-                    </p>
-                  </div>
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <h4 className="font-medium mb-2">Profile Management</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Update your profile information and avatar.
-                    </p>
-                  </div>
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <h4 className="font-medium mb-2">Security Settings</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Enable 2FA and manage your security preferences.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Lock className="h-12 w-12 text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">
-                    Content locked
-                  </p>
-                </div>
-              )}
-            </CardContent>
           </Card>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-3">
+            {sortedTiers.map((tierData) => {
+              const tier = tierData.tier;
+              const features = formatTierFeatures(tier.features);
+              const canAccess = hasAccessToLevel(
+                user.effectiveSubscriptionTier.level,
+                tier.level
+              );
+              const isPremium = tier.level >= 2;
+              const isMid = tier.level === 1;
+              const cardBorder = isPremium
+                ? "border-yellow-200"
+                : isMid
+                ? "border-blue-200"
+                : "border-gray-200";
+              const featureBg = isPremium
+                ? "bg-yellow-50"
+                : isMid
+                ? "bg-blue-50"
+                : "bg-gray-50";
+              const Icon = isPremium ? Crown : isMid ? Zap : Star;
 
-          {/* Tier 1 Section */}
-          <Card className={`border-2 ${hasAccessToTier(user.effectiveSubscriptionTier.slug as SubscriptionTier, "tier1") ? "border-blue-200" : "border-gray-200"}`}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-blue-500" />
-                  <CardTitle>Tier 1 Features</CardTitle>
-                </div>
-                <Badge variant="secondary">Tier 1</Badge>
-              </div>
-              <CardDescription>
-                Enhanced features for subscribers
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {hasAccessToTier(user.effectiveSubscriptionTier.slug as SubscriptionTier, "tier1") ? (
-                <div className="space-y-4">
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <h4 className="font-medium mb-2">Advanced Analytics</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Detailed charts and insights about your usage patterns.
-                    </p>
-                  </div>
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <h4 className="font-medium mb-2">Priority Support</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Get faster response times from our support team.
-                    </p>
-                  </div>
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <h4 className="font-medium mb-2">API Access</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Access our REST API for integrations.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Lock className="h-12 w-12 text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground mb-4">
-                    Upgrade to Tier 1 to unlock
-                  </p>
-                  <Button variant="outline" size="sm">
-                    Upgrade
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Tier 2 Section */}
-          <Card className={`border-2 ${hasAccessToTier(user.effectiveSubscriptionTier.slug as SubscriptionTier, "tier2") ? "border-yellow-200" : "border-gray-200"}`}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Crown className="h-5 w-5 text-yellow-500" />
-                  <CardTitle>Tier 2 Features</CardTitle>
-                </div>
-                <Badge>Tier 2</Badge>
-              </div>
-              <CardDescription>
-                Premium features for power users
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {hasAccessToTier(user.effectiveSubscriptionTier.slug as SubscriptionTier, "tier2") ? (
-                <div className="space-y-4">
-                  <div className="p-4 bg-yellow-50 rounded-lg">
-                    <h4 className="font-medium mb-2">White-label Solution</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Customize branding and remove our watermarks.
-                    </p>
-                  </div>
-                  <div className="p-4 bg-yellow-50 rounded-lg">
-                    <h4 className="font-medium mb-2">Dedicated Account Manager</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Personal support from a dedicated team member.
-                    </p>
-                  </div>
-                  <div className="p-4 bg-yellow-50 rounded-lg">
-                    <h4 className="font-medium mb-2">Custom Integrations</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Build custom workflows with our advanced API.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Lock className="h-12 w-12 text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground mb-4">
-                    Upgrade to Tier 2 to unlock
-                  </p>
-                  <Button variant="outline" size="sm">
-                    Upgrade
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              return (
+                <Card key={tier.id} className={`border-2 ${cardBorder}`}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Icon
+                          className={`h-5 w-5 ${
+                            isPremium
+                              ? "text-yellow-500"
+                              : isMid
+                              ? "text-blue-500"
+                              : "text-gray-500"
+                          }`}
+                        />
+                        <CardTitle>{tier.name} Features</CardTitle>
+                      </div>
+                      <Badge variant={getTierBadgeVariant(tier.level)}>
+                        {tier.name}
+                      </Badge>
+                    </div>
+                    <CardDescription>
+                      {tier.description ?? `${tier.name} tier features`}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {canAccess ? (
+                      features.length > 0 ? (
+                        <div className="space-y-4">
+                          {features.map((feature) => (
+                            <div
+                              key={feature}
+                              className={`p-4 ${featureBg} rounded-lg`}
+                            >
+                              <h4 className="font-medium mb-2">{feature}</h4>
+                              <p className="text-sm text-muted-foreground">
+                                Included with {tier.name}.
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-8 text-center">
+                          <CheckCircle className="h-12 w-12 text-green-600 mb-4" />
+                          <p className="text-muted-foreground">
+                            You have access to {tier.name}.
+                          </p>
+                        </div>
+                      )
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-8 text-center">
+                        <Lock className="h-12 w-12 text-muted-foreground mb-4" />
+                        <p className="text-muted-foreground mb-4">
+                          Upgrade to {tier.name} to unlock
+                        </p>
+                        <Button variant="outline" size="sm">
+                          Upgrade
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

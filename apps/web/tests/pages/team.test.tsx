@@ -42,7 +42,7 @@ function createMockTier(slug: string, level: number): SubscriptionTierDTO {
   return {
     id: level + 1,
     slug,
-    name: slug === "free" ? "Free" : slug === "tier1" ? "Tier 1" : "Tier 2",
+    name: slug === "free" ? "Free" : slug === "tier1" ? "Pro" : "Enterprise",
     description: `${slug} tier description`,
     level,
     maxTeamMembers: slug === "free" ? 5 : slug === "tier1" ? 20 : null,
@@ -296,7 +296,7 @@ describe("Team Management Page", () => {
       render(<TeamManagementPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("Tier 1")).toBeInTheDocument();
+        expect(screen.getByText("Pro")).toBeInTheDocument();
       });
     });
 
@@ -848,11 +848,78 @@ describe("Team Management Page", () => {
     });
   });
 
-  describe("team with no subscription (Free tier display)", () => {
+  describe("team with no subscription", () => {
     const teamData = {
       id: 1,
       name: "Free Team",
       slug: "free-team",
+      subscription: null,
+      ownerId: 1,
+      members: [
+        {
+          id: 1,
+          userId: 1,
+          teamId: 1,
+          role: "owner",
+          user: {
+            id: 1,
+            email: "owner@example.com",
+            fullName: "Team Owner",
+            avatarUrl: null,
+          },
+          createdAt: "2024-01-01T00:00:00.000Z",
+        },
+      ],
+    };
+
+    beforeEach(() => {
+      const userWithFreeTier: MockUser = {
+        id: 1,
+        email: "owner@example.com",
+        fullName: "Team Owner",
+        role: "user",
+        subscription: null,
+        effectiveSubscriptionTier: createMockTier("free", 0),
+        currentTeamId: 1,
+        currentTeam: {
+          id: 1,
+          name: "Free Team",
+          slug: "free-team",
+          subscription: null,
+        },
+        emailVerified: true,
+        mfaEnabled: false,
+        avatarUrl: null,
+      };
+
+      mockUseAuth.mockReturnValue({
+        user: userWithFreeTier,
+        isLoading: false,
+      });
+
+      mockApiGet.mockImplementation((url: string) => {
+        if (url.includes("/invitations")) {
+          return Promise.resolve({ data: [] });
+        }
+        return Promise.resolve({ data: teamData });
+      });
+    });
+
+    it("redirects to dashboard for free tier", async () => {
+      render(<TeamManagementPage />);
+
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith("/dashboard");
+      });
+    });
+
+  });
+
+  describe("paid team with one member", () => {
+    const teamData = {
+      id: 1,
+      name: "Pro Team",
+      slug: "pro-team",
       subscription: null,
       ownerId: 1,
       members: [
@@ -883,8 +950,8 @@ describe("Team Management Page", () => {
         currentTeamId: 1,
         currentTeam: {
           id: 1,
-          name: "Free Team",
-          slug: "free-team",
+          name: "Pro Team",
+          slug: "pro-team",
           subscription: null,
         },
         emailVerified: true,
@@ -902,14 +969,6 @@ describe("Team Management Page", () => {
           return Promise.resolve({ data: [] });
         }
         return Promise.resolve({ data: teamData });
-      });
-    });
-
-    it("displays Free badge when team has no subscription", async () => {
-      render(<TeamManagementPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText("Free")).toBeInTheDocument();
       });
     });
 

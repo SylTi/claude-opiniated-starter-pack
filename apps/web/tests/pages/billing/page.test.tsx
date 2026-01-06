@@ -7,7 +7,6 @@ import type {
   BillingSubscriptionDTO,
   SubscriptionTierDTO,
   PriceDTO,
-  BalanceDTO,
   ValidateDiscountCodeResponse,
 } from '@saas/shared'
 
@@ -343,6 +342,9 @@ describe('BillingPage', () => {
       const validationResponse: ValidateDiscountCodeResponse = {
         valid: false,
         message: 'Invalid discount code',
+        originalAmount: 2000,
+        discountedAmount: 2000,
+        discountApplied: 0,
       }
       mockValidateDiscountCode.mockResolvedValue(validationResponse)
 
