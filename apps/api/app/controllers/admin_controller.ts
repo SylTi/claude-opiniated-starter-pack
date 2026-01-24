@@ -18,6 +18,8 @@ import {
   createPriceValidator,
   updatePriceValidator,
 } from '#validators/admin'
+import { AuditContext } from '#services/audit_context'
+import { AUDIT_EVENT_TYPES } from '#constants/audit_events'
 
 export default class AdminController {
   /**
@@ -141,7 +143,9 @@ export default class AdminController {
   /**
    * Manually verify a user's email
    */
-  async verifyUserEmail({ params, response }: HttpContext): Promise<void> {
+  async verifyUserEmail(ctx: HttpContext): Promise<void> {
+    const { params, response } = ctx
+    const audit = new AuditContext(ctx)
     const user = await User.findOrFail(params.id)
 
     if (user.emailVerified) {
@@ -154,6 +158,9 @@ export default class AdminController {
     user.emailVerified = true
     user.emailVerifiedAt = DateTime.now()
     await user.save()
+
+    // Emit audit event for admin email verification
+    audit.emit(AUDIT_EVENT_TYPES.ADMIN_USER_VERIFY_EMAIL, { type: 'user', id: user.id })
 
     response.json({
       data: {
@@ -197,7 +204,9 @@ export default class AdminController {
   /**
    * Delete a user
    */
-  async deleteUser({ params, auth, response }: HttpContext): Promise<void> {
+  async deleteUser(ctx: HttpContext): Promise<void> {
+    const { params, auth, response } = ctx
+    const audit = new AuditContext(ctx)
     const user = await User.findOrFail(params.id)
     const currentUser = auth.user!
 
@@ -207,6 +216,11 @@ export default class AdminController {
         message: 'You cannot delete your own account from admin panel',
       })
     }
+
+    const deletedUserId = user.id
+
+    // Emit audit event before deletion
+    audit.emit(AUDIT_EVENT_TYPES.ADMIN_USER_DELETE, { type: 'user', id: deletedUserId })
 
     await user.delete()
 
@@ -219,7 +233,9 @@ export default class AdminController {
    * Update user's current tenant subscription tier (admin override)
    * @deprecated Use updateTenantTier instead - tenant is the billing unit
    */
-  async updateUserTier({ params, request, response }: HttpContext): Promise<void> {
+  async updateUserTier(ctx: HttpContext): Promise<void> {
+    const { params, request, response } = ctx
+    const audit = new AuditContext(ctx)
     const user = await User.findOrFail(params.id)
     const { subscriptionTier, subscriptionExpiresAt } =
       await request.validateUsing(updateUserTierValidator)
@@ -253,6 +269,13 @@ export default class AdminController {
       user.currentTenantId,
       subscriptionTier,
       expiresAt
+    )
+
+    // Emit audit event for tier update
+    audit.emit(
+      AUDIT_EVENT_TYPES.ADMIN_TIER_UPDATE,
+      { type: 'tenant', id: user.currentTenantId },
+      { newTier: tier.slug, source: 'updateUserTier' }
     )
 
     response.json({
@@ -333,7 +356,9 @@ export default class AdminController {
   /**
    * Update tenant's subscription tier (tenant is the billing unit)
    */
-  async updateTenantTier({ params, request, response }: HttpContext): Promise<void> {
+  async updateTenantTier(ctx: HttpContext): Promise<void> {
+    const { params, request, response } = ctx
+    const audit = new AuditContext(ctx)
     const tenant = await Tenant.findOrFail(params.id)
     const { subscriptionTier, subscriptionExpiresAt } =
       await request.validateUsing(updateTenantTierValidator)
@@ -359,6 +384,13 @@ export default class AdminController {
       tenant.id,
       subscriptionTier,
       expiresAt
+    )
+
+    // Emit audit event for tier update
+    audit.emit(
+      AUDIT_EVENT_TYPES.ADMIN_TIER_UPDATE,
+      { type: 'tenant', id: tenant.id },
+      { newTier: tier.slug, source: 'updateTenantTier' }
     )
 
     response.json({

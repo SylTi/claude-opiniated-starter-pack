@@ -25,6 +25,8 @@ import {
 import { RbacGuard } from '#services/rbac_guard'
 import { ACTIONS } from '#constants/permissions'
 import type { TenantRole } from '#constants/roles'
+import { AuditContext } from '#services/audit_context'
+import { AUDIT_EVENT_TYPES } from '#constants/audit_events'
 
 export default class TenantsController {
   private mailService = new MailService()
@@ -81,7 +83,9 @@ export default class TenantsController {
   /**
    * Create a new tenant
    */
-  async store({ auth, request, response }: HttpContext): Promise<void> {
+  async store(ctx: HttpContext): Promise<void> {
+    const { auth, request, response } = ctx
+    const audit = new AuditContext(ctx)
     const user = auth.user!
     const { name } = await request.validateUsing(createTenantValidator)
 
@@ -125,6 +129,12 @@ export default class TenantsController {
       await user.save()
 
       return newTenant
+    })
+
+    // Emit audit event for tenant creation
+    audit.emitForTenant(AUDIT_EVENT_TYPES.TENANT_CREATE, tenant.id, {
+      type: 'tenant',
+      id: tenant.id,
     })
 
     response.created({
@@ -198,7 +208,9 @@ export default class TenantsController {
   /**
    * Update tenant
    */
-  async update({ auth, params, request, response }: HttpContext): Promise<void> {
+  async update(ctx: HttpContext): Promise<void> {
+    const { auth, params, request, response } = ctx
+    const audit = new AuditContext(ctx)
     const user = auth.user!
     const tenantId = params.id
 
@@ -229,6 +241,14 @@ export default class TenantsController {
 
     await tenant.save()
 
+    // Emit audit event for tenant update
+    audit.emitForTenant(
+      AUDIT_EVENT_TYPES.TENANT_UPDATE,
+      tenant.id,
+      { type: 'tenant', id: tenant.id },
+      { updatedFields: Object.keys(data) }
+    )
+
     response.json({
       data: {
         id: tenant.id,
@@ -243,9 +263,12 @@ export default class TenantsController {
   /**
    * Switch current tenant
    */
-  async switchTenant({ auth, params, response }: HttpContext): Promise<void> {
+  async switchTenant(ctx: HttpContext): Promise<void> {
+    const { auth, params, response } = ctx
+    const audit = new AuditContext(ctx)
     const user = auth.user!
     const tenantId = params.id
+    const previousTenantId = user.currentTenantId
 
     // Check if user is a member
     const membership = await TenantMembership.query()
@@ -265,6 +288,14 @@ export default class TenantsController {
 
     const tenant = await Tenant.findOrFail(tenantId)
 
+    // Emit audit event for tenant switch
+    audit.emitForTenant(
+      AUDIT_EVENT_TYPES.TENANT_SWITCH,
+      tenant.id,
+      { type: 'tenant', id: tenant.id },
+      { previousTenantId }
+    )
+
     response.json({
       data: {
         currentTenantId: user.currentTenantId,
@@ -282,7 +313,9 @@ export default class TenantsController {
    * Add member to tenant
    * Uses transaction with row locking to prevent race conditions
    */
-  async addMember({ auth, params, request, response }: HttpContext): Promise<void> {
+  async addMember(ctx: HttpContext): Promise<void> {
+    const { auth, params, request, response } = ctx
+    const audit = new AuditContext(ctx)
     const user = auth.user!
     const tenantId = params.id
 
@@ -357,6 +390,14 @@ export default class TenantsController {
         await newMember.save()
       })
 
+      // Emit audit event for member addition
+      audit.emitForTenant(
+        AUDIT_EVENT_TYPES.MEMBER_ADD,
+        Number(tenantId),
+        { type: 'user', id: newMember.id },
+        { role: role ?? TENANT_ROLES.MEMBER }
+      )
+
       response.created({
         data: {
           userId: newMember.id,
@@ -386,7 +427,9 @@ export default class TenantsController {
   /**
    * Remove member from tenant
    */
-  async removeMember({ auth, params, response }: HttpContext): Promise<void> {
+  async removeMember(ctx: HttpContext): Promise<void> {
+    const { auth, params, response } = ctx
+    const audit = new AuditContext(ctx)
     const user = auth.user!
     const { id: tenantId, userId: memberUserId } = params
 
@@ -437,6 +480,14 @@ export default class TenantsController {
       await removedUser.save()
     }
 
+    // Emit audit event for member removal
+    audit.emitForTenant(
+      AUDIT_EVENT_TYPES.MEMBER_REMOVE,
+      Number(tenantId),
+      { type: 'user', id: Number(memberUserId) },
+      { removedRole: memberToRemove.role }
+    )
+
     response.json({
       message: 'Member removed successfully',
     })
@@ -445,7 +496,9 @@ export default class TenantsController {
   /**
    * Leave tenant
    */
-  async leave({ auth, params, response }: HttpContext): Promise<void> {
+  async leave(ctx: HttpContext): Promise<void> {
+    const { auth, params, response } = ctx
+    const audit = new AuditContext(ctx)
     const user = auth.user!
     const tenantId = params.id
 
@@ -477,6 +530,14 @@ export default class TenantsController {
       await user.save()
     }
 
+    // Emit audit event for member leaving
+    audit.emitForTenant(
+      AUDIT_EVENT_TYPES.MEMBER_LEAVE,
+      Number(tenantId),
+      { type: 'tenant', id: Number(tenantId) },
+      { previousRole: membership.role }
+    )
+
     response.json({
       message: 'Left tenant successfully',
     })
@@ -485,7 +546,9 @@ export default class TenantsController {
   /**
    * Delete tenant
    */
-  async destroy({ auth, params, response }: HttpContext): Promise<void> {
+  async destroy(ctx: HttpContext): Promise<void> {
+    const { auth, params, response } = ctx
+    const audit = new AuditContext(ctx)
     const user = auth.user!
     const tenantId = params.id
 
@@ -518,6 +581,13 @@ export default class TenantsController {
     // Clear currentTenantId for all members
     await User.query().where('currentTenantId', tenantId).update({ currentTenantId: null })
 
+    // Emit audit event before deletion (tenant will no longer exist after)
+    audit.emit(
+      AUDIT_EVENT_TYPES.TENANT_DELETE,
+      { type: 'tenant', id: Number(tenantId) },
+      { tenantName: tenant.name }
+    )
+
     await tenant.delete()
 
     response.json({
@@ -528,7 +598,9 @@ export default class TenantsController {
   /**
    * Send tenant invitation
    */
-  async sendInvitation({ auth, params, request, response }: HttpContext): Promise<void> {
+  async sendInvitation(ctx: HttpContext): Promise<void> {
+    const { auth, params, request, response } = ctx
+    const audit = new AuditContext(ctx)
     const user = auth.user!
     const tenantId = params.id
 
@@ -636,6 +708,14 @@ export default class TenantsController {
       )
       .catch((err) => logger.error({ err }, 'Failed to send tenant invitation email'))
 
+    // Emit audit event for invitation sent
+    audit.emitForTenant(
+      AUDIT_EVENT_TYPES.INVITATION_SEND,
+      Number(tenantId),
+      { type: 'invitation', id: invitation.id },
+      { invitedRole: inviteRole }
+    )
+
     response.created({
       data: {
         id: invitation.id,
@@ -700,7 +780,9 @@ export default class TenantsController {
   /**
    * Cancel a pending invitation
    */
-  async cancelInvitation({ auth, params, response }: HttpContext): Promise<void> {
+  async cancelInvitation(ctx: HttpContext): Promise<void> {
+    const { auth, params, response } = ctx
+    const audit = new AuditContext(ctx)
     const user = auth.user!
     const { id: tenantId, invitationId } = params
 
@@ -734,6 +816,12 @@ export default class TenantsController {
         message: 'Invitation not found or already processed',
       })
     }
+
+    // Emit audit event for invitation cancellation
+    audit.emitForTenant(AUDIT_EVENT_TYPES.INVITATION_CANCEL, Number(tenantId), {
+      type: 'invitation',
+      id: Number(invitationId),
+    })
 
     await invitation.delete()
 
@@ -801,7 +889,9 @@ export default class TenantsController {
    * Accept invitation (for authenticated users)
    * Uses transaction with row locking to prevent race conditions
    */
-  async acceptInvitation({ auth, params, response }: HttpContext): Promise<void> {
+  async acceptInvitation(ctx: HttpContext): Promise<void> {
+    const { auth, params, response } = ctx
+    const audit = new AuditContext(ctx)
     const user = auth.user!
     const { token } = params
 
@@ -885,6 +975,14 @@ export default class TenantsController {
         await invitation.save()
       })
 
+      // Emit audit event for invitation acceptance
+      audit.emitForTenant(
+        AUDIT_EVENT_TYPES.INVITATION_ACCEPT,
+        invitation.tenantId,
+        { type: 'invitation', id: invitation.id },
+        { role: invitation.role }
+      )
+
       response.json({
         data: {
           tenantId: invitation.tenantId,
@@ -915,7 +1013,9 @@ export default class TenantsController {
   /**
    * Decline invitation (for authenticated users)
    */
-  async declineInvitation({ auth, params, response }: HttpContext): Promise<void> {
+  async declineInvitation(ctx: HttpContext): Promise<void> {
+    const { auth, params, response } = ctx
+    const audit = new AuditContext(ctx)
     const user = auth.user!
     const { token } = params
 
@@ -945,6 +1045,12 @@ export default class TenantsController {
 
     invitation.status = 'declined'
     await invitation.save()
+
+    // Emit audit event for invitation decline
+    audit.emitForTenant(AUDIT_EVENT_TYPES.INVITATION_DECLINE, invitation.tenantId, {
+      type: 'invitation',
+      id: invitation.id,
+    })
 
     response.json({
       message: 'Invitation declined',

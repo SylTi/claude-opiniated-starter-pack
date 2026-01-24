@@ -40,6 +40,7 @@ test('GET /api/v1/users', async ({ client }) => {
 ```
 
 **Avantages:**
+
 - Intégration native AdonisJS
 - Assertions intégrées
 - Type-safe
@@ -56,15 +57,14 @@ import request from 'supertest'
 test('GET /api/v1/users', async ({ assert }) => {
   const BASE_URL = `http://${process.env.HOST}:${process.env.PORT}`
 
-  const response = await request(BASE_URL)
-    .get('/api/v1/users')
-    .expect(200)
+  const response = await request(BASE_URL).get('/api/v1/users').expect(200)
 
   assert.isArray(response.body.data)
 })
 ```
 
 **Avantages:**
+
 - Très populaire
 - Documentation extensive
 - Syntaxe chainable

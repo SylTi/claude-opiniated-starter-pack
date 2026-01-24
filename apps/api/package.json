@@ -73,6 +73,7 @@
     "@adonisjs/lucid": "^21.6.1",
     "@adonisjs/session": "^7.6.0",
     "@adonisjs/shield": "^8.2.0",
+    "@saas/shared": "workspace:*",
     "@vinejs/vine": "^3.0.1",
     "jose": "^6.1.3",
     "luxon": "^3.7.2",

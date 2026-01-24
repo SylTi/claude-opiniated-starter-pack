@@ -1,6 +1,8 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { verifyMfaValidator, enableMfaValidator } from '#validators/auth'
 import MfaService from '#services/mfa_service'
+import { AuditContext } from '#services/audit_context'
+import { AUDIT_EVENT_TYPES } from '#constants/audit_events'
 
 export default class MfaController {
   private mfaService = new MfaService()
@@ -36,7 +38,9 @@ export default class MfaController {
    * Enable MFA after verifying the code
    * POST /api/v1/auth/mfa/enable
    */
-  async enable({ request, response, auth }: HttpContext): Promise<void> {
+  async enable(ctx: HttpContext): Promise<void> {
+    const { request, response, auth } = ctx
+    const audit = new AuditContext(ctx)
     const user = auth.user!
     const { code, secret, backupCodes } = await request.validateUsing(enableMfaValidator)
 
@@ -58,6 +62,9 @@ export default class MfaController {
       return
     }
 
+    // Emit audit event for MFA enable
+    audit.emit(AUDIT_EVENT_TYPES.AUTH_MFA_ENABLE, { type: 'user', id: user.id })
+
     response.ok({
       data: { mfaEnabled: true },
       message: 'MFA has been enabled successfully',
@@ -68,7 +75,9 @@ export default class MfaController {
    * Disable MFA
    * POST /api/v1/auth/mfa/disable
    */
-  async disable({ request, response, auth }: HttpContext): Promise<void> {
+  async disable(ctx: HttpContext): Promise<void> {
+    const { request, response, auth } = ctx
+    const audit = new AuditContext(ctx)
     const user = auth.user!
     const { code } = await request.validateUsing(verifyMfaValidator)
 
@@ -92,6 +101,9 @@ export default class MfaController {
     }
 
     await this.mfaService.disable(user)
+
+    // Emit audit event for MFA disable
+    audit.emit(AUDIT_EVENT_TYPES.AUTH_MFA_DISABLE, { type: 'user', id: user.id })
 
     response.ok({
       data: { mfaEnabled: false },

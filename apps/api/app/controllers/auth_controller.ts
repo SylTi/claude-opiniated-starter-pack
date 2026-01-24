@@ -18,6 +18,8 @@ import Tenant from '#models/tenant'
 import Subscription from '#models/subscription'
 import SubscriptionTier from '#models/subscription_tier'
 import { TENANT_ROLES } from '#constants/roles'
+import { AuditContext } from '#services/audit_context'
+import { AUDIT_EVENT_TYPES } from '#constants/audit_events'
 
 export default class AuthController {
   private authService = new AuthService()
@@ -61,7 +63,9 @@ export default class AuthController {
    * Security: Returns generic response to prevent user enumeration.
    * Adds random timing delay to prevent timing-based attacks.
    */
-  async register({ request, response }: HttpContext): Promise<void> {
+  async register(ctx: HttpContext): Promise<void> {
+    const { request, response } = ctx
+    const audit = new AuditContext(ctx)
     const data = await request.validateUsing(registerValidator)
 
     // Add random delay (100-300ms) to prevent timing-based enumeration
@@ -184,6 +188,14 @@ export default class AuthController {
     // For new registrations with invitation, we can be more specific
     // since the invitation token already proves the user was invited
     if (joinedTenant) {
+      // Emit audit event for registration with invitation
+      audit.emitWithActor(
+        AUDIT_EVENT_TYPES.AUTH_REGISTER,
+        audit.createUserActor(user.id),
+        { type: 'user', id: user.id },
+        { joinedTenantId: joinedTenant.id }
+      )
+
       response.created({
         data: {
           id: user.id,
@@ -200,6 +212,12 @@ export default class AuthController {
       return
     }
 
+    // Emit audit event for successful registration
+    audit.emitWithActor(AUDIT_EVENT_TYPES.AUTH_REGISTER, audit.createUserActor(user.id), {
+      type: 'user',
+      id: user.id,
+    })
+
     // Generic response for regular registration to prevent enumeration
     response.created({
       message: 'Registration initiated. Please check your email to verify your account.',
@@ -210,7 +228,9 @@ export default class AuthController {
    * Login user
    * POST /api/v1/auth/login
    */
-  async login({ request, response, auth }: HttpContext): Promise<void> {
+  async login(ctx: HttpContext): Promise<void> {
+    const { request, response, auth } = ctx
+    const audit = new AuditContext(ctx)
     const { email, password, mfaCode } = await request.validateUsing(loginValidator)
     const ipAddress = request.ip()
     const userAgent = request.header('user-agent')
@@ -243,6 +263,15 @@ export default class AuthController {
             userAgent,
             'Invalid MFA code'
           )
+
+          // Emit audit event for failed MFA
+          audit.emitWithActor(
+            AUDIT_EVENT_TYPES.AUTH_LOGIN_FAILURE,
+            audit.createUserActor(user.id),
+            { type: 'user', id: user.id },
+            { reason: 'invalid_mfa_code' }
+          )
+
           response.unauthorized({
             error: 'InvalidMfaCode',
             message: 'Invalid MFA code',
@@ -282,6 +311,14 @@ export default class AuthController {
 
       const effectiveTier = await this.getEffectiveTier(user.currentTenantId)
 
+      // Emit audit event for successful login
+      audit.emitWithActor(
+        AUDIT_EVENT_TYPES.AUTH_LOGIN_SUCCESS,
+        audit.createUserActor(user.id),
+        { type: 'user', id: user.id },
+        { mfaUsed: requiresMfa }
+      )
+
       response.ok({
         data: {
           id: user.id,
@@ -320,6 +357,19 @@ export default class AuthController {
           userAgent,
           'Invalid credentials'
         )
+
+        // Emit audit event for failed login
+        audit.emitWithActor(
+          AUDIT_EVENT_TYPES.AUTH_LOGIN_FAILURE,
+          audit.createUserActor(user.id),
+          { type: 'user', id: user.id },
+          { reason: 'invalid_credentials' }
+        )
+      } else {
+        // Emit audit event for failed login with unknown user
+        audit.emit(AUDIT_EVENT_TYPES.AUTH_LOGIN_FAILURE, undefined, {
+          reason: 'user_not_found',
+        })
       }
 
       response.unauthorized({
@@ -333,11 +383,23 @@ export default class AuthController {
    * Logout user
    * POST /api/v1/auth/logout
    */
-  async logout({ response, auth }: HttpContext): Promise<void> {
+  async logout(ctx: HttpContext): Promise<void> {
+    const { response, auth } = ctx
+    const audit = new AuditContext(ctx)
+    const userId = auth.user?.id
+
     await auth.use('web').logout()
 
     // Clear the user info cookie
     response.clearCookie('user-info')
+
+    // Emit audit event for logout
+    if (userId) {
+      audit.emitWithActor(AUDIT_EVENT_TYPES.AUTH_LOGOUT, audit.createUserActor(userId), {
+        type: 'user',
+        id: userId,
+      })
+    }
 
     response.ok({
       message: 'Logout successful',
@@ -389,7 +451,9 @@ export default class AuthController {
    * Request password reset
    * POST /api/v1/auth/forgot-password
    */
-  async forgotPassword({ request, response }: HttpContext): Promise<void> {
+  async forgotPassword(ctx: HttpContext): Promise<void> {
+    const { request, response } = ctx
+    const audit = new AuditContext(ctx)
     const { email } = await request.validateUsing(forgotPasswordValidator)
 
     const user = await this.authService.findByEmail(email)
@@ -401,6 +465,13 @@ export default class AuthController {
       this.mailService
         .sendPasswordResetEmail(user.email, token, user.fullName ?? undefined)
         .catch((err) => logger.error({ err }, 'Failed to send password reset email'))
+
+      // Emit audit event for password reset request
+      audit.emitWithActor(
+        AUDIT_EVENT_TYPES.AUTH_PASSWORD_RESET_REQUEST,
+        audit.createUserActor(user.id),
+        { type: 'user', id: user.id }
+      )
     }
 
     response.ok({
@@ -412,8 +483,13 @@ export default class AuthController {
    * Reset password using token
    * POST /api/v1/auth/reset-password
    */
-  async resetPassword({ request, response }: HttpContext): Promise<void> {
+  async resetPassword(ctx: HttpContext): Promise<void> {
+    const { request, response } = ctx
+    const audit = new AuditContext(ctx)
     const { token, password } = await request.validateUsing(resetPasswordValidator)
+
+    // First verify the token to get user for audit logging
+    const user = await this.authService.verifyPasswordResetToken(token)
 
     const success = await this.authService.resetPassword(token, password)
 
@@ -425,6 +501,14 @@ export default class AuthController {
       return
     }
 
+    // Emit audit event for password reset
+    if (user) {
+      audit.emitWithActor(AUDIT_EVENT_TYPES.AUTH_PASSWORD_RESET, audit.createUserActor(user.id), {
+        type: 'user',
+        id: user.id,
+      })
+    }
+
     response.ok({
       message: 'Password has been reset successfully',
     })
@@ -434,8 +518,18 @@ export default class AuthController {
    * Verify email using token
    * GET /api/v1/auth/verify-email/:token
    */
-  async verifyEmail({ params, response }: HttpContext): Promise<void> {
+  async verifyEmail(ctx: HttpContext): Promise<void> {
+    const { params, response } = ctx
+    const audit = new AuditContext(ctx)
     const { token } = params
+
+    // Get token details before verification for audit logging
+    const emailVerificationTokenModule = await import('#models/email_verification_token')
+    const EmailVerificationToken = emailVerificationTokenModule.default
+    const verificationToken = await EmailVerificationToken.query()
+      .where('token', token)
+      .preload('user')
+      .first()
 
     const success = await this.authService.verifyEmail(token)
 
@@ -445,6 +539,15 @@ export default class AuthController {
         message: 'Invalid or expired verification token',
       })
       return
+    }
+
+    // Emit audit event for email verification
+    if (verificationToken?.user) {
+      audit.emitWithActor(
+        AUDIT_EVENT_TYPES.AUTH_EMAIL_VERIFY,
+        audit.createUserActor(verificationToken.user.id),
+        { type: 'user', id: verificationToken.user.id }
+      )
     }
 
     response.ok({
@@ -513,7 +616,9 @@ export default class AuthController {
    * Change password
    * PUT /api/v1/auth/password
    */
-  async changePassword({ request, response, auth }: HttpContext): Promise<void> {
+  async changePassword(ctx: HttpContext): Promise<void> {
+    const { request, response, auth } = ctx
+    const audit = new AuditContext(ctx)
     const { currentPassword, newPassword } = await request.validateUsing(changePasswordValidator)
     const user = auth.user!
 
@@ -526,6 +631,9 @@ export default class AuthController {
       })
       return
     }
+
+    // Emit audit event for password change
+    audit.emit(AUDIT_EVENT_TYPES.AUTH_PASSWORD_CHANGE, { type: 'user', id: user.id })
 
     response.ok({
       message: 'Password changed successfully',

@@ -17,6 +17,8 @@ import PaymentCustomer from '#models/payment_customer'
 import Price from '#models/price'
 import Subscription from '#models/subscription'
 import ProcessedWebhookEvent from '#models/processed_webhook_event'
+import { auditEventEmitter } from '#services/audit_event_emitter'
+import { AUDIT_EVENT_TYPES } from '#constants/audit_events'
 
 export default class StripeProvider implements PaymentProvider {
   readonly name = 'stripe'
@@ -280,7 +282,7 @@ export default class StripeProvider implements PaymentProvider {
     const expiresAt = currentPeriodEnd ? DateTime.fromSeconds(currentPeriodEnd) : null
 
     // Create new subscription
-    await Subscription.create(
+    const newSubscription = await Subscription.create(
       {
         tenantId,
         tierId: price.product.tierId,
@@ -292,6 +294,15 @@ export default class StripeProvider implements PaymentProvider {
       },
       { client: trx }
     )
+
+    // Emit audit event for subscription creation
+    auditEventEmitter.emit({
+      type: AUDIT_EVENT_TYPES.SUBSCRIPTION_CREATE,
+      tenantId,
+      actor: auditEventEmitter.createServiceActor('stripe'),
+      resource: { type: 'subscription', id: newSubscription.id },
+      meta: { tierId: price.product.tierId, stripeSubscriptionId: stripeSubscription.id },
+    })
   }
 
   /**
@@ -340,6 +351,15 @@ export default class StripeProvider implements PaymentProvider {
     subscription.expiresAt = expiresAt
     subscription.useTransaction(trx)
     await subscription.save()
+
+    // Emit audit event for subscription update
+    auditEventEmitter.emit({
+      type: AUDIT_EVENT_TYPES.SUBSCRIPTION_UPDATE,
+      tenantId: subscription.tenantId,
+      actor: auditEventEmitter.createServiceActor('stripe'),
+      resource: { type: 'subscription', id: subscription.id },
+      meta: { status, stripeStatus: stripeSubscription.status },
+    })
   }
 
   /**
@@ -364,6 +384,15 @@ export default class StripeProvider implements PaymentProvider {
     subscription.useTransaction(trx)
     await subscription.save()
 
+    // Emit audit event for subscription cancellation
+    auditEventEmitter.emit({
+      type: AUDIT_EVENT_TYPES.SUBSCRIPTION_CANCEL,
+      tenantId: subscription.tenantId,
+      actor: auditEventEmitter.createServiceActor('stripe'),
+      resource: { type: 'subscription', id: subscription.id },
+      meta: { stripeSubscriptionId: stripeSubscription.id },
+    })
+
     // Downgrade tenant to free tier
     await Subscription.downgradeTenantToFree(subscription.tenantId)
   }
@@ -372,12 +401,34 @@ export default class StripeProvider implements PaymentProvider {
    * Handle invoice.payment_failed event
    */
   private async handlePaymentFailed(
-    _invoice: Stripe.Invoice,
+    invoice: Stripe.Invoice,
     _trx: TransactionClientContract
   ): Promise<void> {
-    // Log warning - could send email notification here
-    // For now, we just mark the event as processed
-    // The subscription status will be updated by customer.subscription.updated
+    // Get subscription ID from invoice
+    const invoiceData = invoice as unknown as { subscription?: string | { id: string } | null }
+    const subscriptionId =
+      typeof invoiceData.subscription === 'string'
+        ? invoiceData.subscription
+        : (invoiceData.subscription?.id ?? null)
+
+    let tenantId: number | null = null
+
+    if (subscriptionId) {
+      const subscription = await Subscription.findByProviderSubscriptionId(
+        this.name,
+        subscriptionId
+      )
+      tenantId = subscription?.tenantId ?? null
+    }
+
+    // Emit audit event for payment failure
+    auditEventEmitter.emit({
+      type: AUDIT_EVENT_TYPES.BILLING_PAYMENT_FAILURE,
+      tenantId,
+      actor: auditEventEmitter.createServiceActor('stripe'),
+      resource: subscriptionId ? { type: 'invoice', id: invoice.id ?? 'unknown' } : undefined,
+      meta: { invoiceId: invoice.id, stripeSubscriptionId: subscriptionId },
+    })
   }
 
   /**
@@ -412,5 +463,14 @@ export default class StripeProvider implements PaymentProvider {
       subscription.useTransaction(trx)
       await subscription.save()
     }
+
+    // Emit audit event for payment success
+    auditEventEmitter.emit({
+      type: AUDIT_EVENT_TYPES.BILLING_PAYMENT_SUCCESS,
+      tenantId: subscription.tenantId,
+      actor: auditEventEmitter.createServiceActor('stripe'),
+      resource: { type: 'subscription', id: subscription.id },
+      meta: { invoiceId: invoice.id, amountPaid: invoice.amount_paid },
+    })
   }
 }
