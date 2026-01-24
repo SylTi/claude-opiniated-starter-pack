@@ -259,3 +259,70 @@ All admin routes require authentication and admin role.
 
 - `admin`: Invited as admin
 - `member`: Invited as member
+
+---
+
+## RBAC (Role-Based Access Control)
+
+The application uses a code-based RBAC system for tenant-scoped authorization.
+
+### Principles
+
+- **Deny by default**: Unknown roles or actions are denied
+- **Explicit allow lists**: Each role has a defined list of permitted actions
+- **Pure functions**: Authorization decisions are deterministic and testable
+- **Code-based**: Permissions are defined in code, not database, for version control
+
+### Actions
+
+| Action | Description |
+|--------|-------------|
+| `tenant:read` | View tenant details |
+| `tenant:update` | Update tenant name/settings |
+| `tenant:delete` | Delete the tenant |
+| `member:list` | View member list |
+| `member:add` | Add new members |
+| `member:remove` | Remove members |
+| `member:update_role` | Change member roles |
+| `invitation:list` | View pending invitations |
+| `invitation:send` | Send new invitations |
+| `invitation:cancel` | Cancel pending invitations |
+| `billing:view` | View billing information |
+| `billing:manage` | Manage payment methods |
+| `subscription:view` | View subscription status |
+| `subscription:upgrade` | Upgrade subscription |
+| `subscription:cancel` | Cancel subscription |
+
+### Role Permissions Matrix
+
+| Action | Owner | Admin | Member |
+|--------|:-----:|:-----:|:------:|
+| `tenant:read` | ✓ | ✓ | ✓ |
+| `tenant:update` | ✓ | ✓ | ✗ |
+| `tenant:delete` | ✓ | ✗ | ✗ |
+| `member:list` | ✓ | ✓ | ✓ |
+| `member:add` | ✓ | ✓ | ✗ |
+| `member:remove` | ✓ | ✓ | ✗ |
+| `member:update_role` | ✓ | ✗ | ✗ |
+| `invitation:list` | ✓ | ✓ | ✗ |
+| `invitation:send` | ✓ | ✓ | ✗ |
+| `invitation:cancel` | ✓ | ✓ | ✗ |
+| `billing:view` | ✓ | ✓ | ✓ |
+| `billing:manage` | ✓ | ✗ | ✗ |
+| `subscription:view` | ✓ | ✓ | ✓ |
+| `subscription:upgrade` | ✓ | ✓ | ✗ |
+| `subscription:cancel` | ✓ | ✗ | ✗ |
+
+### RBAC Denied Response
+
+When an action is denied due to insufficient permissions:
+
+```json
+{
+  "error": "RbacDenied",
+  "message": "You do not have permission to perform this action",
+  "deniedActions": ["tenant:delete"]
+}
+```
+
+HTTP Status: `403 Forbidden`

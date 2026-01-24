@@ -1,5 +1,6 @@
 import app from '@adonisjs/core/services/app'
 import { HttpContext, ExceptionHandler } from '@adonisjs/core/http'
+import { isRbacDeniedError } from '#services/rbac_guard'
 
 export default class HttpExceptionHandler extends ExceptionHandler {
   /**
@@ -13,6 +14,15 @@ export default class HttpExceptionHandler extends ExceptionHandler {
    * response to the client
    */
   async handle(error: unknown, ctx: HttpContext) {
+    // Handle RBAC denied errors with proper 403 response
+    if (isRbacDeniedError(error)) {
+      return ctx.response.forbidden({
+        error: 'RbacDenied',
+        message: error.message,
+        deniedActions: error.deniedActions,
+      })
+    }
+
     return super.handle(error, ctx)
   }
 

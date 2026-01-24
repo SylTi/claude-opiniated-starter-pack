@@ -10,6 +10,8 @@
 
 import router from '@adonisjs/core/services/router'
 import server from '@adonisjs/core/services/server'
+import { createRbacMiddleware } from '#middleware/rbac_middleware'
+import type { TenantAction } from '#constants/permissions'
 
 /**
  * The error handler is used to convert an exception
@@ -52,3 +54,22 @@ export const middleware = router.named({
   rawBody: () => import('#middleware/raw_body_middleware'),
   tenant: () => import('#middleware/tenant_context_middleware'),
 })
+
+/**
+ * RBAC middleware factory for route-level authorization.
+ *
+ * @param actions - One or more actions required for the route
+ * @returns Middleware class to use with .use()
+ *
+ * @example
+ * ```typescript
+ * import { rbac } from '#start/kernel'
+ * import { ACTIONS } from '#constants/permissions'
+ *
+ * router.put('/:id', [Controller, 'update']).use(rbac(ACTIONS.TENANT_UPDATE))
+ * router.delete('/:id', [Controller, 'destroy']).use(rbac(ACTIONS.TENANT_DELETE))
+ * ```
+ */
+export function rbac(...actions: TenantAction[]) {
+  return createRbacMiddleware(...actions)
+}

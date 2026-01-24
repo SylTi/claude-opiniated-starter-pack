@@ -22,9 +22,42 @@ import {
   isAlreadyMemberError,
   isMemberLimitReachedError,
 } from '#exceptions/tenant_errors'
+import { RbacGuard } from '#services/rbac_guard'
+import { ACTIONS } from '#constants/permissions'
+import type { TenantRole } from '#constants/roles'
 
 export default class TenantsController {
   private mailService = new MailService()
+
+  /**
+   * Helper to get membership and create RbacGuard.
+   * Returns null if user is not a member of the tenant.
+   */
+  private async getMembershipWithGuard(
+    userId: number,
+    tenantId: number
+  ): Promise<{ membership: TenantMembership; guard: RbacGuard } | null> {
+    const membership = await TenantMembership.query()
+      .where('userId', userId)
+      .where('tenantId', tenantId)
+      .first()
+
+    if (!membership) {
+      return null
+    }
+
+    const guard = new RbacGuard({
+      id: tenantId,
+      membership: {
+        id: membership.id,
+        tenantId: membership.tenantId,
+        userId: membership.userId,
+        role: membership.role as TenantRole,
+      },
+    })
+
+    return { membership, guard }
+  }
   /**
    * List all tenants for the current user
    */
@@ -113,16 +146,21 @@ export default class TenantsController {
     const user = auth.user!
     const tenantId = params.id
 
-    // Check if user is a member
-    const membership = await TenantMembership.query()
-      .where('userId', user.id)
-      .where('tenantId', tenantId)
-      .first()
-
-    if (!membership) {
+    // Check membership and RBAC permission
+    const result = await this.getMembershipWithGuard(user.id, tenantId)
+    if (!result) {
       return response.forbidden({
         error: 'Forbidden',
         message: 'You are not a member of this tenant',
+      })
+    }
+
+    // Verify TENANT_READ permission (all roles have this, but enforces consistency)
+    if (!result.guard.can(ACTIONS.TENANT_READ)) {
+      return response.forbidden({
+        error: 'RbacDenied',
+        message: 'You do not have permission to view this tenant',
+        deniedActions: [ACTIONS.TENANT_READ],
       })
     }
 
@@ -164,16 +202,21 @@ export default class TenantsController {
     const user = auth.user!
     const tenantId = params.id
 
-    // Check if user is admin
-    const membership = await TenantMembership.query()
-      .where('userId', user.id)
-      .where('tenantId', tenantId)
-      .first()
-
-    if (!membership || !membership.isAdmin()) {
+    // Check membership and RBAC permission
+    const result = await this.getMembershipWithGuard(user.id, tenantId)
+    if (!result) {
       return response.forbidden({
         error: 'Forbidden',
-        message: 'You must be a tenant admin to update the tenant',
+        message: 'You are not a member of this tenant',
+      })
+    }
+
+    // Check TENANT_UPDATE permission (owner + admin)
+    if (!result.guard.can(ACTIONS.TENANT_UPDATE)) {
+      return response.forbidden({
+        error: 'RbacDenied',
+        message: 'You do not have permission to update this tenant',
+        deniedActions: [ACTIONS.TENANT_UPDATE],
       })
     }
 
@@ -243,16 +286,21 @@ export default class TenantsController {
     const user = auth.user!
     const tenantId = params.id
 
-    // Check if user is admin
-    const membership = await TenantMembership.query()
-      .where('userId', user.id)
-      .where('tenantId', tenantId)
-      .first()
-
-    if (!membership || !membership.isAdmin()) {
+    // Check membership and RBAC permission
+    const result = await this.getMembershipWithGuard(user.id, tenantId)
+    if (!result) {
       return response.forbidden({
         error: 'Forbidden',
-        message: 'You must be a tenant admin to add members',
+        message: 'You are not a member of this tenant',
+      })
+    }
+
+    // Check MEMBER_ADD permission (owner + admin)
+    if (!result.guard.can(ACTIONS.MEMBER_ADD)) {
+      return response.forbidden({
+        error: 'RbacDenied',
+        message: 'You do not have permission to add members',
+        deniedActions: [ACTIONS.MEMBER_ADD],
       })
     }
 
@@ -342,16 +390,21 @@ export default class TenantsController {
     const user = auth.user!
     const { id: tenantId, userId: memberUserId } = params
 
-    // Check if user is admin
-    const membership = await TenantMembership.query()
-      .where('userId', user.id)
-      .where('tenantId', tenantId)
-      .first()
-
-    if (!membership || !membership.isAdmin()) {
+    // Check membership and RBAC permission
+    const result = await this.getMembershipWithGuard(user.id, tenantId)
+    if (!result) {
       return response.forbidden({
         error: 'Forbidden',
-        message: 'You must be a tenant admin to remove members',
+        message: 'You are not a member of this tenant',
+      })
+    }
+
+    // Check MEMBER_REMOVE permission (owner + admin)
+    if (!result.guard.can(ACTIONS.MEMBER_REMOVE)) {
+      return response.forbidden({
+        error: 'RbacDenied',
+        message: 'You do not have permission to remove members',
+        deniedActions: [ACTIONS.MEMBER_REMOVE],
       })
     }
 
@@ -444,11 +497,21 @@ export default class TenantsController {
       })
     }
 
-    // Only owner can delete
-    if (tenant.ownerId !== user.id) {
+    // Check membership and RBAC permission
+    const result = await this.getMembershipWithGuard(user.id, tenantId)
+    if (!result) {
       return response.forbidden({
         error: 'Forbidden',
+        message: 'You are not a member of this tenant',
+      })
+    }
+
+    // Check TENANT_DELETE permission (owner only)
+    if (!result.guard.can(ACTIONS.TENANT_DELETE)) {
+      return response.forbidden({
+        error: 'RbacDenied',
         message: 'Only the tenant owner can delete the tenant',
+        deniedActions: [ACTIONS.TENANT_DELETE],
       })
     }
 
@@ -469,16 +532,21 @@ export default class TenantsController {
     const user = auth.user!
     const tenantId = params.id
 
-    // Check if user is admin
-    const membership = await TenantMembership.query()
-      .where('userId', user.id)
-      .where('tenantId', tenantId)
-      .first()
-
-    if (!membership || !membership.isAdmin()) {
+    // Check membership and RBAC permission
+    const result = await this.getMembershipWithGuard(user.id, tenantId)
+    if (!result) {
       return response.forbidden({
         error: 'Forbidden',
-        message: 'You must be a tenant admin to send invitations',
+        message: 'You are not a member of this tenant',
+      })
+    }
+
+    // Check INVITATION_SEND permission (owner + admin)
+    if (!result.guard.can(ACTIONS.INVITATION_SEND)) {
+      return response.forbidden({
+        error: 'RbacDenied',
+        message: 'You do not have permission to send invitations',
+        deniedActions: [ACTIONS.INVITATION_SEND],
       })
     }
 
@@ -588,16 +656,21 @@ export default class TenantsController {
     const user = auth.user!
     const tenantId = params.id
 
-    // Check if user is admin
-    const membership = await TenantMembership.query()
-      .where('userId', user.id)
-      .where('tenantId', tenantId)
-      .first()
-
-    if (!membership || !membership.isAdmin()) {
+    // Check membership and RBAC permission
+    const result = await this.getMembershipWithGuard(user.id, tenantId)
+    if (!result) {
       return response.forbidden({
         error: 'Forbidden',
-        message: 'You must be a tenant admin to view invitations',
+        message: 'You are not a member of this tenant',
+      })
+    }
+
+    // Check INVITATION_LIST permission (owner + admin)
+    if (!result.guard.can(ACTIONS.INVITATION_LIST)) {
+      return response.forbidden({
+        error: 'RbacDenied',
+        message: 'You do not have permission to view invitations',
+        deniedActions: [ACTIONS.INVITATION_LIST],
       })
     }
 
@@ -631,16 +704,21 @@ export default class TenantsController {
     const user = auth.user!
     const { id: tenantId, invitationId } = params
 
-    // Check if user is admin
-    const membership = await TenantMembership.query()
-      .where('userId', user.id)
-      .where('tenantId', tenantId)
-      .first()
-
-    if (!membership || !membership.isAdmin()) {
+    // Check membership and RBAC permission
+    const result = await this.getMembershipWithGuard(user.id, tenantId)
+    if (!result) {
       return response.forbidden({
         error: 'Forbidden',
-        message: 'You must be a tenant admin to cancel invitations',
+        message: 'You are not a member of this tenant',
+      })
+    }
+
+    // Check INVITATION_CANCEL permission (owner + admin)
+    if (!result.guard.can(ACTIONS.INVITATION_CANCEL)) {
+      return response.forbidden({
+        error: 'RbacDenied',
+        message: 'You do not have permission to cancel invitations',
+        deniedActions: [ACTIONS.INVITATION_CANCEL],
       })
     }
 

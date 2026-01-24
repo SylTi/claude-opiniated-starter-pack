@@ -5,3 +5,4 @@ export * from "./types/auth.js";
 export * from "./types/tenant.js";
 export * from "./types/payment.js";
 export * from "./types/discount.js";
+export * from "./types/rbac.js";
