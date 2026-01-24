@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { api, ApiError, adminBillingApi } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -22,13 +22,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -37,19 +30,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import {
-  type AdminUserDTO,
-  type SubscriptionTierDTO,
-} from "@saas/shared";
+import { type AdminUserDTO } from "@saas/shared";
 
 export default function AdminUsersPage(): React.ReactElement {
   const router = useRouter();
   const { user } = useAuth();
   const [users, setUsers] = useState<AdminUserDTO[]>([]);
-  const [tiers, setTiers] = useState<SubscriptionTierDTO[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; userId: number | null; email: string }>({
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    userId: number | null;
+    email: string;
+  }>({
     open: false,
     userId: null,
     email: "",
@@ -57,14 +50,12 @@ export default function AdminUsersPage(): React.ReactElement {
 
   const fetchData = useCallback(async (): Promise<void> => {
     try {
-      const [usersResponse, tiersResponse] = await Promise.all([
-        api.get<AdminUserDTO[]>("/api/v1/admin/users"),
-        adminBillingApi.listTiers(),
-      ]);
+      const usersResponse = await api.get<AdminUserDTO[]>(
+        "/api/v1/admin/users",
+      );
       if (usersResponse.data) {
         setUsers(usersResponse.data);
       }
-      setTiers(tiersResponse);
     } catch (error) {
       if (error instanceof ApiError) {
         toast.error(error.message);
@@ -145,36 +136,12 @@ export default function AdminUsersPage(): React.ReactElement {
     }
   }
 
-  async function handleUpdateTier(
-    userId: number,
-    tier: string,
-  ): Promise<void> {
-    setActionLoading(userId);
-    try {
-      await api.put(`/api/v1/admin/users/${userId}/tier`, {
-        subscriptionTier: tier,
-      });
-      toast.success("Subscription tier updated successfully");
-      fetchData();
-    } catch (error) {
-      if (error instanceof ApiError) {
-        toast.error(error.message);
-      } else {
-        toast.error("Failed to update subscription tier");
-      }
-    } finally {
-      setActionLoading(null);
-    }
-  }
-
-  function getTierBadgeVariant(level: number): "default" | "secondary" | "outline" {
-    if (level >= 2) return "default";
-    if (level >= 1) return "secondary";
+  function getTenantTypeBadgeVariant(
+    type: string | null,
+  ): "default" | "secondary" | "outline" {
+    if (type === "team") return "default";
+    if (type === "personal") return "secondary";
     return "outline";
-  }
-
-  function getTierBySlug(slug: string): SubscriptionTierDTO | undefined {
-    return tiers.find((tier) => tier.slug === slug);
   }
 
   function formatDate(dateString: string | null): string {
@@ -188,8 +155,6 @@ export default function AdminUsersPage(): React.ReactElement {
     });
   }
 
-  const tierOptions = [...tiers].sort((a, b) => a.level - b.level);
-
   if (isLoading) {
     return (
       <div className="animate-pulse space-y-4">
@@ -201,7 +166,7 @@ export default function AdminUsersPage(): React.ReactElement {
 
   return (
     <>
-    <Card>
+      <Card>
         <CardHeader>
           <CardTitle>User Management</CardTitle>
           <CardDescription>
@@ -217,7 +182,7 @@ export default function AdminUsersPage(): React.ReactElement {
                 <TableHead>Email</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead>Subscription</TableHead>
+                <TableHead>Current Tenant</TableHead>
                 <TableHead>Email Status</TableHead>
                 <TableHead>MFA</TableHead>
                 <TableHead>Created</TableHead>
@@ -248,45 +213,21 @@ export default function AdminUsersPage(): React.ReactElement {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Select
-                        value={u.subscriptionTier}
-                        onValueChange={(value: string) =>
-                          handleUpdateTier(u.id, value)
-                        }
-                        disabled={actionLoading === u.id || tierOptions.length === 0}
-                      >
-                        <SelectTrigger className="w-[140px]">
-                          <SelectValue>
-                            {(() => {
-                              const tier = getTierBySlug(u.subscriptionTier);
-                              const tierLabel = tier?.name ?? u.subscriptionTier;
-                              const tierLevel = tier?.level ?? 0;
-                              return (
-                                <Badge variant={getTierBadgeVariant(tierLevel)}>
-                                  {tierLabel}
-                                </Badge>
-                              );
-                            })()}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {tierOptions.length > 0 ? (
-                            tierOptions.map((tier) => (
-                              <SelectItem key={tier.id} value={tier.slug}>
-                                <Badge variant={getTierBadgeVariant(tier.level)}>
-                                  {tier.name}
-                                </Badge>
-                              </SelectItem>
-                            ))
-                          ) : (
-                            <SelectItem value={u.subscriptionTier}>
-                              <Badge variant={getTierBadgeVariant(0)}>
-                                {u.subscriptionTier}
-                              </Badge>
-                            </SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
+                      {u.currentTenantName ? (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm">{u.currentTenantName}</span>
+                          <Badge
+                            variant={getTenantTypeBadgeVariant(
+                              u.currentTenantType,
+                            )}
+                            className="w-fit text-xs"
+                          >
+                            {u.currentTenantType || "none"}
+                          </Badge>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {u.emailVerified ? (
@@ -348,26 +289,34 @@ export default function AdminUsersPage(): React.ReactElement {
             </TableBody>
           </Table>
         </CardContent>
-    </Card>
+      </Card>
 
-    <Dialog open={deleteDialog.open} onOpenChange={(open) => !open && closeDeleteDialog()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Delete User</DialogTitle>
-          <DialogDescription>
-            Are you sure you want to delete user {deleteDialog.email}? This action cannot be undone.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={closeDeleteDialog}>
-            Cancel
-          </Button>
-          <Button variant="destructive" onClick={handleConfirmDelete} disabled={actionLoading !== null}>
-            {actionLoading !== null ? "Deleting..." : "Delete"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <Dialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => !open && closeDeleteDialog()}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete User</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete user {deleteDialog.email}? This
+              action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeDeleteDialog}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={actionLoading !== null}
+            >
+              {actionLoading !== null ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

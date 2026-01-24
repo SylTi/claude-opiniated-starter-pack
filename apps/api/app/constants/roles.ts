@@ -12,16 +12,16 @@ export const USER_ROLES = {
 
 export type UserRole = (typeof USER_ROLES)[keyof typeof USER_ROLES]
 
-// Team member roles
-export const TEAM_ROLES = {
+// Tenant member roles
+export const TENANT_ROLES = {
   OWNER: 'owner',
   ADMIN: 'admin',
   MEMBER: 'member',
 } as const
 
-export type TeamRole = (typeof TEAM_ROLES)[keyof typeof TEAM_ROLES]
+export type TenantRole = (typeof TENANT_ROLES)[keyof typeof TENANT_ROLES]
 
-// Invitation roles (subset of team roles)
+// Invitation roles (subset of tenant roles)
 export const INVITATION_ROLES = {
   ADMIN: 'admin',
   MEMBER: 'member',

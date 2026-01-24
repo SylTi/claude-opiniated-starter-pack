@@ -2,6 +2,7 @@ import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, beforeSave } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import User from '#models/user'
+import Tenant from '#models/tenant'
 
 export default class Coupon extends BaseModel {
   static table = 'coupons'
@@ -34,8 +35,13 @@ export default class Coupon extends BaseModel {
   @column()
   declare isActive: boolean
 
+  // WHO redeemed the coupon (audit trail)
   @column()
   declare redeemedByUserId: number | null
+
+  // Which tenant received the credit (billing context)
+  @column()
+  declare redeemedForTenantId: number | null
 
   @column.dateTime()
   declare redeemedAt: DateTime | null
@@ -46,8 +52,13 @@ export default class Coupon extends BaseModel {
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
 
+  // WHO redeemed it (audit trail)
   @belongsTo(() => User, { foreignKey: 'redeemedByUserId' })
   declare redeemedByUser: BelongsTo<typeof User>
+
+  // Which tenant got the credit (billing context)
+  @belongsTo(() => Tenant, { foreignKey: 'redeemedForTenantId' })
+  declare redeemedForTenant: BelongsTo<typeof Tenant>
 
   isExpired(): boolean {
     if (!this.expiresAt) return false
@@ -55,7 +66,7 @@ export default class Coupon extends BaseModel {
   }
 
   isRedeemed(): boolean {
-    return this.redeemedByUserId !== null
+    return this.redeemedForTenantId !== null
   }
 
   isRedeemable(): boolean {
@@ -65,33 +76,33 @@ export default class Coupon extends BaseModel {
     return true
   }
 
-  async redeem(userId: number): Promise<void> {
+  /**
+   * Mark coupon as redeemed
+   * @param tenantId - Which tenant received the credit (billing context)
+   * @param userId - Who performed the redemption (audit trail)
+   */
+  async redeem(tenantId: number, userId: number): Promise<void> {
+    this.redeemedForTenantId = tenantId
     this.redeemedByUserId = userId
     this.redeemedAt = DateTime.now()
     this.isActive = false
     await this.save()
   }
 
-  async redeemForUser(userId: number): Promise<number> {
+  /**
+   * Redeem coupon for a tenant (tenant is the billing unit)
+   * @param tenantId - Which tenant receives the credit
+   * @param userId - Who is performing the redemption (audit)
+   * @returns New tenant balance
+   */
+  async redeemForTenant(tenantId: number, userId: number): Promise<number> {
     if (!this.isRedeemable()) {
       throw new Error('Coupon is not redeemable')
     }
 
-    const user = await User.findOrFail(userId)
-    await this.redeem(userId)
-    const newBalance = await user.addCredit(this.creditAmount, this.currency)
-    return newBalance
-  }
-
-  async redeemForTeam(teamId: number, userId: number): Promise<number> {
-    if (!this.isRedeemable()) {
-      throw new Error('Coupon is not redeemable')
-    }
-
-    const { default: Team } = await import('#models/team')
-    const team = await Team.findOrFail(teamId)
-    await this.redeem(userId)
-    const newBalance = await team.addCredit(this.creditAmount, this.currency)
+    const tenant = await Tenant.findOrFail(tenantId)
+    await this.redeem(tenantId, userId)
+    const newBalance = await tenant.addCredit(this.creditAmount, this.currency)
     return newBalance
   }
 

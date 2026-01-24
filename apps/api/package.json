@@ -14,7 +14,10 @@
     "test:coverage:functional": "c8 node ace test functional",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:migration": "node ace migration:run",
+    "db:reset": "node ace migration:fresh",
+    "db:seed": "node ace db:seed --files=database/seeders/database_seeder.ts"
   },
   "imports": {
     "#controllers/*": "./app/controllers/*.js",

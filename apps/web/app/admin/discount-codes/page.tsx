@@ -47,7 +47,7 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
     currency: "usd",
     minAmount: "",
     maxUses: "",
-    maxUsesPerUser: "",
+    maxUsesPerTenant: "",
     expiresAt: "",
     isActive: true,
   });
@@ -78,7 +78,7 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
       currency: "usd",
       minAmount: "",
       maxUses: "",
-      maxUsesPerUser: "",
+      maxUsesPerTenant: "",
       expiresAt: "",
       isActive: true,
     });
@@ -100,7 +100,9 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
       currency: code.currency || "usd",
       minAmount: code.minAmount ? String(code.minAmount) : "",
       maxUses: code.maxUses ? String(code.maxUses) : "",
-      maxUsesPerUser: code.maxUsesPerUser ? String(code.maxUsesPerUser) : "",
+      maxUsesPerTenant: code.maxUsesPerTenant
+        ? String(code.maxUsesPerTenant)
+        : "",
       expiresAt: code.expiresAt ? code.expiresAt.split("T")[0] : "",
       isActive: code.isActive,
     });
@@ -115,10 +117,13 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
         description: formData.description || undefined,
         discountType: formData.discountType,
         discountValue: Number(formData.discountValue),
-        currency: formData.discountType === "fixed" ? formData.currency : undefined,
+        currency:
+          formData.discountType === "fixed" ? formData.currency : undefined,
         minAmount: formData.minAmount ? Number(formData.minAmount) : undefined,
         maxUses: formData.maxUses ? Number(formData.maxUses) : undefined,
-        maxUsesPerUser: formData.maxUsesPerUser ? Number(formData.maxUsesPerUser) : undefined,
+        maxUsesPerTenant: formData.maxUsesPerTenant
+          ? Number(formData.maxUsesPerTenant)
+          : undefined,
         expiresAt: formData.expiresAt || undefined,
         isActive: formData.isActive,
       };
@@ -202,7 +207,9 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Discount Codes</h1>
-          <p className="text-gray-500">Manage discount codes for subscriptions</p>
+          <p className="text-gray-500">
+            Manage discount codes for subscriptions
+          </p>
         </div>
         <Button onClick={openCreateDialog}>
           <Plus className="h-4 w-4 mr-2" />
@@ -310,7 +317,10 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
                 id="code"
                 value={formData.code}
                 onChange={(e) =>
-                  setFormData({ ...formData, code: e.target.value.toUpperCase() })
+                  setFormData({
+                    ...formData,
+                    code: e.target.value.toUpperCase(),
+                  })
                 }
                 placeholder="e.g., SUMMER20"
               />
@@ -346,7 +356,9 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
               </div>
               <div>
                 <Label htmlFor="discountValue">
-                  {formData.discountType === "percent" ? "Percentage (%)" : "Amount (cents)"}
+                  {formData.discountType === "percent"
+                    ? "Percentage (%)"
+                    : "Amount (cents)"}
                 </Label>
                 <Input
                   id="discountValue"
@@ -355,7 +367,9 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
                   onChange={(e) =>
                     setFormData({ ...formData, discountValue: e.target.value })
                   }
-                  placeholder={formData.discountType === "percent" ? "20" : "1000"}
+                  placeholder={
+                    formData.discountType === "percent" ? "20" : "1000"
+                  }
                 />
               </div>
             </div>
@@ -364,7 +378,9 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
                 <Label htmlFor="currency">Currency</Label>
                 <Select
                   value={formData.currency}
-                  onValueChange={(v) => setFormData({ ...formData, currency: v })}
+                  onValueChange={(v) =>
+                    setFormData({ ...formData, currency: v })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -390,13 +406,16 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
                 />
               </div>
               <div>
-                <Label htmlFor="maxUsesPerUser">Max Uses (per user)</Label>
+                <Label htmlFor="maxUsesPerTenant">Max Uses (per tenant)</Label>
                 <Input
-                  id="maxUsesPerUser"
+                  id="maxUsesPerTenant"
                   type="number"
-                  value={formData.maxUsesPerUser}
+                  value={formData.maxUsesPerTenant}
                   onChange={(e) =>
-                    setFormData({ ...formData, maxUsesPerUser: e.target.value })
+                    setFormData({
+                      ...formData,
+                      maxUsesPerTenant: e.target.value,
+                    })
                   }
                   placeholder="Unlimited"
                 />
@@ -419,7 +438,9 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
               Cancel
             </Button>
             <Button onClick={handleSubmit} disabled={actionLoading === -1}>
-              {actionLoading === -1 && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {actionLoading === -1 && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
               {editingCode ? "Update" : "Create"}
             </Button>
           </DialogFooter>

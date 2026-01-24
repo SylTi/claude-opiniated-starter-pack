@@ -10,14 +10,14 @@ function getApiUrl(): string {
   const url = process.env.NEXT_PUBLIC_API_URL
 
   if (!url) {
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV === "production") {
       throw new Error(
-        'Configuration Error: NEXT_PUBLIC_API_URL is required in production. ' +
-        'Set this environment variable before deploying.'
+        "Configuration Error: NEXT_PUBLIC_API_URL is required in production. " +
+          "Set this environment variable before deploying.",
       )
     }
     // Safe fallback for development only
-    return 'http://localhost:3333'
+    return "http://localhost:3333"
   }
 
   return url
@@ -29,7 +29,7 @@ const API_BASE_URL = getApiUrl()
 export { API_BASE_URL }
 
 function getXsrfToken(): string | null {
-  if (typeof document === 'undefined') {
+  if (typeof document === "undefined") {
     return null
   }
   const match = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/)
@@ -38,17 +38,17 @@ function getXsrfToken(): string | null {
 
 async function ensureXsrfToken(): Promise<string | null> {
   const existing = getXsrfToken()
-  if (existing || typeof window === 'undefined') {
+  if (existing || typeof window === "undefined") {
     return existing
   }
 
   try {
     await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'Accept': 'application/json',
+        Accept: "application/json",
       },
-      credentials: 'include',
+      credentials: "include",
     })
   } catch {
     // Ignore: token cookie may still be set even on 401.
@@ -58,10 +58,10 @@ async function ensureXsrfToken(): Promise<string | null> {
 }
 
 export interface ApiResponse<T> {
-  data?: T
-  message?: string
-  error?: string
-  errors?: Array<{ field: string; message: string; rule: string }>
+  data?: T;
+  message?: string;
+  error?: string;
+  errors?: Array<{ field: string; message: string; rule: string }>;
 }
 
 export class ApiError extends Error {
@@ -69,10 +69,10 @@ export class ApiError extends Error {
     public statusCode: number,
     public error: string,
     message: string,
-    public errors?: Array<{ field: string; message: string; rule: string }>
+    public errors?: Array<{ field: string; message: string; rule: string }>,
   ) {
     super(message)
-    this.name = 'ApiError'
+    this.name = "ApiError"
   }
 }
 
@@ -82,9 +82,9 @@ async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
   if (!response.ok) {
     throw new ApiError(
       response.status,
-      data.error || 'UnknownError',
-      data.message || 'An error occurred',
-      data.errors
+      data.error || "UnknownError",
+      data.message || "An error occurred",
+      data.errors,
     )
   }
 
@@ -97,12 +97,12 @@ export const api = {
    */
   async get<T>(endpoint: string): Promise<ApiResponse<T>> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        "Content-Type": "application/json",
+        Accept: "application/json",
       },
-      credentials: 'include',
+      credentials: "include",
     })
 
     return handleResponse<T>(response)
@@ -114,13 +114,13 @@ export const api = {
   async post<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
     const xsrfToken = await ensureXsrfToken()
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        ...(xsrfToken ? { 'X-XSRF-TOKEN': xsrfToken } : {}),
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {}),
       },
-      credentials: 'include',
+      credentials: "include",
       body: body ? JSON.stringify(body) : undefined,
     })
 
@@ -133,13 +133,13 @@ export const api = {
   async put<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
     const xsrfToken = await ensureXsrfToken()
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'PUT',
+      method: "PUT",
       headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        ...(xsrfToken ? { 'X-XSRF-TOKEN': xsrfToken } : {}),
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {}),
       },
-      credentials: 'include',
+      credentials: "include",
       body: body ? JSON.stringify(body) : undefined,
     })
 
@@ -152,13 +152,13 @@ export const api = {
   async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
     const xsrfToken = await ensureXsrfToken()
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'DELETE',
+      method: "DELETE",
       headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        ...(xsrfToken ? { 'X-XSRF-TOKEN': xsrfToken } : {}),
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {}),
       },
-      credentials: 'include',
+      credentials: "include",
     })
 
     return handleResponse<T>(response)
@@ -178,7 +178,7 @@ import type {
   ValidateDiscountCodeResponse,
   RedeemCouponResponse,
   BalanceDTO,
-} from '@saas/shared'
+} from "@saas/shared"
 
 /**
  * Billing API client
@@ -188,7 +188,7 @@ export const billingApi = {
    * Get all billing tiers with prices (public)
    */
   async getTiers(): Promise<BillingTierDTO[]> {
-    const response = await api.get<BillingTierDTO[]>('/api/v1/billing/tiers')
+    const response = await api.get<BillingTierDTO[]>("/api/v1/billing/tiers")
     return response.data || []
   },
 
@@ -196,14 +196,17 @@ export const billingApi = {
    * Create a checkout session
    */
   async createCheckout(params: {
-    priceId: string
-    successUrl: string
-    cancelUrl: string
-    discountCode?: string
+    priceId: string;
+    successUrl: string;
+    cancelUrl: string;
+    discountCode?: string;
   }): Promise<CheckoutSessionDTO> {
-    const response = await api.post<CheckoutSessionDTO>('/api/v1/billing/checkout', params)
+    const response = await api.post<CheckoutSessionDTO>(
+      "/api/v1/billing/checkout",
+      params,
+    )
     if (!response.data) {
-      throw new Error('Failed to create checkout session')
+      throw new Error("Failed to create checkout session")
     }
     return response.data
   },
@@ -212,9 +215,12 @@ export const billingApi = {
    * Create a customer portal session
    */
   async createPortal(returnUrl: string): Promise<CustomerPortalDTO> {
-    const response = await api.post<CustomerPortalDTO>('/api/v1/billing/portal', { returnUrl })
+    const response = await api.post<CustomerPortalDTO>(
+      "/api/v1/billing/portal",
+      { returnUrl },
+    )
     if (!response.data) {
-      throw new Error('Failed to create portal session')
+      throw new Error("Failed to create portal session")
     }
     return response.data
   },
@@ -223,9 +229,11 @@ export const billingApi = {
    * Get current subscription status
    */
   async getSubscription(): Promise<BillingSubscriptionDTO> {
-    const response = await api.get<BillingSubscriptionDTO>('/api/v1/billing/subscription')
+    const response = await api.get<BillingSubscriptionDTO>(
+      "/api/v1/billing/subscription",
+    )
     if (!response.data) {
-      throw new Error('Failed to get subscription')
+      throw new Error("Failed to get subscription")
     }
     return response.data
   },
@@ -234,16 +242,22 @@ export const billingApi = {
    * Cancel current subscription
    */
   async cancelSubscription(): Promise<void> {
-    await api.post('/api/v1/billing/cancel')
+    await api.post("/api/v1/billing/cancel")
   },
 
   /**
    * Validate a discount code
    */
-  async validateDiscountCode(code: string, priceId: number): Promise<ValidateDiscountCodeResponse> {
-    const response = await api.post<ValidateDiscountCodeResponse>('/api/v1/billing/validate-discount-code', { code, priceId })
+  async validateDiscountCode(
+    code: string,
+    priceId: number,
+  ): Promise<ValidateDiscountCodeResponse> {
+    const response = await api.post<ValidateDiscountCodeResponse>(
+      "/api/v1/billing/validate-discount-code",
+      { code, priceId },
+    )
     if (!response.data) {
-      throw new Error('Failed to validate discount code')
+      throw new Error("Failed to validate discount code")
     }
     return response.data
   },
@@ -251,10 +265,16 @@ export const billingApi = {
   /**
    * Redeem a coupon
    */
-  async redeemCoupon(code: string, teamId?: number): Promise<RedeemCouponResponse> {
-    const response = await api.post<RedeemCouponResponse>('/api/v1/billing/redeem-coupon', { code, teamId })
+  async redeemCoupon(
+    code: string,
+    teamId?: number,
+  ): Promise<RedeemCouponResponse> {
+    const response = await api.post<RedeemCouponResponse>(
+      "/api/v1/billing/redeem-coupon",
+      { code, teamId },
+    )
     if (!response.data) {
-      throw new Error('Failed to redeem coupon')
+      throw new Error("Failed to redeem coupon")
     }
     return response.data
   },
@@ -263,10 +283,12 @@ export const billingApi = {
    * Get current balance
    */
   async getBalance(teamId?: number): Promise<BalanceDTO> {
-    const endpoint = teamId ? `/api/v1/billing/balance?teamId=${teamId}` : '/api/v1/billing/balance'
+    const endpoint = teamId
+      ? `/api/v1/billing/balance?teamId=${teamId}`
+      : "/api/v1/billing/balance"
     const response = await api.get<BalanceDTO>(endpoint)
     if (!response.data) {
-      throw new Error('Failed to get balance')
+      throw new Error("Failed to get balance")
     }
     return response.data
   },
@@ -280,7 +302,9 @@ export const adminBillingApi = {
    * List all subscription tiers
    */
   async listTiers(): Promise<SubscriptionTierDTO[]> {
-    const response = await api.get<SubscriptionTierDTO[]>('/api/v1/admin/tiers')
+    const response = await api.get<SubscriptionTierDTO[]>(
+      "/api/v1/admin/tiers",
+    )
     return response.data || []
   },
 
@@ -288,18 +312,21 @@ export const adminBillingApi = {
    * Create a new tier
    */
   async createTier(data: {
-    name: string
-    slug: string
-    level: number
-    features?: Record<string, unknown>
-    maxTeamMembers?: number
-    priceMonthly?: number
-    yearlyDiscountPercent?: number
-    isActive?: boolean
+    name: string;
+    slug: string;
+    level: number;
+    features?: Record<string, unknown>;
+    maxTeamMembers?: number;
+    priceMonthly?: number;
+    yearlyDiscountPercent?: number;
+    isActive?: boolean;
   }): Promise<SubscriptionTierDTO> {
-    const response = await api.post<SubscriptionTierDTO>('/api/v1/admin/tiers', data)
+    const response = await api.post<SubscriptionTierDTO>(
+      "/api/v1/admin/tiers",
+      data,
+    )
     if (!response.data) {
-      throw new Error('Failed to create tier')
+      throw new Error("Failed to create tier")
     }
     return response.data
   },
@@ -310,18 +337,21 @@ export const adminBillingApi = {
   async updateTier(
     id: number,
     data: {
-      name?: string
-      level?: number
-      features?: Record<string, unknown> | null
-      maxTeamMembers?: number | null
-      priceMonthly?: number | null
-      yearlyDiscountPercent?: number | null
-      isActive?: boolean
-    }
+      name?: string;
+      level?: number;
+      features?: Record<string, unknown> | null;
+      maxTeamMembers?: number | null;
+      priceMonthly?: number | null;
+      yearlyDiscountPercent?: number | null;
+      isActive?: boolean;
+    },
   ): Promise<SubscriptionTierDTO> {
-    const response = await api.put<SubscriptionTierDTO>(`/api/v1/admin/tiers/${id}`, data)
+    const response = await api.put<SubscriptionTierDTO>(
+      `/api/v1/admin/tiers/${id}`,
+      data,
+    )
     if (!response.data) {
-      throw new Error('Failed to update tier')
+      throw new Error("Failed to update tier")
     }
     return response.data
   },
@@ -337,7 +367,7 @@ export const adminBillingApi = {
    * List all prices
    */
   async listPrices(): Promise<PriceDTO[]> {
-    const response = await api.get<PriceDTO[]>('/api/v1/admin/prices')
+    const response = await api.get<PriceDTO[]>("/api/v1/admin/prices")
     return response.data || []
   },
 
@@ -345,17 +375,17 @@ export const adminBillingApi = {
    * Create a new price
    */
   async createPrice(data: {
-    productId: number
-    providerPriceId: string
-    interval: 'month' | 'year'
-    currency: string
-    unitAmount: number
-    taxBehavior?: 'inclusive' | 'exclusive'
-    isActive?: boolean
+    productId: number;
+    providerPriceId: string;
+    interval: "month" | "year";
+    currency: string;
+    unitAmount: number;
+    taxBehavior?: "inclusive" | "exclusive";
+    isActive?: boolean;
   }): Promise<PriceDTO> {
-    const response = await api.post<PriceDTO>('/api/v1/admin/prices', data)
+    const response = await api.post<PriceDTO>("/api/v1/admin/prices", data)
     if (!response.data) {
-      throw new Error('Failed to create price')
+      throw new Error("Failed to create price")
     }
     return response.data
   },
@@ -366,63 +396,200 @@ export const adminBillingApi = {
   async updatePrice(
     id: number,
     data: {
-      isActive?: boolean
-    }
+      isActive?: boolean;
+    },
   ): Promise<PriceDTO> {
-    const response = await api.put<PriceDTO>(`/api/v1/admin/prices/${id}`, data)
+    const response = await api.put<PriceDTO>(
+      `/api/v1/admin/prices/${id}`,
+      data,
+    )
     if (!response.data) {
-      throw new Error('Failed to update price')
+      throw new Error("Failed to update price")
     }
     return response.data
   },
+
+  /**
+   * Delete a price
+   */
+  async deletePrice(id: number): Promise<void> {
+    await api.delete(`/api/v1/admin/prices/${id}`)
+  },
+
+  /**
+   * List all products (Stripe products linked to tiers)
+   */
+  async listProducts(): Promise<StripeProductDTO[]> {
+    const response = await api.get<StripeProductDTO[]>(
+      "/api/v1/admin/products",
+    )
+    return response.data || []
+  },
+
+  /**
+   * Create a product (link tier to Stripe product)
+   */
+  async createProduct(data: {
+    tierId: number;
+    provider: string;
+    providerProductId: string;
+  }): Promise<StripeProductDTO> {
+    const response = await api.post<StripeProductDTO>(
+      "/api/v1/admin/products",
+      data,
+    )
+    if (!response.data) {
+      throw new Error("Failed to create product")
+    }
+    return response.data
+  },
+
+  /**
+   * Update a product
+   */
+  async updateProduct(
+    id: number,
+    data: {
+      providerProductId?: string;
+    },
+  ): Promise<StripeProductDTO> {
+    const response = await api.put<StripeProductDTO>(
+      `/api/v1/admin/products/${id}`,
+      data,
+    )
+    if (!response.data) {
+      throw new Error("Failed to update product")
+    }
+    return response.data
+  },
+
+  /**
+   * Delete a product
+   */
+  async deleteProduct(id: number): Promise<void> {
+    await api.delete(`/api/v1/admin/products/${id}`)
+  },
 }
+
+/**
+ * Stripe Product DTO for admin management
+ */
+export interface StripeProductDTO {
+  id: number;
+  tierId: number;
+  provider: string;
+  providerProductId: string;
+  tier?: {
+    id: number;
+    name: string;
+    slug: string;
+  };
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+/**
+ * Stripe Price DTO for admin management (extended with provider info)
+ */
+export interface StripePriceDTO {
+  id: number;
+  productId: number;
+  provider: string;
+  providerPriceId: string;
+  interval: "month" | "year";
+  currency: string;
+  unitAmount: number;
+  taxBehavior: "inclusive" | "exclusive";
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+/**
+ * Admin API for managing teams
+ */
+export const adminTeamsApi = {
+  /**
+   * List all teams with admin details
+   */
+  async list(): Promise<AdminTeamDTO[]> {
+    const response = await api.get<AdminTeamDTO[]>("/api/v1/admin/teams")
+    return response.data || []
+  },
+
+  /**
+   * Update a team's subscription tier
+   */
+  async updateTier(
+    id: number,
+    data: { subscriptionTier: string },
+  ): Promise<void> {
+    await api.put(`/api/v1/admin/teams/${id}/tier`, data)
+  },
+}
+
+// Import admin team type
+import type { AdminTeamDTO } from "@saas/shared"
 
 /**
  * Admin API for managing discount codes
  */
 export const adminDiscountCodesApi = {
   async list(): Promise<DiscountCodeDTO[]> {
-    const response = await api.get<DiscountCodeDTO[]>('/api/v1/admin/discount-codes')
+    const response = await api.get<DiscountCodeDTO[]>(
+      "/api/v1/admin/discount-codes",
+    )
     return response.data || []
   },
 
   async get(id: number): Promise<DiscountCodeDTO> {
-    const response = await api.get<DiscountCodeDTO>(`/api/v1/admin/discount-codes/${id}`)
-    if (!response.data) throw new Error('Failed to get discount code')
+    const response = await api.get<DiscountCodeDTO>(
+      `/api/v1/admin/discount-codes/${id}`,
+    )
+    if (!response.data) throw new Error("Failed to get discount code")
     return response.data
   },
 
   async create(data: {
-    code: string
-    description?: string
-    discountType: 'percent' | 'fixed'
-    discountValue: number
-    currency?: string
-    minAmount?: number
-    maxUses?: number
-    maxUsesPerUser?: number
-    expiresAt?: string
-    isActive?: boolean
+    code: string;
+    description?: string;
+    discountType: "percent" | "fixed";
+    discountValue: number;
+    currency?: string;
+    minAmount?: number;
+    maxUses?: number;
+    maxUsesPerUser?: number;
+    expiresAt?: string;
+    isActive?: boolean;
   }): Promise<DiscountCodeDTO> {
-    const response = await api.post<DiscountCodeDTO>('/api/v1/admin/discount-codes', data)
-    if (!response.data) throw new Error('Failed to create discount code')
+    const response = await api.post<DiscountCodeDTO>(
+      "/api/v1/admin/discount-codes",
+      data,
+    )
+    if (!response.data) throw new Error("Failed to create discount code")
     return response.data
   },
 
-  async update(id: number, data: Partial<{
-    code: string
-    description: string | null
-    discountType: 'percent' | 'fixed'
-    discountValue: number
-    currency: string | null
-    minAmount: number | null
-    maxUses: number | null
-    maxUsesPerUser: number | null
-    expiresAt: string | null
-    isActive: boolean
-  }>): Promise<DiscountCodeDTO> {
-    const response = await api.put<DiscountCodeDTO>(`/api/v1/admin/discount-codes/${id}`, data)
-    if (!response.data) throw new Error('Failed to update discount code')
+  async update(
+    id: number,
+    data: Partial<{
+      code: string;
+      description: string | null;
+      discountType: "percent" | "fixed";
+      discountValue: number;
+      currency: string | null;
+      minAmount: number | null;
+      maxUses: number | null;
+      maxUsesPerUser: number | null;
+      expiresAt: string | null;
+      isActive: boolean;
+    }>,
+  ): Promise<DiscountCodeDTO> {
+    const response = await api.put<DiscountCodeDTO>(
+      `/api/v1/admin/discount-codes/${id}`,
+      data,
+    )
+    if (!response.data) throw new Error("Failed to update discount code")
     return response.data
   },
 
@@ -436,39 +603,45 @@ export const adminDiscountCodesApi = {
  */
 export const adminCouponsApi = {
   async list(): Promise<CouponDTO[]> {
-    const response = await api.get<CouponDTO[]>('/api/v1/admin/coupons')
+    const response = await api.get<CouponDTO[]>("/api/v1/admin/coupons")
     return response.data || []
   },
 
   async get(id: number): Promise<CouponDTO> {
     const response = await api.get<CouponDTO>(`/api/v1/admin/coupons/${id}`)
-    if (!response.data) throw new Error('Failed to get coupon')
+    if (!response.data) throw new Error("Failed to get coupon")
     return response.data
   },
 
   async create(data: {
-    code: string
-    description?: string
-    creditAmount: number
-    currency?: string
-    expiresAt?: string
-    isActive?: boolean
+    code: string;
+    description?: string;
+    creditAmount: number;
+    currency?: string;
+    expiresAt?: string;
+    isActive?: boolean;
   }): Promise<CouponDTO> {
-    const response = await api.post<CouponDTO>('/api/v1/admin/coupons', data)
-    if (!response.data) throw new Error('Failed to create coupon')
+    const response = await api.post<CouponDTO>("/api/v1/admin/coupons", data)
+    if (!response.data) throw new Error("Failed to create coupon")
     return response.data
   },
 
-  async update(id: number, data: Partial<{
-    code: string
-    description: string | null
-    creditAmount: number
-    currency: string
-    expiresAt: string | null
-    isActive: boolean
-  }>): Promise<CouponDTO> {
-    const response = await api.put<CouponDTO>(`/api/v1/admin/coupons/${id}`, data)
-    if (!response.data) throw new Error('Failed to update coupon')
+  async update(
+    id: number,
+    data: Partial<{
+      code: string;
+      description: string | null;
+      creditAmount: number;
+      currency: string;
+      expiresAt: string | null;
+      isActive: boolean;
+    }>,
+  ): Promise<CouponDTO> {
+    const response = await api.put<CouponDTO>(
+      `/api/v1/admin/coupons/${id}`,
+      data,
+    )
+    if (!response.data) throw new Error("Failed to update coupon")
     return response.data
   },
 

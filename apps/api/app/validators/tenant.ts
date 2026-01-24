@@ -1,25 +1,25 @@
 import vine from '@vinejs/vine'
 
 /**
- * Validator for creating a team
+ * Validator for creating a tenant
  */
-export const createTeamValidator = vine.compile(
+export const createTenantValidator = vine.compile(
   vine.object({
     name: vine.string().trim().minLength(1).maxLength(100),
   })
 )
 
 /**
- * Validator for updating a team
+ * Validator for updating a tenant
  */
-export const updateTeamValidator = vine.compile(
+export const updateTenantValidator = vine.compile(
   vine.object({
     name: vine.string().trim().minLength(1).maxLength(100).optional(),
   })
 )
 
 /**
- * Validator for adding a member to a team
+ * Validator for adding a member to a tenant
  */
 export const addMemberValidator = vine.compile(
   vine.object({
@@ -29,7 +29,7 @@ export const addMemberValidator = vine.compile(
 )
 
 /**
- * Validator for updating a team member's role
+ * Validator for updating a tenant member's role
  */
 export const updateMemberRoleValidator = vine.compile(
   vine.object({
@@ -38,7 +38,7 @@ export const updateMemberRoleValidator = vine.compile(
 )
 
 /**
- * Validator for sending a team invitation
+ * Validator for sending a tenant invitation
  */
 export const sendInvitationValidator = vine.compile(
   vine.object({

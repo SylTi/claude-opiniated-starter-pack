@@ -23,7 +23,7 @@ const OAuthController = () => import('#controllers/oauth_controller')
 const AdminController = () => import('#controllers/admin_controller')
 const AdminTiersController = () => import('#controllers/admin_tiers_controller')
 const DashboardController = () => import('#controllers/dashboard_controller')
-const TeamsController = () => import('#controllers/teams_controller')
+const TenantsController = () => import('#controllers/tenants_controller')
 const PaymentController = () => import('#controllers/payment_controller')
 const WebhookController = () => import('#controllers/webhook_controller')
 const DiscountCodesController = () => import('#controllers/discount_codes_controller')
@@ -109,8 +109,8 @@ router
         router.post('/users/:id/unverify-email', [AdminController, 'unverifyUserEmail'])
         router.put('/users/:id/tier', [AdminController, 'updateUserTier'])
         router.delete('/users/:id', [AdminController, 'deleteUser'])
-        router.get('/teams', [AdminController, 'listTeams'])
-        router.put('/teams/:id/tier', [AdminController, 'updateTeamTier'])
+        router.get('/tenants', [AdminController, 'listTenants'])
+        router.put('/tenants/:id/tier', [AdminController, 'updateTenantTier'])
 
         // Subscription Tiers Management
         router.get('/tiers', [AdminTiersController, 'index'])
@@ -155,34 +155,34 @@ router
       .prefix('/dashboard')
       .use(middleware.auth())
 
-    // Teams - Protected routes
+    // Tenants - Protected routes
     router
       .group(() => {
-        router.get('/', [TeamsController, 'index'])
-        router.post('/', [TeamsController, 'store'])
-        router.get('/:id', [TeamsController, 'show'])
-        router.put('/:id', [TeamsController, 'update'])
-        router.post('/:id/switch', [TeamsController, 'switchTeam'])
-        router.post('/:id/members', [TeamsController, 'addMember'])
-        router.delete('/:id/members/:userId', [TeamsController, 'removeMember'])
-        router.post('/:id/leave', [TeamsController, 'leave'])
-        router.delete('/:id', [TeamsController, 'destroy'])
+        router.get('/', [TenantsController, 'index'])
+        router.post('/', [TenantsController, 'store'])
+        router.get('/:id', [TenantsController, 'show'])
+        router.put('/:id', [TenantsController, 'update'])
+        router.post('/:id/switch', [TenantsController, 'switchTenant'])
+        router.post('/:id/members', [TenantsController, 'addMember'])
+        router.delete('/:id/members/:userId', [TenantsController, 'removeMember'])
+        router.post('/:id/leave', [TenantsController, 'leave'])
+        router.delete('/:id', [TenantsController, 'destroy'])
         // Invitations
-        router.post('/:id/invitations', [TeamsController, 'sendInvitation'])
-        router.get('/:id/invitations', [TeamsController, 'listInvitations'])
-        router.delete('/:id/invitations/:invitationId', [TeamsController, 'cancelInvitation'])
+        router.post('/:id/invitations', [TenantsController, 'sendInvitation'])
+        router.get('/:id/invitations', [TenantsController, 'listInvitations'])
+        router.delete('/:id/invitations/:invitationId', [TenantsController, 'cancelInvitation'])
       })
-      .prefix('/teams')
+      .prefix('/tenants')
       .use(middleware.auth())
 
     // Invitations - Public route (get invitation details by token)
-    router.get('/invitations/:token', [TeamsController, 'getInvitationByToken'])
+    router.get('/invitations/:token', [TenantsController, 'getInvitationByToken'])
 
     // Invitations - Protected routes (accept/decline)
     router
       .group(() => {
-        router.post('/:token/accept', [TeamsController, 'acceptInvitation'])
-        router.post('/:token/decline', [TeamsController, 'declineInvitation'])
+        router.post('/:token/accept', [TenantsController, 'acceptInvitation'])
+        router.post('/:token/decline', [TenantsController, 'declineInvitation'])
       })
       .prefix('/invitations')
       .use(middleware.auth())

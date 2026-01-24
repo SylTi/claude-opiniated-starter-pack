@@ -2,8 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import PaymentService from '#services/payment_service'
 import DiscountCodeService from '#services/discount_code_service'
 import env from '#start/env'
-import type { SubscriberType } from '#models/subscription'
-import Team from '#models/team'
+import TenantMembership from '#models/tenant_membership'
 import DiscountCode from '#models/discount_code'
 import SubscriptionTier from '#models/subscription_tier'
 import Product from '#models/product'
@@ -71,27 +70,23 @@ export default class PaymentController {
   /**
    * Create checkout session for subscription
    * POST /api/v1/billing/checkout
+   * Tenant is the billing unit - no user-level subscriptions
    */
   async createCheckout({ request, response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
-    const { priceId, subscriberType, subscriberId, discountCode } =
-      await request.validateUsing(createCheckoutValidator)
+    const { priceId, tenantId, discountCode } = await request.validateUsing(createCheckoutValidator)
 
-    // Determine the subscriber
-    let finalSubscriberType: SubscriberType = 'user'
-    let finalSubscriberId: number = user.id
+    // Verify user can manage billing for this tenant
+    const membership = await TenantMembership.query()
+      .where('tenantId', tenantId)
+      .where('userId', user.id)
+      .first()
 
-    if (subscriberType === 'team' && subscriberId) {
-      // Verify user is team owner
-      const team = await Team.find(subscriberId)
-      if (!team || team.ownerId !== user.id) {
-        return response.forbidden({
-          error: 'Forbidden',
-          message: 'Only team owners can manage team billing',
-        })
-      }
-      finalSubscriberType = 'team'
-      finalSubscriberId = subscriberId
+    if (!membership || !membership.isAdmin()) {
+      return response.forbidden({
+        error: 'Forbidden',
+        message: 'Only tenant admins can manage billing',
+      })
     }
 
     // Validate discount code if provided
@@ -101,7 +96,7 @@ export default class PaymentController {
       const validationResult = await discountCodeService.validateCode(
         discountCode,
         priceId,
-        user.id
+        tenantId
       )
       if (!validationResult.valid) {
         return response.badRequest({
@@ -119,8 +114,7 @@ export default class PaymentController {
     try {
       const paymentService = new PaymentService()
       const result = await paymentService.createCheckoutSession(
-        finalSubscriberType,
-        finalSubscriberId,
+        tenantId,
         priceId,
         successUrl,
         cancelUrl
@@ -129,7 +123,12 @@ export default class PaymentController {
       // Record discount code usage if one was applied
       if (validatedDiscountCode) {
         const discountCodeService = new DiscountCodeService()
-        await discountCodeService.recordUsage(validatedDiscountCode.id, user.id, result.sessionId)
+        await discountCodeService.recordUsage(
+          validatedDiscountCode.id,
+          tenantId,
+          user.id,
+          result.sessionId
+        )
       }
 
       response.json({
@@ -152,24 +151,19 @@ export default class PaymentController {
    */
   async createPortal({ request, response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
-    const { returnUrl, subscriberType, subscriberId } =
-      await request.validateUsing(createPortalValidator)
+    const { returnUrl, tenantId } = await request.validateUsing(createPortalValidator)
 
-    // Determine the subscriber
-    let finalSubscriberType: SubscriberType = 'user'
-    let finalSubscriberId: number = user.id
+    // Verify user can manage billing for this tenant
+    const membership = await TenantMembership.query()
+      .where('tenantId', tenantId)
+      .where('userId', user.id)
+      .first()
 
-    if (subscriberType === 'team' && subscriberId) {
-      // Verify user is team owner
-      const team = await Team.find(subscriberId)
-      if (!team || team.ownerId !== user.id) {
-        return response.forbidden({
-          error: 'Forbidden',
-          message: 'Only team owners can manage team billing',
-        })
-      }
-      finalSubscriberType = 'team'
-      finalSubscriberId = subscriberId
+    if (!membership || !membership.isAdmin()) {
+      return response.forbidden({
+        error: 'Forbidden',
+        message: 'Only tenant admins can manage billing',
+      })
     }
 
     const frontendUrl = env.get('FRONTEND_URL', 'http://localhost:3000')
@@ -181,11 +175,7 @@ export default class PaymentController {
 
     try {
       const paymentService = new PaymentService()
-      const result = await paymentService.createCustomerPortalSession(
-        finalSubscriberType,
-        finalSubscriberId,
-        finalReturnUrl
-      )
+      const result = await paymentService.createCustomerPortalSession(tenantId, finalReturnUrl)
 
       response.json({
         data: {
@@ -206,37 +196,31 @@ export default class PaymentController {
    */
   async getSubscription({ request, response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
-    const data = await request.validateUsing(getSubscriptionValidator)
-    const subscriberType = (data.subscriberType ?? 'user') as SubscriberType
-    const subscriberId = data.subscriberId ?? user.id
+    const { tenantId } = await request.validateUsing(getSubscriptionValidator)
 
-    // Verify access if team
-    if (subscriberType === 'team') {
-      const team = await Team.find(subscriberId)
-      if (!team || team.ownerId !== user.id) {
-        return response.forbidden({
-          error: 'Forbidden',
-          message: 'Only team owners can view team billing',
-        })
-      }
-    } else if (subscriberId !== user.id) {
+    // Verify user is a member of the tenant
+    const membership = await TenantMembership.query()
+      .where('tenantId', tenantId)
+      .where('userId', user.id)
+      .first()
+
+    if (!membership) {
       return response.forbidden({
         error: 'Forbidden',
-        message: "Cannot view another user's billing",
+        message: 'Not a member of this tenant',
       })
     }
 
     const paymentService = new PaymentService()
-    const subscription = await paymentService.getCurrentSubscription(subscriberType, subscriberId)
-    const canManage = await paymentService.canManageBilling(subscriberType, subscriberId)
+    const subscription = await paymentService.getCurrentSubscription(tenantId)
+    const canManage = membership.isAdmin() && (await paymentService.canManageBilling(tenantId))
 
     let subscriptionData = null
     if (subscription) {
       await subscription.load('tier')
       subscriptionData = {
         id: subscription.id,
-        subscriberType: subscription.subscriberType,
-        subscriberId: subscription.subscriberId,
+        tenantId: subscription.tenantId,
         tier: {
           id: subscription.tier.id,
           slug: subscription.tier.slug,
@@ -273,32 +257,23 @@ export default class PaymentController {
    */
   async cancelSubscription({ request, response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
-    const { subscriberType, subscriberId } = await request.validateUsing(
-      cancelSubscriptionValidator
-    )
+    const { tenantId } = await request.validateUsing(cancelSubscriptionValidator)
 
-    // Determine the subscriber
-    let finalSubscriberType: SubscriberType = 'user'
-    let finalSubscriberId: number = user.id
+    // Verify user can manage billing for this tenant
+    const membership = await TenantMembership.query()
+      .where('tenantId', tenantId)
+      .where('userId', user.id)
+      .first()
 
-    if (subscriberType === 'team' && subscriberId) {
-      // Verify user is team owner
-      const team = await Team.find(subscriberId)
-      if (!team || team.ownerId !== user.id) {
-        return response.forbidden({
-          error: 'Forbidden',
-          message: 'Only team owners can cancel team subscription',
-        })
-      }
-      finalSubscriberType = 'team'
-      finalSubscriberId = subscriberId
+    if (!membership || !membership.isAdmin()) {
+      return response.forbidden({
+        error: 'Forbidden',
+        message: 'Only tenant admins can cancel subscriptions',
+      })
     }
 
     const paymentService = new PaymentService()
-    const subscription = await paymentService.getCurrentSubscription(
-      finalSubscriberType,
-      finalSubscriberId
-    )
+    const subscription = await paymentService.getCurrentSubscription(tenantId)
 
     if (!subscription) {
       return response.badRequest({

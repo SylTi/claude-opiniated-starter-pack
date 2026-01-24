@@ -68,7 +68,7 @@ interface TeamData {
 }
 
 function getRoleBadgeVariant(
-  role: string
+  role: string,
 ): "default" | "secondary" | "destructive" | "outline" {
   switch (role) {
     case "owner":
@@ -91,16 +91,16 @@ export default function TeamManagementPage(): React.ReactElement {
   const [isSending, setIsSending] = useState(false);
 
   const fetchTeamData = useCallback(async (): Promise<void> => {
-    if (!user?.currentTeamId) {
+    if (!user?.currentTenantId) {
       setIsLoading(false);
       return;
     }
 
     try {
       const [teamResponse, invitationsResponse] = await Promise.all([
-        api.get<TeamData>(`/api/v1/teams/${user.currentTeamId}`),
+        api.get<TeamData>(`/api/v1/teams/${user.currentTenantId}`),
         api.get<TeamInvitationDTO[]>(
-          `/api/v1/teams/${user.currentTeamId}/invitations`
+          `/api/v1/teams/${user.currentTenantId}/invitations`,
         ),
       ]);
 
@@ -128,7 +128,7 @@ export default function TeamManagementPage(): React.ReactElement {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.currentTeamId, router]);
+  }, [user?.currentTenantId, router]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -138,7 +138,7 @@ export default function TeamManagementPage(): React.ReactElement {
 
     if (user) {
       // Check if user has a team
-      if (!user.currentTeamId) {
+      if (!user.currentTenantId) {
         toast.error("You are not part of any team");
         router.push("/dashboard");
         return;
@@ -165,7 +165,7 @@ export default function TeamManagementPage(): React.ReactElement {
         {
           email: inviteEmail.trim(),
           role: inviteRole,
-        }
+        },
       );
 
       toast.success("Invitation sent successfully");
@@ -189,14 +189,12 @@ export default function TeamManagementPage(): React.ReactElement {
   };
 
   const handleCancelInvitation = async (
-    invitationId: number
+    invitationId: number,
   ): Promise<void> => {
     if (!team) return;
 
     try {
-      await api.delete(
-        `/api/v1/teams/${team.id}/invitations/${invitationId}`
-      );
+      await api.delete(`/api/v1/teams/${team.id}/invitations/${invitationId}`);
       toast.success("Invitation cancelled");
       fetchTeamData();
     } catch (error) {
@@ -253,7 +251,7 @@ export default function TeamManagementPage(): React.ReactElement {
   }
 
   const pendingInvitations = invitations.filter(
-    (inv) => inv.status === "pending" && !inv.isExpired
+    (inv) => inv.status === "pending" && !inv.isExpired,
   );
 
   return (
@@ -268,7 +266,8 @@ export default function TeamManagementPage(): React.ReactElement {
         </p>
         <div className="flex items-center gap-2 mt-2">
           <Badge variant="secondary">
-            {team.subscription?.tier.name ?? user.effectiveSubscriptionTier.name}
+            {team.subscription?.tier.name ??
+              user.effectiveSubscriptionTier.name}
           </Badge>
           <span className="text-sm text-muted-foreground">
             {team.members.length} member{team.members.length !== 1 ? "s" : ""}
@@ -373,7 +372,9 @@ export default function TeamManagementPage(): React.ReactElement {
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>Cancel Invitation</AlertDialogTitle>
+                            <AlertDialogTitle>
+                              Cancel Invitation
+                            </AlertDialogTitle>
                             <AlertDialogDescription>
                               Are you sure you want to cancel this invitation to{" "}
                               {invitation.email}?
@@ -408,9 +409,7 @@ export default function TeamManagementPage(): React.ReactElement {
             <Users className="h-5 w-5" />
             <CardTitle>Team Members</CardTitle>
           </div>
-          <CardDescription>
-            Current members of {team.name}
-          </CardDescription>
+          <CardDescription>Current members of {team.name}</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -467,14 +466,16 @@ export default function TeamManagementPage(): React.ReactElement {
                               <AlertDialogTitle>Remove Member</AlertDialogTitle>
                               <AlertDialogDescription>
                                 Are you sure you want to remove{" "}
-                                {member.user?.fullName || member.user?.email} from
-                                the team?
+                                {member.user?.fullName || member.user?.email}{" "}
+                                from the team?
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
                               <AlertDialogAction
-                                onClick={() => handleRemoveMember(member.userId)}
+                                onClick={() =>
+                                  handleRemoveMember(member.userId)
+                                }
                                 className="bg-red-600 hover:bg-red-700"
                               >
                                 Remove
@@ -499,8 +500,8 @@ export default function TeamManagementPage(): React.ReactElement {
             <div className="flex items-center gap-2 text-yellow-800">
               <AlertCircle className="h-5 w-5" />
               <p>
-                You can view team members but cannot make changes. Contact a team
-                admin for assistance.
+                You can view team members but cannot make changes. Contact a
+                team admin for assistance.
               </p>
             </div>
           </CardContent>

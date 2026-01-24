@@ -149,7 +149,7 @@ test.group('Admin Discount Codes API - Create', (group) => {
         discountType: 'percent',
         discountValue: 25,
         maxUses: 100,
-        maxUsesPerUser: 1,
+        maxUsesPerTenant: 1,
         expiresAt: '2027-12-31',
       })
       .expect(201)
@@ -455,7 +455,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
       code,
       discountType: 'percent',
       discountValue: 20,
-      maxUsesPerUser: 1,
+      maxUsesPerTenant: 1,
       isActive: true,
     })
 

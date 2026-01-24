@@ -12,10 +12,16 @@ export interface ValidateDiscountCodeResult {
 }
 
 export default class DiscountCodeService {
+  /**
+   * Validate a discount code for a tenant (tenant is the billing unit)
+   * @param code - Discount code
+   * @param priceId - Price ID to validate against
+   * @param tenantId - Which tenant is using the discount (billing context)
+   */
   async validateCode(
     code: string,
     priceId: number,
-    userId: number
+    tenantId: number
   ): Promise<ValidateDiscountCodeResult> {
     const price = await Price.find(priceId)
     if (!price) {
@@ -69,14 +75,15 @@ export default class DiscountCodeService {
       }
     }
 
-    const canBeUsed = await discountCode.canBeUsedBy(userId)
+    // Check tenant-based usage limits (tenant is the billing unit)
+    const canBeUsed = await discountCode.canBeUsedByTenant(tenantId)
     if (!canBeUsed) {
       return {
         valid: false,
         originalAmount: price.unitAmount,
         discountedAmount: price.unitAmount,
         discountApplied: 0,
-        message: 'You have already used this discount code the maximum number of times',
+        message: 'This tenant has already used this discount code the maximum number of times',
       }
     }
 
@@ -116,25 +123,53 @@ export default class DiscountCodeService {
     }
   }
 
+  /**
+   * Record discount code usage
+   * @param discountCodeId - Which discount code was used
+   * @param tenantId - Which tenant used the discount (billing context)
+   * @param userId - Who performed the action (audit trail)
+   * @param checkoutSessionId - Optional checkout session reference
+   */
   async recordUsage(
     discountCodeId: number,
+    tenantId: number,
     userId: number,
     checkoutSessionId?: string
   ): Promise<DiscountCodeUsage> {
-    return DiscountCodeUsage.recordUsage(discountCodeId, userId, checkoutSessionId)
+    return DiscountCodeUsage.recordUsage(discountCodeId, tenantId, userId, checkoutSessionId)
   }
 
+  /**
+   * Get all usages of a discount code
+   */
   async getUsages(discountCodeId: number): Promise<DiscountCodeUsage[]> {
     return DiscountCodeUsage.query()
       .where('discountCodeId', discountCodeId)
       .preload('user')
+      .preload('tenant')
       .orderBy('usedAt', 'desc')
   }
 
+  /**
+   * Get all discount code usages by a tenant (billing context)
+   */
+  async getTenantUsages(tenantId: number): Promise<DiscountCodeUsage[]> {
+    return DiscountCodeUsage.query()
+      .where('tenantId', tenantId)
+      .preload('discountCode')
+      .preload('user')
+      .orderBy('usedAt', 'desc')
+  }
+
+  /**
+   * Get all discount code usages by a user (audit trail)
+   * @deprecated For billing purposes, use getTenantUsages instead
+   */
   async getUserUsages(userId: number): Promise<DiscountCodeUsage[]> {
     return DiscountCodeUsage.query()
       .where('userId', userId)
       .preload('discountCode')
+      .preload('tenant')
       .orderBy('usedAt', 'desc')
   }
 }

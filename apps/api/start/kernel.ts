@@ -50,4 +50,5 @@ export const middleware = router.named({
   auth: () => import('#middleware/auth_middleware'),
   admin: () => import('#middleware/admin_middleware'),
   rawBody: () => import('#middleware/raw_body_middleware'),
+  tenant: () => import('#middleware/tenant_context_middleware'),
 })

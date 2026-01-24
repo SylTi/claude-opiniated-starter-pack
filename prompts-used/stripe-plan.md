@@ -288,3 +288,140 @@ billingApi.cancelSubscription()
 | `app/middleware/raw_body_middleware.ts` | Raw body for signature verification |
 | `app/models/subscription.ts` | Add provider fields |
 | `packages/shared/src/types/payment.ts` | Shared type safety |
+
+---
+
+## Implementation Status Report (2026-01-09)
+
+### Overall Status: **100% COMPLETE**
+
+The Stripe payment integration is fully implemented with complete frontend, backend, tests, and documentation.
+
+---
+
+### Phase-by-Phase Status
+
+| Phase | Status | Completion |
+|-------|--------|------------|
+| Phase 1 - Environment & Dependencies | ✅ COMPLETE | 100% |
+| Phase 2 - Database Migrations | ✅ COMPLETE | 100% |
+| Phase 3 - Models | ✅ COMPLETE | 100% |
+| Phase 4 - Types & Interfaces | ✅ COMPLETE | 100% |
+| Phase 5 - Service Layer | ✅ COMPLETE | 100% |
+| Phase 6 - Middleware & Controllers | ✅ COMPLETE | 100% |
+| Phase 7 - Routes & Abilities | ✅ COMPLETE | 100% |
+| Phase 8 - Webhook Events | ✅ COMPLETE | 100% |
+| Phase 9 - Frontend | ✅ COMPLETE | 100% |
+| Phase 10 - Tests | ✅ COMPLETE | 100% |
+| Phase 11 - Documentation | ✅ COMPLETE | 100% |
+
+---
+
+### Detailed Implementation Status
+
+#### Phase 1 - Environment & Dependencies ✅
+- [x] `STRIPE_SECRET_KEY` in `.env.example`
+- [x] `STRIPE_WEBHOOK_SECRET` in `.env.example`
+- [x] `STRIPE_PUBLISHABLE_KEY` in `.env.example`
+- [x] Env validation in `start/env.ts` (optional vars)
+- [x] `stripe` package v20.1.0 installed
+
+#### Phase 2 - Database Migrations ✅
+- [x] `1765740372240_create_payment_customers_table.ts`
+- [x] `1765740372241_create_products_table.ts`
+- [x] `1765740372242_create_prices_table.ts`
+- [x] `1765740372243_add_provider_fields_to_subscriptions_table.ts`
+- [x] `1765740372244_create_processed_webhook_events_table.ts`
+
+#### Phase 3 - Models ✅
+- [x] `app/models/payment_customer.ts` - with `findBySubscriber()`, `findOrCreateBySubscriber()`, `upsertBySubscriber()`
+- [x] `app/models/product.ts` - with `findByTierAndProvider()`, `getProductsWithPrices()`
+- [x] `app/models/price.ts` - with `PriceInterval` enum, `findByProviderPriceId()`, `getActiveForProduct()`
+- [x] `app/models/processed_webhook_event.ts` - with `hasBeenProcessed()`, `markAsProcessed()`, `cleanupOldEvents()`
+- [x] `app/models/subscription.ts` - `providerName` and `providerSubscriptionId` fields added
+
+#### Phase 4 - Types & Interfaces ✅
+- [x] `app/services/types/payment_provider.ts` - Full `PaymentProvider` interface with supporting types
+- [x] `packages/shared/src/types/payment.ts` - `PriceDTO`, `ProductDTO`, `BillingTierDTO`, `CheckoutSessionDTO`, `CustomerPortalDTO`, `BillingSubscriptionDTO`
+- [x] `packages/shared/src/types/subscription.ts` - Provider fields added to `SubscriptionDTO`
+
+#### Phase 5 - Service Layer ✅
+- [x] `app/services/providers/stripe_provider.ts` - 433 lines, full implementation
+- [x] `app/services/payment_service.ts` - `getBillingTiers()`, `createCheckoutSession()`, `createCustomerPortalSession()`, `processWebhook()`, `cancelSubscription()`, `getCurrentSubscription()`
+
+#### Phase 6 - Middleware & Controllers ✅
+- [x] `app/middleware/raw_body_middleware.ts` - Raw body capture for signature verification
+- [x] `app/controllers/payment_controller.ts` - 331 lines, all billing endpoints
+- [x] `app/controllers/webhook_controller.ts` - Stripe webhook handling with signature verification
+
+#### Phase 7 - Routes & Abilities ✅
+- [x] `GET /api/v1/billing/tiers` - Public
+- [x] `POST /api/v1/billing/checkout` - Auth required
+- [x] `POST /api/v1/billing/portal` - Auth required
+- [x] `GET /api/v1/billing/subscription` - Auth required
+- [x] `POST /api/v1/billing/cancel` - Auth required
+- [x] `POST /api/v1/webhooks/stripe` - With rawBody middleware
+- [x] Billing abilities in `app/abilities/main.ts` - `manageBilling()`, `canUpgradeSubscription()`
+- [x] **BONUS**: Additional routes: `/billing/validate-discount-code`, `/billing/redeem-coupon`, `/billing/balance`
+
+#### Phase 8 - Webhook Events ✅
+- [x] `checkout.session.completed` handler
+- [x] `customer.subscription.updated` handler
+- [x] `customer.subscription.deleted` handler
+- [x] `invoice.payment_failed` handler
+- [x] `invoice.payment_succeeded` handler
+- [x] Signature verification
+- [x] Idempotency via `processed_webhook_events`
+- [x] DB transaction wrapping
+
+#### Phase 9 - Frontend ✅
+- [x] `apps/web/lib/api.ts` - Complete `billingApi` object with all methods
+- [x] `apps/web/app/billing/page.tsx` - Main billing page (324 lines, fully featured)
+- [x] `apps/web/app/billing/success/page.tsx` - Post-checkout success with countdown
+- [x] `apps/web/app/billing/cancel/page.tsx` - Checkout cancelled with navigation
+- [x] `components/billing/pricing-card.tsx` - Full pricing display with discounts
+- [x] `components/billing/subscription-status.tsx` - Status, portal, cancel
+- [x] `components/billing/coupon-redemption.tsx` - Coupon input and redemption
+- [x] `components/billing/balance-card.tsx` - Balance display
+- [x] `tests/pages/billing/page.test.tsx` - 514 lines, comprehensive
+- [x] `tests/pages/billing/success.test.tsx`
+- [x] `tests/pages/billing/cancel.test.tsx`
+- [x] `tests/components/billing/pricing-card.test.tsx` - 265 lines
+- [x] `tests/components/billing/subscription-status.test.tsx` - 236 lines
+- [x] `tests/components/billing/balance-card.test.tsx` - 119 lines
+- [x] `tests/components/billing/coupon-redemption.test.tsx` - 251 lines
+
+#### Phase 10 - Backend Tests ✅
+- [x] `tests/unit/payment_customer.spec.ts`
+- [x] `tests/unit/product.spec.ts`
+- [x] `tests/unit/price.spec.ts`
+- [x] `tests/unit/processed_webhook_event.spec.ts`
+- [x] `tests/unit/subscription.spec.ts`
+- [x] `tests/functional/billing.spec.ts` (12KB)
+- [x] `tests/functional/webhooks.spec.ts` (11KB)
+- [x] `tests/functional/discount_codes.spec.ts`
+
+#### Phase 11 - Documentation ✅
+- [x] `docs/api.md` fully updated with all billing routes
+- [x] `.env.example` updated with Stripe vars
+- [x] Webhooks endpoint documented
+- [x] Admin products/prices endpoints documented
+- [x] Dashboard stats endpoint documented
+
+---
+
+### Remaining Work
+
+**None - All phases complete!**
+
+All validators already implemented: `createCheckoutValidator`, `createPortalValidator`, `getSubscriptionValidator`, `cancelSubscriptionValidator`
+
+---
+
+### Bonus Features Implemented (Not in Original Plan)
+
+- Discount code validation endpoint (`POST /billing/validate-discount-code`)
+- Coupon redemption endpoint (`POST /billing/redeem-coupon`)
+- Balance endpoint (`GET /billing/balance`)
+- Admin tier/product/price management routes
+- `balance-card.tsx` and `coupon-redemption.tsx` components

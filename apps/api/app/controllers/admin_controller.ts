@@ -2,14 +2,15 @@ import type { HttpContext } from '@adonisjs/core/http'
 import { DateTime } from 'luxon'
 import User from '#models/user'
 import LoginHistory from '#models/login_history'
-import Team from '#models/team'
+import Tenant from '#models/tenant'
+import Subscription from '#models/subscription'
 import SubscriptionTier from '#models/subscription_tier'
 import Product from '#models/product'
 import Price from '#models/price'
 import SubscriptionService from '#services/subscription_service'
 import {
   updateUserTierValidator,
-  updateTeamTierValidator,
+  updateTenantTierValidator,
   createProductValidator,
   updateProductValidator,
   listPricesValidator,
@@ -66,7 +67,7 @@ export default class AdminController {
         'email',
         'fullName',
         'role',
-        'currentTeamId',
+        'currentTenantId',
         'emailVerified',
         'emailVerifiedAt',
         'mfaEnabled',
@@ -74,13 +75,16 @@ export default class AdminController {
         'createdAt',
         'updatedAt'
       )
-      .preload('currentTeam')
+      .preload('currentTenant')
       .orderBy('createdAt', 'desc')
 
-    // Get subscriptions for all users
+    // Get subscriptions for all users based on their current tenant
     const usersWithSubscriptions = await Promise.all(
       users.map(async (user) => {
-        const subscription = await user.getActiveSubscription()
+        let subscription = null
+        if (user.currentTenantId) {
+          subscription = await Subscription.getActiveForTenant(user.currentTenantId)
+        }
         return {
           id: user.id,
           email: user.email,
@@ -88,10 +92,8 @@ export default class AdminController {
           role: user.role,
           subscriptionTier: subscription?.tier?.slug ?? 'free',
           subscriptionExpiresAt: subscription?.expiresAt?.toISO() ?? null,
-          currentTeamId: user.currentTeamId,
-          currentTeamName: user.currentTeam?.name ?? null,
-          balance: user.balance ?? 0,
-          balanceCurrency: user.balanceCurrency ?? 'usd',
+          currentTenantId: user.currentTenantId,
+          currentTenantName: user.currentTenant?.name ?? null,
           emailVerified: user.emailVerified,
           emailVerifiedAt: user.emailVerifiedAt?.toISO() ?? null,
           mfaEnabled: user.mfaEnabled,
@@ -185,12 +187,21 @@ export default class AdminController {
   }
 
   /**
-   * Update user's subscription tier
+   * Update user's current tenant subscription tier (admin override)
+   * @deprecated Use updateTenantTier instead - tenant is the billing unit
    */
   async updateUserTier({ params, request, response }: HttpContext): Promise<void> {
     const user = await User.findOrFail(params.id)
     const { subscriptionTier, subscriptionExpiresAt } =
       await request.validateUsing(updateUserTierValidator)
+
+    // User must have a current tenant
+    if (!user.currentTenantId) {
+      return response.badRequest({
+        error: 'ValidationError',
+        message: 'User has no current tenant. Create a tenant first.',
+      })
+    }
 
     // Validate tier exists
     const tier = await SubscriptionTier.findBySlug(subscriptionTier)
@@ -207,10 +218,10 @@ export default class AdminController {
       expiresAt = DateTime.fromJSDate(subscriptionExpiresAt)
     }
 
-    // Use subscription service to update
+    // Use subscription service to update the tenant's subscription
     const subscriptionService = new SubscriptionService()
-    const subscription = await subscriptionService.updateUserSubscription(
-      user.id,
+    const subscription = await subscriptionService.updateTenantSubscription(
+      user.currentTenantId,
       subscriptionTier,
       expiresAt
     )
@@ -219,55 +230,57 @@ export default class AdminController {
       data: {
         id: user.id,
         email: user.email,
+        tenantId: user.currentTenantId,
         subscriptionTier: tier.slug,
         subscriptionExpiresAt: subscription.expiresAt?.toISO() ?? null,
       },
-      message: 'User subscription tier has been updated successfully',
+      message: 'User tenant subscription tier has been updated successfully',
     })
   }
 
   /**
-   * List all teams with admin details
+   * List all tenants with admin details
    */
-  async listTeams({ response }: HttpContext): Promise<void> {
-    const teams = await Team.query()
+  async listTenants({ response }: HttpContext): Promise<void> {
+    const tenants = await Tenant.query()
       .preload('owner')
-      .preload('members')
+      .preload('memberships')
       .orderBy('createdAt', 'desc')
 
-    // Get subscriptions for all teams
-    const teamsWithSubscriptions = await Promise.all(
-      teams.map(async (team) => {
-        const subscription = await team.getActiveSubscription()
+    // Get subscriptions for all tenants
+    const tenantsWithSubscriptions = await Promise.all(
+      tenants.map(async (tenant: Tenant) => {
+        const subscription = await tenant.getActiveSubscription()
         return {
-          id: team.id,
-          name: team.name,
-          slug: team.slug,
+          id: tenant.id,
+          name: tenant.name,
+          slug: tenant.slug,
+          type: tenant.type,
           subscriptionTier: subscription?.tier?.slug ?? 'free',
           subscriptionExpiresAt: subscription?.expiresAt?.toISO() ?? null,
-          ownerId: team.ownerId,
-          ownerEmail: team.owner?.email ?? null,
-          memberCount: team.members.length,
-          balance: team.balance ?? 0,
-          balanceCurrency: team.balanceCurrency ?? 'usd',
-          createdAt: team.createdAt.toISO(),
-          updatedAt: team.updatedAt?.toISO() ?? null,
+          ownerId: tenant.ownerId,
+          ownerEmail: tenant.owner?.email ?? null,
+          memberCount: tenant.memberships.length,
+          balance: tenant.balance ?? 0,
+          balanceCurrency: tenant.balanceCurrency ?? 'usd',
+          createdAt: tenant.createdAt.toISO(),
+          updatedAt: tenant.updatedAt?.toISO() ?? null,
         }
       })
     )
 
     response.json({
-      data: teamsWithSubscriptions,
+      data: tenantsWithSubscriptions,
     })
   }
 
   /**
-   * Update team's subscription tier
+   * Update tenant's subscription tier (tenant is the billing unit)
    */
-  async updateTeamTier({ params, request, response }: HttpContext): Promise<void> {
-    const team = await Team.findOrFail(params.id)
+  async updateTenantTier({ params, request, response }: HttpContext): Promise<void> {
+    const tenant = await Tenant.findOrFail(params.id)
     const { subscriptionTier, subscriptionExpiresAt } =
-      await request.validateUsing(updateTeamTierValidator)
+      await request.validateUsing(updateTenantTierValidator)
 
     // Validate tier exists
     const tier = await SubscriptionTier.findBySlug(subscriptionTier)
@@ -286,20 +299,20 @@ export default class AdminController {
 
     // Use subscription service to update
     const subscriptionService = new SubscriptionService()
-    const subscription = await subscriptionService.updateTeamSubscription(
-      team.id,
+    const subscription = await subscriptionService.updateTenantSubscription(
+      tenant.id,
       subscriptionTier,
       expiresAt
     )
 
     response.json({
       data: {
-        id: team.id,
-        name: team.name,
+        id: tenant.id,
+        name: tenant.name,
         subscriptionTier: tier.slug,
         subscriptionExpiresAt: subscription.expiresAt?.toISO() ?? null,
       },
-      message: 'Team subscription tier has been updated successfully',
+      message: 'Tenant subscription tier has been updated successfully',
     })
   }
 

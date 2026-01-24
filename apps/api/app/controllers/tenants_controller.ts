@@ -1,67 +1,67 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import logger from '@adonisjs/core/services/logger'
 import { DateTime } from 'luxon'
-import Team from '#models/team'
-import TeamMember from '#models/team_member'
-import TeamInvitation from '#models/team_invitation'
+import Tenant from '#models/tenant'
+import TenantMembership from '#models/tenant_membership'
+import TenantInvitation from '#models/tenant_invitation'
 import User from '#models/user'
 import string from '@adonisjs/core/helpers/string'
 import env from '#start/env'
 import MailService from '#services/mail_service'
 import db from '@adonisjs/lucid/services/db'
 import {
-  createTeamValidator,
-  updateTeamValidator,
+  createTenantValidator,
+  updateTenantValidator,
   addMemberValidator,
   sendInvitationValidator,
-} from '#validators/team'
-import { TEAM_ROLES } from '#constants/roles'
+} from '#validators/tenant'
+import { TENANT_ROLES } from '#constants/roles'
 
-export default class TeamsController {
+export default class TenantsController {
   private mailService = new MailService()
   /**
-   * List all teams for the current user
+   * List all tenants for the current user
    */
   async index({ auth, response }: HttpContext): Promise<void> {
     const user = auth.user!
 
-    const memberships = await TeamMember.query().where('userId', user.id).preload('team')
+    const memberships = await TenantMembership.query().where('userId', user.id).preload('tenant')
 
     response.json({
       data: memberships.map((m) => ({
-        id: m.team.id,
-        name: m.team.name,
-        slug: m.team.slug,
+        id: m.tenant.id,
+        name: m.tenant.name,
+        slug: m.tenant.slug,
         role: m.role,
-        isCurrentTeam: m.team.id === user.currentTeamId,
-        createdAt: m.team.createdAt.toISO(),
+        isCurrentTenant: m.tenant.id === user.currentTenantId,
+        createdAt: m.tenant.createdAt.toISO(),
       })),
     })
   }
 
   /**
-   * Create a new team
+   * Create a new tenant
    */
   async store({ auth, request, response }: HttpContext): Promise<void> {
     const user = auth.user!
-    const { name } = await request.validateUsing(createTeamValidator)
+    const { name } = await request.validateUsing(createTenantValidator)
 
     // Use transaction to prevent race conditions
-    const team = await db.transaction(async (trx) => {
+    const tenant = await db.transaction(async (trx) => {
       // Generate unique slug (lowercase for URL-friendly format)
       const baseSlug = string.slug(name).toLowerCase()
       let slug = baseSlug
 
       // Check if slug exists within transaction
-      const existingTeam = await Team.query({ client: trx }).where('slug', slug).first()
+      const existingTeam = await Tenant.query({ client: trx }).where('slug', slug).first()
 
       if (existingTeam) {
         // Add random suffix to avoid collision
         slug = `${baseSlug}-${string.random(4).toLowerCase()}`
       }
 
-      // Create team
-      const newTeam = await Team.create(
+      // Create tenant
+      const newTenant = await Tenant.create(
         {
           name: name.trim(),
           slug,
@@ -71,69 +71,69 @@ export default class TeamsController {
       )
 
       // Add creator as owner
-      await TeamMember.create(
+      await TenantMembership.create(
         {
           userId: user.id,
-          teamId: newTeam.id,
-          role: TEAM_ROLES.OWNER,
+          tenantId: newTenant.id,
+          role: TENANT_ROLES.OWNER,
         },
         { client: trx }
       )
 
-      // Set as current team
-      user.currentTeamId = newTeam.id
+      // Set as current tenant
+      user.currentTenantId = newTenant.id
       user.useTransaction(trx)
       await user.save()
 
-      return newTeam
+      return newTenant
     })
 
     response.created({
       data: {
-        id: team.id,
-        name: team.name,
-        slug: team.slug,
-        ownerId: team.ownerId,
-        createdAt: team.createdAt.toISO(),
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        ownerId: tenant.ownerId,
+        createdAt: tenant.createdAt.toISO(),
       },
-      message: 'Team created successfully',
+      message: 'Tenant created successfully',
     })
   }
 
   /**
-   * Get team details
+   * Get tenant details
    */
   async show({ auth, params, response }: HttpContext): Promise<void> {
     const user = auth.user!
-    const teamId = params.id
+    const tenantId = params.id
 
     // Check if user is a member
-    const membership = await TeamMember.query()
+    const membership = await TenantMembership.query()
       .where('userId', user.id)
-      .where('teamId', teamId)
+      .where('tenantId', tenantId)
       .first()
 
     if (!membership) {
       return response.forbidden({
         error: 'Forbidden',
-        message: 'You are not a member of this team',
+        message: 'You are not a member of this tenant',
       })
     }
 
-    const team = await Team.query()
-      .where('id', teamId)
-      .preload('members', (query) => {
+    const tenant = await Tenant.query()
+      .where('id', tenantId)
+      .preload('memberships', (query) => {
         query.preload('user')
       })
       .firstOrFail()
 
     response.json({
       data: {
-        id: team.id,
-        name: team.name,
-        slug: team.slug,
-        ownerId: team.ownerId,
-        members: team.members.map((m) => ({
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        ownerId: tenant.ownerId,
+        members: tenant.memberships.map((m) => ({
           id: m.id,
           userId: m.userId,
           role: m.role,
@@ -145,112 +145,112 @@ export default class TeamsController {
           },
           createdAt: m.createdAt.toISO(),
         })),
-        createdAt: team.createdAt.toISO(),
-        updatedAt: team.updatedAt?.toISO() ?? null,
+        createdAt: tenant.createdAt.toISO(),
+        updatedAt: tenant.updatedAt?.toISO() ?? null,
       },
     })
   }
 
   /**
-   * Update team
+   * Update tenant
    */
   async update({ auth, params, request, response }: HttpContext): Promise<void> {
     const user = auth.user!
-    const teamId = params.id
+    const tenantId = params.id
 
     // Check if user is admin
-    const membership = await TeamMember.query()
+    const membership = await TenantMembership.query()
       .where('userId', user.id)
-      .where('teamId', teamId)
+      .where('tenantId', tenantId)
       .first()
 
     if (!membership || !membership.isAdmin()) {
       return response.forbidden({
         error: 'Forbidden',
-        message: 'You must be a team admin to update the team',
+        message: 'You must be a tenant admin to update the tenant',
       })
     }
 
-    const team = await Team.findOrFail(teamId)
-    const data = await request.validateUsing(updateTeamValidator)
+    const tenant = await Tenant.findOrFail(tenantId)
+    const data = await request.validateUsing(updateTenantValidator)
 
     if (data.name !== undefined) {
-      team.name = data.name
+      tenant.name = data.name
     }
 
-    await team.save()
+    await tenant.save()
 
     response.json({
       data: {
-        id: team.id,
-        name: team.name,
-        slug: team.slug,
-        updatedAt: team.updatedAt?.toISO() ?? null,
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        updatedAt: tenant.updatedAt?.toISO() ?? null,
       },
-      message: 'Team updated successfully',
+      message: 'Tenant updated successfully',
     })
   }
 
   /**
-   * Switch current team
+   * Switch current tenant
    */
-  async switchTeam({ auth, params, response }: HttpContext): Promise<void> {
+  async switchTenant({ auth, params, response }: HttpContext): Promise<void> {
     const user = auth.user!
-    const teamId = params.id
+    const tenantId = params.id
 
     // Check if user is a member
-    const membership = await TeamMember.query()
+    const membership = await TenantMembership.query()
       .where('userId', user.id)
-      .where('teamId', teamId)
+      .where('tenantId', tenantId)
       .first()
 
     if (!membership) {
       return response.forbidden({
         error: 'Forbidden',
-        message: 'You are not a member of this team',
+        message: 'You are not a member of this tenant',
       })
     }
 
-    user.currentTeamId = teamId
+    user.currentTenantId = tenantId
     await user.save()
 
-    const team = await Team.findOrFail(teamId)
+    const tenant = await Tenant.findOrFail(tenantId)
 
     response.json({
       data: {
-        currentTeamId: user.currentTeamId,
-        team: {
-          id: team.id,
-          name: team.name,
-          slug: team.slug,
+        currentTenantId: user.currentTenantId,
+        tenant: {
+          id: tenant.id,
+          name: tenant.name,
+          slug: tenant.slug,
         },
       },
-      message: 'Switched to team successfully',
+      message: 'Switched to tenant successfully',
     })
   }
 
   /**
-   * Add member to team
+   * Add member to tenant
    * Uses transaction with row locking to prevent race conditions
    */
   async addMember({ auth, params, request, response }: HttpContext): Promise<void> {
     const user = auth.user!
-    const teamId = params.id
+    const tenantId = params.id
 
     // Check if user is admin
-    const membership = await TeamMember.query()
+    const membership = await TenantMembership.query()
       .where('userId', user.id)
-      .where('teamId', teamId)
+      .where('tenantId', tenantId)
       .first()
 
     if (!membership || !membership.isAdmin()) {
       return response.forbidden({
         error: 'Forbidden',
-        message: 'You must be a team admin to add members',
+        message: 'You must be a tenant admin to add members',
       })
     }
 
-    const { email, role = TEAM_ROLES.MEMBER } = await request.validateUsing(addMemberValidator)
+    const { email, role = TENANT_ROLES.MEMBER } = await request.validateUsing(addMemberValidator)
 
     const newMember = await User.findBy('email', email)
     if (!newMember) {
@@ -264,17 +264,17 @@ export default class TeamsController {
     // when multiple requests try to add members simultaneously
     try {
       await db.transaction(async (trx) => {
-        // Lock the team row to prevent concurrent modifications
-        const team = await Team.query({ client: trx })
-          .where('id', teamId)
+        // Lock the tenant row to prevent concurrent modifications
+        const tenant = await Tenant.query({ client: trx })
+          .where('id', tenantId)
           .forUpdate()
-          .preload('members')
+          .preload('memberships')
           .firstOrFail()
 
         // Double-check membership inside transaction
-        const existingMembership = await TeamMember.query({ client: trx })
+        const existingMembership = await TenantMembership.query({ client: trx })
           .where('userId', newMember.id)
-          .where('teamId', teamId)
+          .where('tenantId', tenantId)
           .first()
 
         if (existingMembership) {
@@ -282,23 +282,23 @@ export default class TeamsController {
         }
 
         // Check max members limit (inside transaction with lock)
-        if (!(await team.canAddMember(team.members.length))) {
-          const maxMembers = await team.getEffectiveMaxMembers()
+        if (!(await tenant.canAddMember(tenant.memberships.length))) {
+          const maxMembers = await tenant.getEffectiveMaxMembers()
           throw new Error(`LIMIT_REACHED:${maxMembers}`)
         }
 
         // Create member inside transaction
-        await TeamMember.create(
+        await TenantMembership.create(
           {
             userId: newMember.id,
-            teamId: Number(teamId),
-            role: role ?? TEAM_ROLES.MEMBER,
+            tenantId: Number(tenantId),
+            role: role ?? TENANT_ROLES.MEMBER,
           },
           { client: trx }
         )
 
-        // Set as current team
-        newMember.currentTeamId = Number(teamId)
+        // Set as current tenant
+        newMember.currentTenantId = Number(tenantId)
         newMember.useTransaction(trx)
         await newMember.save()
       })
@@ -308,7 +308,7 @@ export default class TeamsController {
           userId: newMember.id,
           email: newMember.email,
           fullName: newMember.fullName,
-          role: role ?? TEAM_ROLES.MEMBER,
+          role: role ?? TENANT_ROLES.MEMBER,
         },
         message: 'Member added successfully',
       })
@@ -317,14 +317,14 @@ export default class TeamsController {
         if (error.message === 'ALREADY_MEMBER') {
           return response.badRequest({
             error: 'ValidationError',
-            message: 'User is already a member of this team',
+            message: 'User is already a member of this tenant',
           })
         }
         if (error.message.startsWith('LIMIT_REACHED:')) {
           const maxMembers = error.message.split(':')[1]
           return response.badRequest({
             error: 'LimitReached',
-            message: `Team has reached the maximum of ${maxMembers} members. Upgrade your subscription to add more.`,
+            message: `Tenant has reached the maximum of ${maxMembers} members. Upgrade your subscription to add more.`,
           })
         }
       }
@@ -333,28 +333,28 @@ export default class TeamsController {
   }
 
   /**
-   * Remove member from team
+   * Remove member from tenant
    */
   async removeMember({ auth, params, response }: HttpContext): Promise<void> {
     const user = auth.user!
-    const { id: teamId, userId: memberUserId } = params
+    const { id: tenantId, userId: memberUserId } = params
 
     // Check if user is admin
-    const membership = await TeamMember.query()
+    const membership = await TenantMembership.query()
       .where('userId', user.id)
-      .where('teamId', teamId)
+      .where('tenantId', tenantId)
       .first()
 
     if (!membership || !membership.isAdmin()) {
       return response.forbidden({
         error: 'Forbidden',
-        message: 'You must be a team admin to remove members',
+        message: 'You must be a tenant admin to remove members',
       })
     }
 
-    const memberToRemove = await TeamMember.query()
+    const memberToRemove = await TenantMembership.query()
       .where('userId', memberUserId)
-      .where('teamId', teamId)
+      .where('tenantId', tenantId)
       .first()
 
     if (!memberToRemove) {
@@ -365,19 +365,19 @@ export default class TeamsController {
     }
 
     // Can't remove owner
-    if (memberToRemove.role === TEAM_ROLES.OWNER) {
+    if (memberToRemove.role === TENANT_ROLES.OWNER) {
       return response.badRequest({
         error: 'ValidationError',
-        message: 'Cannot remove the team owner',
+        message: 'Cannot remove the tenant owner',
       })
     }
 
     await memberToRemove.delete()
 
-    // Clear the user's current team if it was this team
+    // Clear the user's current tenant if it was this tenant
     const removedUser = await User.find(memberUserId)
-    if (removedUser && removedUser.currentTeamId === Number(teamId)) {
-      removedUser.currentTeamId = null
+    if (removedUser && removedUser.currentTenantId === Number(tenantId)) {
+      removedUser.currentTenantId = null
       await removedUser.save()
     }
 
@@ -387,145 +387,146 @@ export default class TeamsController {
   }
 
   /**
-   * Leave team
+   * Leave tenant
    */
   async leave({ auth, params, response }: HttpContext): Promise<void> {
     const user = auth.user!
-    const teamId = params.id
+    const tenantId = params.id
 
-    const membership = await TeamMember.query()
+    const membership = await TenantMembership.query()
       .where('userId', user.id)
-      .where('teamId', teamId)
+      .where('tenantId', tenantId)
       .first()
 
     if (!membership) {
       return response.notFound({
         error: 'NotFound',
-        message: 'You are not a member of this team',
+        message: 'You are not a member of this tenant',
       })
     }
 
     // Owner can't leave
-    if (membership.role === TEAM_ROLES.OWNER) {
+    if (membership.role === TENANT_ROLES.OWNER) {
       return response.badRequest({
         error: 'ValidationError',
-        message: 'Team owner cannot leave. Transfer ownership first or delete the team.',
+        message: 'Tenant owner cannot leave. Transfer ownership first or delete the tenant.',
       })
     }
 
     await membership.delete()
 
-    // Clear current team
-    if (user.currentTeamId === Number(teamId)) {
-      user.currentTeamId = null
+    // Clear current tenant
+    if (user.currentTenantId === Number(tenantId)) {
+      user.currentTenantId = null
       await user.save()
     }
 
     response.json({
-      message: 'Left team successfully',
+      message: 'Left tenant successfully',
     })
   }
 
   /**
-   * Delete team
+   * Delete tenant
    */
   async destroy({ auth, params, response }: HttpContext): Promise<void> {
     const user = auth.user!
-    const teamId = params.id
+    const tenantId = params.id
 
-    const team = await Team.find(teamId)
-    if (!team) {
+    const tenant = await Tenant.find(tenantId)
+    if (!tenant) {
       return response.notFound({
         error: 'NotFound',
-        message: 'Team not found',
+        message: 'Tenant not found',
       })
     }
 
     // Only owner can delete
-    if (team.ownerId !== user.id) {
+    if (tenant.ownerId !== user.id) {
       return response.forbidden({
         error: 'Forbidden',
-        message: 'Only the team owner can delete the team',
+        message: 'Only the tenant owner can delete the tenant',
       })
     }
 
-    // Clear currentTeamId for all members
-    await User.query().where('currentTeamId', teamId).update({ currentTeamId: null })
+    // Clear currentTenantId for all members
+    await User.query().where('currentTenantId', tenantId).update({ currentTenantId: null })
 
-    await team.delete()
+    await tenant.delete()
 
     response.json({
-      message: 'Team deleted successfully',
+      message: 'Tenant deleted successfully',
     })
   }
 
   /**
-   * Send team invitation
+   * Send tenant invitation
    */
   async sendInvitation({ auth, params, request, response }: HttpContext): Promise<void> {
     const user = auth.user!
-    const teamId = params.id
+    const tenantId = params.id
 
     // Check if user is admin
-    const membership = await TeamMember.query()
+    const membership = await TenantMembership.query()
       .where('userId', user.id)
-      .where('teamId', teamId)
+      .where('tenantId', tenantId)
       .first()
 
     if (!membership || !membership.isAdmin()) {
       return response.forbidden({
         error: 'Forbidden',
-        message: 'You must be a team admin to send invitations',
+        message: 'You must be a tenant admin to send invitations',
       })
     }
 
-    const { email, role = TEAM_ROLES.MEMBER } = await request.validateUsing(sendInvitationValidator)
+    const { email, role = TENANT_ROLES.MEMBER } =
+      await request.validateUsing(sendInvitationValidator)
 
-    const team = await Team.query().where('id', teamId).preload('members').firstOrFail()
+    const tenant = await Tenant.query().where('id', tenantId).preload('memberships').firstOrFail()
 
-    // Check if team has paid subscription
-    const teamTier = await team.getSubscriptionTier()
-    if (teamTier.slug === 'free') {
+    // Check if tenant has paid subscription
+    const tenantTier = await tenant.getSubscriptionTier()
+    if (tenantTier.slug === 'free') {
       return response.forbidden({
         error: 'Forbidden',
-        message: 'Team must have a paid subscription to send invitations',
+        message: 'Tenant must have a paid subscription to send invitations',
       })
     }
 
     // Check max members limit
-    const pendingInvitations = await TeamInvitation.query()
-      .where('teamId', teamId)
+    const pendingInvitations = await TenantInvitation.query()
+      .where('tenantId', tenantId)
       .where('status', 'pending')
 
-    const totalPotentialMembers = team.members.length + pendingInvitations.length
-    if (!(await team.canAddMember(totalPotentialMembers))) {
-      const maxMembers = await team.getEffectiveMaxMembers()
+    const totalPotentialMembers = tenant.memberships.length + pendingInvitations.length
+    if (!(await tenant.canAddMember(totalPotentialMembers))) {
+      const maxMembers = await tenant.getEffectiveMaxMembers()
       return response.badRequest({
         error: 'LimitReached',
-        message: `Team would exceed the maximum of ${maxMembers} members with pending invitations. Upgrade your subscription to add more.`,
+        message: `Tenant would exceed the maximum of ${maxMembers} members with pending invitations. Upgrade your subscription to add more.`,
       })
     }
 
     // Check if already a member
     const existingUser = await User.findBy('email', email)
     if (existingUser) {
-      const existingMembership = await TeamMember.query()
+      const existingMembership = await TenantMembership.query()
         .where('userId', existingUser.id)
-        .where('teamId', teamId)
+        .where('tenantId', tenantId)
         .first()
 
       if (existingMembership) {
         return response.badRequest({
           error: 'ValidationError',
-          message: 'User is already a member of this team',
+          message: 'User is already a member of this tenant',
         })
       }
     }
 
     // Check for existing pending invitation
-    const existingInvitation = await TeamInvitation.query()
+    const existingInvitation = await TenantInvitation.query()
       .where('email', email)
-      .where('teamId', teamId)
+      .where('tenantId', tenantId)
       .where('status', 'pending')
       .first()
 
@@ -536,13 +537,13 @@ export default class TeamsController {
       })
     }
 
-    const inviteRole = role ?? TEAM_ROLES.MEMBER
+    const inviteRole = role ?? TENANT_ROLES.MEMBER
 
-    const invitation = await TeamInvitation.create({
-      teamId: Number(teamId),
+    const invitation = await TenantInvitation.create({
+      tenantId: Number(tenantId),
       invitedById: user.id,
       email,
-      token: TeamInvitation.generateToken(),
+      token: TenantInvitation.generateToken(),
       status: 'pending',
       role: inviteRole,
       expiresAt: DateTime.now().plus({ days: 7 }),
@@ -554,15 +555,15 @@ export default class TeamsController {
 
     // Send invitation email (non-blocking)
     this.mailService
-      .sendTeamInvitationEmail(
+      .sendTenantInvitationEmail(
         email,
-        team.name,
+        tenant.name,
         user.fullName ?? user.email,
         invitation.token,
         inviteRole,
         invitation.expiresAt.toJSDate()
       )
-      .catch((err) => logger.error({ err }, 'Failed to send team invitation email'))
+      .catch((err) => logger.error({ err }, 'Failed to send tenant invitation email'))
 
     response.created({
       data: {
@@ -578,27 +579,27 @@ export default class TeamsController {
   }
 
   /**
-   * List pending invitations for a team
+   * List pending invitations for a tenant
    */
   async listInvitations({ auth, params, response }: HttpContext): Promise<void> {
     const user = auth.user!
-    const teamId = params.id
+    const tenantId = params.id
 
     // Check if user is admin
-    const membership = await TeamMember.query()
+    const membership = await TenantMembership.query()
       .where('userId', user.id)
-      .where('teamId', teamId)
+      .where('tenantId', tenantId)
       .first()
 
     if (!membership || !membership.isAdmin()) {
       return response.forbidden({
         error: 'Forbidden',
-        message: 'You must be a team admin to view invitations',
+        message: 'You must be a tenant admin to view invitations',
       })
     }
 
-    const invitations = await TeamInvitation.query()
-      .where('teamId', teamId)
+    const invitations = await TenantInvitation.query()
+      .where('tenantId', tenantId)
       .preload('invitedBy')
       .orderBy('createdAt', 'desc')
 
@@ -625,24 +626,24 @@ export default class TeamsController {
    */
   async cancelInvitation({ auth, params, response }: HttpContext): Promise<void> {
     const user = auth.user!
-    const { id: teamId, invitationId } = params
+    const { id: tenantId, invitationId } = params
 
     // Check if user is admin
-    const membership = await TeamMember.query()
+    const membership = await TenantMembership.query()
       .where('userId', user.id)
-      .where('teamId', teamId)
+      .where('tenantId', tenantId)
       .first()
 
     if (!membership || !membership.isAdmin()) {
       return response.forbidden({
         error: 'Forbidden',
-        message: 'You must be a team admin to cancel invitations',
+        message: 'You must be a tenant admin to cancel invitations',
       })
     }
 
-    const invitation = await TeamInvitation.query()
+    const invitation = await TenantInvitation.query()
       .where('id', invitationId)
-      .where('teamId', teamId)
+      .where('tenantId', tenantId)
       .where('status', 'pending')
       .first()
 
@@ -666,9 +667,9 @@ export default class TeamsController {
   async getInvitationByToken({ params, response }: HttpContext): Promise<void> {
     const { token } = params
 
-    const invitation = await TeamInvitation.query()
+    const invitation = await TenantInvitation.query()
       .where('token', token)
-      .preload('team')
+      .preload('tenant')
       .preload('invitedBy')
       .first()
 
@@ -700,10 +701,10 @@ export default class TeamsController {
         id: invitation.id,
         email: invitation.email,
         role: invitation.role,
-        team: {
-          id: invitation.team.id,
-          name: invitation.team.name,
-          slug: invitation.team.slug,
+        tenant: {
+          id: invitation.tenant.id,
+          name: invitation.tenant.name,
+          slug: invitation.tenant.slug,
         },
         invitedBy: {
           id: invitation.invitedBy.id,
@@ -723,10 +724,10 @@ export default class TeamsController {
     const user = auth.user!
     const { token } = params
 
-    const invitation = await TeamInvitation.query()
+    const invitation = await TenantInvitation.query()
       .where('token', token)
-      .preload('team', (query) => {
-        query.preload('members')
+      .preload('tenant', (query) => {
+        query.preload('memberships')
       })
       .first()
 
@@ -757,17 +758,17 @@ export default class TeamsController {
     // Use transaction with row locking to prevent race condition
     try {
       await db.transaction(async (trx) => {
-        // Lock the team row to prevent concurrent modifications
-        const team = await Team.query({ client: trx })
-          .where('id', invitation.teamId)
+        // Lock the tenant row to prevent concurrent modifications
+        const tenant = await Tenant.query({ client: trx })
+          .where('id', invitation.tenantId)
           .forUpdate()
-          .preload('members')
+          .preload('memberships')
           .firstOrFail()
 
         // Double-check membership inside transaction
-        const existingMembership = await TeamMember.query({ client: trx })
+        const existingMembership = await TenantMembership.query({ client: trx })
           .where('userId', user.id)
-          .where('teamId', invitation.teamId)
+          .where('tenantId', invitation.tenantId)
           .first()
 
         if (existingMembership) {
@@ -777,23 +778,23 @@ export default class TeamsController {
           throw new Error('ALREADY_MEMBER')
         }
 
-        // Check team member limit (inside transaction with lock)
-        if (!(await team.canAddMember(team.members.length))) {
+        // Check tenant member limit (inside transaction with lock)
+        if (!(await tenant.canAddMember(tenant.memberships.length))) {
           throw new Error('LIMIT_REACHED')
         }
 
-        // Add user to team
-        await TeamMember.create(
+        // Add user to tenant
+        await TenantMembership.create(
           {
             userId: user.id,
-            teamId: invitation.teamId,
+            tenantId: invitation.tenantId,
             role: invitation.role,
           },
           { client: trx }
         )
 
         // Update user
-        user.currentTeamId = invitation.teamId
+        user.currentTenantId = invitation.tenantId
         user.useTransaction(trx)
         await user.save()
 
@@ -805,24 +806,24 @@ export default class TeamsController {
 
       response.json({
         data: {
-          teamId: invitation.teamId,
-          teamName: invitation.team.name,
+          tenantId: invitation.tenantId,
+          tenantName: invitation.tenant.name,
           role: invitation.role,
         },
-        message: 'You have joined the team successfully',
+        message: 'You have joined the tenant successfully',
       })
     } catch (error) {
       if (error instanceof Error) {
         if (error.message === 'ALREADY_MEMBER') {
           return response.badRequest({
             error: 'AlreadyMember',
-            message: 'You are already a member of this team',
+            message: 'You are already a member of this tenant',
           })
         }
         if (error.message === 'LIMIT_REACHED') {
           return response.badRequest({
             error: 'LimitReached',
-            message: 'This team has reached its member limit',
+            message: 'This tenant has reached its member limit',
           })
         }
       }
@@ -837,7 +838,7 @@ export default class TeamsController {
     const user = auth.user!
     const { token } = params
 
-    const invitation = await TeamInvitation.query().where('token', token).first()
+    const invitation = await TenantInvitation.query().where('token', token).first()
 
     if (!invitation) {
       return response.notFound({

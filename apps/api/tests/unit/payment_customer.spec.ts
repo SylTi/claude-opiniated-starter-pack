@@ -1,6 +1,6 @@
 import { test } from '@japa/runner'
 import User from '#models/user'
-import Team from '#models/team'
+import Tenant from '#models/tenant'
 import PaymentCustomer from '#models/payment_customer'
 import { truncateAllTables } from '../bootstrap.js'
 
@@ -13,12 +13,12 @@ test.group('PaymentCustomer Model', (group) => {
     await truncateAllTables()
   })
 
-  test('findBySubscriber returns null when not found', async ({ assert }) => {
-    const customer = await PaymentCustomer.findBySubscriber('user', 999, 'stripe')
+  test('findByTenant returns null when not found', async ({ assert }) => {
+    const customer = await PaymentCustomer.findByTenant(999, 'stripe')
     assert.isNull(customer)
   })
 
-  test('findOrCreateBySubscriber creates new customer for user', async ({ assert }) => {
+  test('findOrCreateByTenant creates new customer for tenant', async ({ assert }) => {
     const id = uniqueId()
     const user = await User.create({
       email: `user-${id}@example.com`,
@@ -28,21 +28,22 @@ test.group('PaymentCustomer Model', (group) => {
       mfaEnabled: false,
     })
 
-    const customer = await PaymentCustomer.findOrCreateBySubscriber(
-      'user',
-      user.id,
-      'stripe',
-      'cus_test123'
-    )
+    const tenant = await Tenant.create({
+      name: 'Test Tenant',
+      slug: `test-tenant-${id}`,
+      type: 'personal',
+      ownerId: user.id,
+    })
+
+    const customer = await PaymentCustomer.findOrCreateByTenant(tenant.id, 'stripe', 'cus_test123')
 
     assert.exists(customer.id)
-    assert.equal(customer.subscriberType, 'user')
-    assert.equal(customer.subscriberId, user.id)
+    assert.equal(customer.tenantId, tenant.id)
     assert.equal(customer.provider, 'stripe')
     assert.equal(customer.providerCustomerId, 'cus_test123')
   })
 
-  test('findOrCreateBySubscriber returns existing customer', async ({ assert }) => {
+  test('findOrCreateByTenant returns existing customer', async ({ assert }) => {
     const id = uniqueId()
     const user = await User.create({
       email: `user-${id}@example.com`,
@@ -52,16 +53,17 @@ test.group('PaymentCustomer Model', (group) => {
       mfaEnabled: false,
     })
 
-    const customer1 = await PaymentCustomer.findOrCreateBySubscriber(
-      'user',
-      user.id,
-      'stripe',
-      'cus_test123'
-    )
+    const tenant = await Tenant.create({
+      name: 'Test Tenant',
+      slug: `test-tenant-${id}`,
+      type: 'personal',
+      ownerId: user.id,
+    })
 
-    const customer2 = await PaymentCustomer.findOrCreateBySubscriber(
-      'user',
-      user.id,
+    const customer1 = await PaymentCustomer.findOrCreateByTenant(tenant.id, 'stripe', 'cus_test123')
+
+    const customer2 = await PaymentCustomer.findOrCreateByTenant(
+      tenant.id,
       'stripe',
       'cus_different'
     )
@@ -70,7 +72,7 @@ test.group('PaymentCustomer Model', (group) => {
     assert.equal(customer2.providerCustomerId, 'cus_test123') // Original value preserved
   })
 
-  test('upsertBySubscriber creates new customer', async ({ assert }) => {
+  test('upsertByTenant creates new customer', async ({ assert }) => {
     const id = uniqueId()
     const user = await User.create({
       email: `user-${id}@example.com`,
@@ -80,18 +82,20 @@ test.group('PaymentCustomer Model', (group) => {
       mfaEnabled: false,
     })
 
-    const customer = await PaymentCustomer.upsertBySubscriber(
-      'user',
-      user.id,
-      'stripe',
-      'cus_test123'
-    )
+    const tenant = await Tenant.create({
+      name: 'Test Tenant',
+      slug: `test-tenant-${id}`,
+      type: 'personal',
+      ownerId: user.id,
+    })
+
+    const customer = await PaymentCustomer.upsertByTenant(tenant.id, 'stripe', 'cus_test123')
 
     assert.exists(customer.id)
     assert.equal(customer.providerCustomerId, 'cus_test123')
   })
 
-  test('upsertBySubscriber updates existing customer', async ({ assert }) => {
+  test('upsertByTenant updates existing customer', async ({ assert }) => {
     const id = uniqueId()
     const user = await User.create({
       email: `user-${id}@example.com`,
@@ -101,44 +105,21 @@ test.group('PaymentCustomer Model', (group) => {
       mfaEnabled: false,
     })
 
-    await PaymentCustomer.upsertBySubscriber('user', user.id, 'stripe', 'cus_old')
-    const customer = await PaymentCustomer.upsertBySubscriber('user', user.id, 'stripe', 'cus_new')
+    const tenant = await Tenant.create({
+      name: 'Test Tenant',
+      slug: `test-tenant-${id}`,
+      type: 'personal',
+      ownerId: user.id,
+    })
+
+    await PaymentCustomer.upsertByTenant(tenant.id, 'stripe', 'cus_old')
+    const customer = await PaymentCustomer.upsertByTenant(tenant.id, 'stripe', 'cus_new')
 
     assert.equal(customer.providerCustomerId, 'cus_new')
 
     // Verify only one record exists
-    const all = await PaymentCustomer.query()
-      .where('subscriberType', 'user')
-      .where('subscriberId', user.id)
+    const all = await PaymentCustomer.query().where('tenantId', tenant.id)
     assert.equal(all.length, 1)
-  })
-
-  test('findOrCreateBySubscriber works for teams', async ({ assert }) => {
-    const id = uniqueId()
-    const owner = await User.create({
-      email: `owner-${id}@example.com`,
-      password: 'password123',
-      role: 'user',
-      emailVerified: true,
-      mfaEnabled: false,
-    })
-
-    const team = await Team.create({
-      name: 'Test Team',
-      slug: `test-team-${id}`,
-      ownerId: owner.id,
-    })
-
-    const customer = await PaymentCustomer.findOrCreateBySubscriber(
-      'team',
-      team.id,
-      'stripe',
-      'cus_team123'
-    )
-
-    assert.equal(customer.subscriberType, 'team')
-    assert.equal(customer.subscriberId, team.id)
-    assert.equal(customer.providerCustomerId, 'cus_team123')
   })
 
   test('findByProviderCustomerId returns customer', async ({ assert }) => {
@@ -151,16 +132,22 @@ test.group('PaymentCustomer Model', (group) => {
       mfaEnabled: false,
     })
 
+    const tenant = await Tenant.create({
+      name: 'Test Tenant',
+      slug: `test-tenant-${id}`,
+      type: 'personal',
+      ownerId: user.id,
+    })
+
     await PaymentCustomer.create({
-      subscriberType: 'user',
-      subscriberId: user.id,
+      tenantId: tenant.id,
       provider: 'stripe',
       providerCustomerId: 'cus_unique123',
     })
 
     const customer = await PaymentCustomer.findByProviderCustomerId('stripe', 'cus_unique123')
     assert.isNotNull(customer)
-    assert.equal(customer!.subscriberId, user.id)
+    assert.equal(customer!.tenantId, tenant.id)
   })
 
   test('findByProviderCustomerId returns null for non-existent', async ({ assert }) => {
@@ -168,7 +155,7 @@ test.group('PaymentCustomer Model', (group) => {
     assert.isNull(customer)
   })
 
-  test('upsertBySubscriber creates customer for team', async ({ assert }) => {
+  test('works for team tenants', async ({ assert }) => {
     const id = uniqueId()
     const owner = await User.create({
       email: `owner-${id}@example.com`,
@@ -178,20 +165,16 @@ test.group('PaymentCustomer Model', (group) => {
       mfaEnabled: false,
     })
 
-    const team = await Team.create({
+    const tenant = await Tenant.create({
       name: 'Test Team',
       slug: `test-team-${id}`,
+      type: 'team',
       ownerId: owner.id,
     })
 
-    const customer = await PaymentCustomer.upsertBySubscriber(
-      'team',
-      team.id,
-      'stripe',
-      `cus_team_${id}`
-    )
+    const customer = await PaymentCustomer.upsertByTenant(tenant.id, 'stripe', `cus_team_${id}`)
 
-    assert.equal(customer.subscriberType, 'team')
-    assert.equal(customer.subscriberId, team.id)
+    assert.equal(customer.tenantId, tenant.id)
+    assert.equal(customer.providerCustomerId, `cus_team_${id}`)
   })
 })

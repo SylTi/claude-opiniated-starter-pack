@@ -1,11 +1,13 @@
 import type { SubscriptionDTO } from "./subscription.js";
 
-export type TeamRole = "owner" | "admin" | "member";
+export type TenantType = "personal" | "team";
+export type TenantRole = "owner" | "admin" | "member";
 
-export interface TeamDTO {
+export interface TenantDTO {
   id: number;
   name: string;
   slug: string;
+  type: TenantType;
   subscription?: SubscriptionDTO | null;
   ownerId: number | null;
   maxMembers: number | null;
@@ -16,11 +18,11 @@ export interface TeamDTO {
   updatedAt: string | null;
 }
 
-export interface TeamMemberDTO {
+export interface TenantMembershipDTO {
   id: number;
   userId: number;
-  teamId: number;
-  role: TeamRole;
+  tenantId: number;
+  role: TenantRole;
   user?: {
     id: number;
     email: string;
@@ -30,39 +32,41 @@ export interface TeamMemberDTO {
   createdAt: string;
 }
 
-export interface CreateTeamDTO {
+export interface CreateTenantDTO {
   name: string;
+  slug?: string;
 }
 
-export interface UpdateTeamDTO {
+export interface UpdateTenantDTO {
   name?: string;
+  slug?: string;
 }
 
-export interface UpdateTeamSubscriptionDTO {
+export interface UpdateTenantSubscriptionDTO {
   subscriptionTier: string;
   subscriptionExpiresAt?: string | null;
 }
 
-export interface AddTeamMemberDTO {
+export interface AddTenantMemberDTO {
   email: string;
-  role?: TeamRole;
+  role?: TenantRole;
 }
 
-export interface UpdateTeamMemberDTO {
-  role: TeamRole;
+export interface UpdateTenantMemberDTO {
+  role: TenantRole;
 }
 
-export interface TeamWithMembersDTO extends TeamDTO {
-  members: TeamMemberDTO[];
+export interface TenantWithMembersDTO extends TenantDTO {
+  members: TenantMembershipDTO[];
 }
 
-// Team Invitation types
+// Tenant Invitation types
 export type InvitationStatus = "pending" | "accepted" | "declined" | "expired";
 export type InvitationRole = "admin" | "member";
 
-export interface TeamInvitationDTO {
+export interface TenantInvitationDTO {
   id: number;
-  teamId: number;
+  tenantId: number;
   email: string;
   role: InvitationRole;
   status: InvitationStatus;
@@ -85,10 +89,11 @@ export interface InvitationDetailsDTO {
   id: number;
   email: string;
   role: InvitationRole;
-  team: {
+  tenant: {
     id: number;
     name: string;
     slug: string;
+    type: TenantType;
   };
   invitedBy: {
     id: number;
@@ -99,16 +104,17 @@ export interface InvitationDetailsDTO {
 }
 
 export interface AcceptInvitationResponseDTO {
-  teamId: number;
-  teamName: string;
+  tenantId: number;
+  tenantName: string;
   role: InvitationRole;
 }
 
-// Admin team types
-export interface AdminTeamDTO {
+// Admin tenant types
+export interface AdminTenantDTO {
   id: number;
   name: string;
   slug: string;
+  type: TenantType;
   subscriptionTier: string;
   subscriptionExpiresAt: string | null;
   ownerId: number | null;
@@ -119,3 +125,21 @@ export interface AdminTeamDTO {
   createdAt: string;
   updatedAt: string | null;
 }
+
+// Backward compatibility - deprecated types (use Tenant* instead)
+/** @deprecated Use TenantRole instead */
+export type TeamRole = TenantRole;
+/** @deprecated Use TenantDTO instead */
+export type TeamDTO = TenantDTO;
+/** @deprecated Use TenantMembershipDTO instead */
+export type TeamMemberDTO = TenantMembershipDTO;
+/** @deprecated Use CreateTenantDTO instead */
+export type CreateTeamDTO = CreateTenantDTO;
+/** @deprecated Use UpdateTenantDTO instead */
+export type UpdateTeamDTO = UpdateTenantDTO;
+/** @deprecated Use TenantWithMembersDTO instead */
+export type TeamWithMembersDTO = TenantWithMembersDTO;
+/** @deprecated Use TenantInvitationDTO instead */
+export type TeamInvitationDTO = TenantInvitationDTO;
+/** @deprecated Use AdminTenantDTO instead */
+export type AdminTeamDTO = AdminTenantDTO;

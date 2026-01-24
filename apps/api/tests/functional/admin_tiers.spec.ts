@@ -84,12 +84,13 @@ test.group('Admin Tiers API - Create', (group) => {
     const { cookies } = await createUserAndLogin(`admin-${id}@example.com`, 'password123', {
       role: 'admin',
     })
+    const slug = `tier-${id}`.slice(0, 20)
 
     const response = await request(BASE_URL)
       .post('/api/v1/admin/tiers')
       .set('Cookie', cookies)
       .send({
-        slug: `tier-${id}`,
+        slug,
         name: 'Enterprise Plus',
         level: 3,
         maxTeamMembers: 25,
@@ -100,9 +101,9 @@ test.group('Admin Tiers API - Create', (group) => {
       })
       .expect(201)
 
-    assert.equal(response.body.data.slug, `tier-${id}`)
+    assert.equal(response.body.data.slug, slug)
     assert.equal(response.body.data.name, 'Enterprise Plus')
-    const tier = await SubscriptionTier.findBySlug(`tier-${id}`)
+    const tier = await SubscriptionTier.findBySlug(slug)
     assert.exists(tier)
   })
 
@@ -111,9 +112,10 @@ test.group('Admin Tiers API - Create', (group) => {
     const { cookies } = await createUserAndLogin(`admin-${id}@example.com`, 'password123', {
       role: 'admin',
     })
+    const slug = `duplicate-${id}`.slice(0, 20)
 
     await SubscriptionTier.create({
-      slug: `duplicate-${id}`,
+      slug,
       name: 'Duplicate',
       level: 5,
       isActive: true,
@@ -123,7 +125,7 @@ test.group('Admin Tiers API - Create', (group) => {
       .post('/api/v1/admin/tiers')
       .set('Cookie', cookies)
       .send({
-        slug: `duplicate-${id}`,
+        slug,
         name: 'Duplicate',
         level: 5,
       })
@@ -143,9 +145,10 @@ test.group('Admin Tiers API - Update', (group) => {
     const { cookies } = await createUserAndLogin(`admin-${id}@example.com`, 'password123', {
       role: 'admin',
     })
+    const slug = `update-${id}`.slice(0, 20)
 
     const tier = await SubscriptionTier.create({
-      slug: `update-${id}`,
+      slug,
       name: 'Update Tier',
       level: 4,
       isActive: true,
@@ -178,9 +181,10 @@ test.group('Admin Tiers API - Delete', (group) => {
     const { cookies } = await createUserAndLogin(`admin-${id}@example.com`, 'password123', {
       role: 'admin',
     })
+    const slug = `delete-${id}`.slice(0, 20)
 
     const tier = await SubscriptionTier.create({
-      slug: `delete-${id}`,
+      slug,
       name: 'Delete Tier',
       level: 4,
       isActive: true,

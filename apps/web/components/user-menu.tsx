@@ -1,7 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { User, Settings, LogOut, Shield, LayoutDashboard, Users, UsersRound } from "lucide-react";
+import {
+  User,
+  Settings,
+  LogOut,
+  Shield,
+  LayoutDashboard,
+  Users,
+  UsersRound,
+} from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -79,7 +87,7 @@ export function UserMenu(): React.ReactElement {
           <Settings className="mr-2 h-4 w-4" />
           <span>Settings</span>
         </DropdownMenuItem>
-        {user.currentTeamId && user.effectiveSubscriptionTier.level > 0 && (
+        {user.currentTenantId && user.effectiveSubscriptionTier.level > 0 && (
           <DropdownMenuItem onClick={() => router.push("/team")}>
             <UsersRound className="mr-2 h-4 w-4" />
             <span>Team</span>

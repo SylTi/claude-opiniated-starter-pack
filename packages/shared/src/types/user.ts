@@ -1,4 +1,5 @@
 import type { SubscriptionTierDTO, SubscriptionDTO } from "./subscription.js";
+import type { TenantType } from "./tenant.js";
 
 export type UserRole = "admin" | "user" | "guest";
 
@@ -7,19 +8,18 @@ export interface UserDTO {
   email: string;
   fullName: string | null;
   role: UserRole;
-  // Active subscription (may be null if using team subscription)
-  subscription?: SubscriptionDTO | null;
-  // Team info
-  currentTeamId: number | null;
-  currentTeam?: {
+  // Current tenant info (billing unit)
+  currentTenantId: number | null;
+  currentTenant?: {
     id: number;
     name: string;
     slug: string;
+    type: TenantType;
     subscription?: SubscriptionDTO | null;
   } | null;
-  // Effective subscription tier (team's if in team, personal otherwise)
+  // Effective subscription tier (from current tenant)
   effectiveSubscriptionTier: SubscriptionTierDTO;
-  // Cash balance (in cents)
+  // User's personal balance (in cents) - deprecated, use tenant balance
   balance: number;
   balanceCurrency: string;
   emailVerified: boolean;
@@ -86,10 +86,9 @@ export interface AdminUserDTO {
   email: string;
   fullName: string | null;
   role: UserRole;
-  subscriptionTier: string;
-  subscriptionExpiresAt: string | null;
-  currentTeamId: number | null;
-  currentTeamName: string | null;
+  currentTenantId: number | null;
+  currentTenantName: string | null;
+  currentTenantType: TenantType | null;
   balance: number;
   balanceCurrency: string;
   emailVerified: boolean;

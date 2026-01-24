@@ -17,7 +17,7 @@ export const createDiscountCodeValidator = vine.compile(
     currency: vine.string().fixedLength(3).optional(),
     minAmount: vine.number().min(0).optional(),
     maxUses: vine.number().min(1).optional(),
-    maxUsesPerUser: vine.number().min(1).optional(),
+    maxUsesPerTenant: vine.number().min(1).optional(),
     expiresAt: vine.date().afterOrEqual('today').optional(),
     isActive: vine.boolean().optional(),
   })
@@ -41,7 +41,7 @@ export const updateDiscountCodeValidator = vine.compile(
     currency: vine.string().fixedLength(3).nullable().optional(),
     minAmount: vine.number().min(0).nullable().optional(),
     maxUses: vine.number().min(1).nullable().optional(),
-    maxUsesPerUser: vine.number().min(1).nullable().optional(),
+    maxUsesPerTenant: vine.number().min(1).nullable().optional(),
     expiresAt: vine.date().nullable().optional(),
     isActive: vine.boolean().optional(),
   })
@@ -49,10 +49,12 @@ export const updateDiscountCodeValidator = vine.compile(
 
 /**
  * Validator for validating a discount code during checkout
+ * Tenant is required (tenant is the billing unit)
  */
 export const validateDiscountCodeValidator = vine.compile(
   vine.object({
     code: vine.string().trim().minLength(1),
     priceId: vine.number().positive(),
+    tenantId: vine.number().positive(),
   })
 )

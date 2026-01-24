@@ -2,11 +2,13 @@ import { DateTime } from 'luxon'
 import { BaseModel, column, hasMany, belongsTo } from '@adonisjs/lucid/orm'
 import type { HasMany, BelongsTo } from '@adonisjs/lucid/types/relations'
 import User from '#models/user'
-import TeamMember from '#models/team_member'
+import TenantMembership from '#models/tenant_membership'
 import Subscription from '#models/subscription'
 import SubscriptionTier from '#models/subscription_tier'
 
-export default class Team extends BaseModel {
+export default class Tenant extends BaseModel {
+  static table = 'tenants'
+
   @column({ isPrimary: true })
   declare id: number
 
@@ -15,6 +17,9 @@ export default class Team extends BaseModel {
 
   @column()
   declare slug: string
+
+  @column()
+  declare type: 'personal' | 'team'
 
   @column()
   declare ownerId: number | null
@@ -37,31 +42,29 @@ export default class Team extends BaseModel {
   @belongsTo(() => User, { foreignKey: 'ownerId' })
   declare owner: BelongsTo<typeof User>
 
-  @hasMany(() => TeamMember)
-  declare members: HasMany<typeof TeamMember>
+  @hasMany(() => TenantMembership)
+  declare memberships: HasMany<typeof TenantMembership>
 
   /**
-   * Get active subscription for this team
+   * Get active subscription for this tenant
    */
   async getActiveSubscription(): Promise<Subscription | null> {
-    return Subscription.getActiveForTeam(this.id)
+    return Subscription.getActiveForTenant(this.id)
   }
 
   /**
-   * Get all subscriptions for this team (including history)
+   * Get all subscriptions for this tenant (including history)
    */
   async getSubscriptions(): Promise<Subscription[]> {
-    return Subscription.getAllForTeam(this.id)
+    return Subscription.getAllForTenant(this.id)
   }
 
   /**
-   * Get the active subscription tier for this team
+   * Get the active subscription tier for this tenant
    */
   async getSubscriptionTier(): Promise<SubscriptionTier> {
-    // Query directly to ensure tier is always loaded
     const subscription = await Subscription.query()
-      .where('subscriberType', 'team')
-      .where('subscriberId', this.id)
+      .where('tenantId', this.id)
       .where('status', 'active')
       .preload('tier')
       .orderBy('createdAt', 'desc')
@@ -74,7 +77,7 @@ export default class Team extends BaseModel {
   }
 
   /**
-   * Check if team's subscription is expired
+   * Check if tenant's subscription is expired
    */
   async isSubscriptionExpired(): Promise<boolean> {
     const subscription = await this.getActiveSubscription()
@@ -83,7 +86,7 @@ export default class Team extends BaseModel {
   }
 
   /**
-   * Check if team has access to a specific tier
+   * Check if tenant has access to a specific tier
    */
   async hasAccessToTier(tier: SubscriptionTier): Promise<boolean> {
     const currentTier = await this.getSubscriptionTier()
@@ -95,7 +98,7 @@ export default class Team extends BaseModel {
   }
 
   /**
-   * Check if team has access to a tier by slug
+   * Check if tenant has access to a tier by slug
    */
   async hasAccessToTierBySlug(tierSlug: string): Promise<boolean> {
     const tier = await SubscriptionTier.findBySlugOrFail(tierSlug)
@@ -112,7 +115,7 @@ export default class Team extends BaseModel {
   }
 
   /**
-   * Check if team can add more members
+   * Check if tenant can add more members
    */
   async canAddMember(currentMemberCount: number): Promise<boolean> {
     const max = await this.getEffectiveMaxMembers()
@@ -121,14 +124,12 @@ export default class Team extends BaseModel {
   }
 
   /**
-   * Add credit to team's balance
+   * Add credit to tenant's balance
    */
   async addCredit(amount: number, currency?: string): Promise<number> {
-    // Only check for currency mismatch if team already has a currency set
     if (this.balanceCurrency && currency && currency !== this.balanceCurrency) {
       throw new Error(`Currency mismatch: expected ${this.balanceCurrency}, got ${currency}`)
     }
-    // Ensure both balance and amount are numbers (they might come as strings from DB)
     const currentBalance = Number(this.balance) || 0
     const creditAmount = Number(amount) || 0
     this.balance = currentBalance + creditAmount
@@ -140,12 +141,26 @@ export default class Team extends BaseModel {
   }
 
   /**
-   * Get team's balance
+   * Get tenant's balance
    */
   getBalance(): { balance: number; currency: string } {
     return {
       balance: this.balance || 0,
       currency: this.balanceCurrency || 'usd',
     }
+  }
+
+  /**
+   * Check if this is a personal tenant
+   */
+  isPersonal(): boolean {
+    return this.type === 'personal'
+  }
+
+  /**
+   * Check if this is a team tenant
+   */
+  isTeam(): boolean {
+    return this.type === 'team'
   }
 }

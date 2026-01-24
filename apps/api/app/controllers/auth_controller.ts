@@ -1,5 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import logger from '@adonisjs/core/services/logger'
+import string from '@adonisjs/core/helpers/string'
 import {
   registerValidator,
   loginValidator,
@@ -11,10 +12,12 @@ import {
 import AuthService from '#services/auth_service'
 import MailService from '#services/mail_service'
 import CookieSigningService from '#services/cookie_signing_service'
-import TeamInvitation from '#models/team_invitation'
-import TeamMember from '#models/team_member'
+import TenantInvitation from '#models/tenant_invitation'
+import TenantMembership from '#models/tenant_membership'
+import Tenant from '#models/tenant'
 import Subscription from '#models/subscription'
 import SubscriptionTier from '#models/subscription_tier'
+import { TENANT_ROLES } from '#constants/roles'
 
 export default class AuthController {
   private authService = new AuthService()
@@ -36,17 +39,15 @@ export default class AuthController {
     }
   }
 
-  private async getEffectiveTier(userId: number, currentTeamId: number | null) {
-    if (currentTeamId) {
-      const teamSubscription = await Subscription.getActiveForTeam(currentTeamId)
-      if (teamSubscription?.tier) {
-        return teamSubscription.tier
+  /**
+   * Get effective tier for a tenant (tenant is the billing unit)
+   */
+  private async getEffectiveTier(tenantId: number | null) {
+    if (tenantId) {
+      const tenantSubscription = await Subscription.getActiveForTenant(tenantId)
+      if (tenantSubscription?.tier) {
+        return tenantSubscription.tier
       }
-    }
-
-    const userSubscription = await Subscription.getActiveForUser(userId)
-    if (userSubscription?.tier) {
-      return userSubscription.tier
     }
 
     return SubscriptionTier.getFreeTier()
@@ -56,6 +57,7 @@ export default class AuthController {
    * Register a new user
    * POST /api/v1/auth/register
    *
+   * Creates a personal tenant for every new user.
    * Security: Returns generic response to prevent user enumeration.
    * Adds random timing delay to prevent timing-based attacks.
    */
@@ -78,12 +80,12 @@ export default class AuthController {
     }
 
     // Check for valid invitation if token is provided
-    let invitation: TeamInvitation | null = null
+    let invitation: TenantInvitation | null = null
     if (data.invitationToken) {
-      invitation = await TeamInvitation.query()
+      invitation = await TenantInvitation.query()
         .where('token', data.invitationToken)
-        .preload('team', (query) => {
-          query.preload('members')
+        .preload('tenant', (query) => {
+          query.preload('memberships')
         })
         .first()
 
@@ -114,11 +116,11 @@ export default class AuthController {
         return
       }
 
-      // Check team member limit
-      if (!(await invitation.team.canAddMember(invitation.team.members.length))) {
+      // Check tenant member limit
+      if (!(await invitation.tenant.canAddMember(invitation.tenant.memberships.length))) {
         response.badRequest({
           error: 'LimitReached',
-          message: 'This team has reached its member limit',
+          message: 'This tenant has reached its member limit',
         })
         return
       }
@@ -126,31 +128,53 @@ export default class AuthController {
 
     const { user, verificationToken } = await this.authService.register(data)
 
-    // Auto-join team if there's a valid invitation
-    let joinedTeam = null
+    // Create personal tenant for every user (tenant is the billing unit)
+    const personalTenantSlug = `personal-${string.slug(user.email.split('@')[0]).toLowerCase()}-${string.random(4).toLowerCase()}`
+    const personalTenant = await Tenant.create({
+      name: user.fullName || user.email.split('@')[0],
+      slug: personalTenantSlug,
+      type: 'personal',
+      ownerId: user.id,
+      balance: 0,
+      balanceCurrency: 'usd',
+    })
+
+    // Add user as owner of their personal tenant
+    await TenantMembership.create({
+      userId: user.id,
+      tenantId: personalTenant.id,
+      role: TENANT_ROLES.OWNER,
+    })
+
+    // Set personal tenant as current tenant
+    user.currentTenantId = personalTenant.id
+
+    // Auto-join tenant if there's a valid invitation
+    let joinedTenant = null
     if (invitation) {
-      // Add user to team
-      await TeamMember.create({
+      // Add user to invited tenant
+      await TenantMembership.create({
         userId: user.id,
-        teamId: invitation.teamId,
+        tenantId: invitation.tenantId,
         role: invitation.role,
       })
 
-      // Update user's current team
-      user.currentTeamId = invitation.teamId
-      await user.save()
+      // Update user's current tenant to the invited one
+      user.currentTenantId = invitation.tenantId
 
       // Mark invitation as accepted
       invitation.status = 'accepted'
       await invitation.save()
 
-      joinedTeam = {
-        id: invitation.team.id,
-        name: invitation.team.name,
-        slug: invitation.team.slug,
+      joinedTenant = {
+        id: invitation.tenant.id,
+        name: invitation.tenant.name,
+        slug: invitation.tenant.slug,
         role: invitation.role,
       }
     }
+
+    await user.save()
 
     // Send verification email (non-blocking, don't fail registration if email fails)
     this.mailService
@@ -159,18 +183,19 @@ export default class AuthController {
 
     // For new registrations with invitation, we can be more specific
     // since the invitation token already proves the user was invited
-    if (joinedTeam) {
+    if (joinedTenant) {
       response.created({
         data: {
           id: user.id,
           email: user.email,
           fullName: user.fullName,
           role: user.role,
-          currentTeamId: user.currentTeamId,
-          joinedTeam,
+          currentTenantId: user.currentTenantId,
+          personalTenantId: personalTenant.id,
+          joinedTenant,
           emailVerified: user.emailVerified,
         },
-        message: `Registration successful. You have been added to team "${joinedTeam.name}".`,
+        message: `Registration successful. You have been added to tenant "${joinedTenant.name}".`,
       })
       return
     }
@@ -250,12 +275,12 @@ export default class AuthController {
         userAgent
       )
 
-      // Load current team if exists
-      if (user.currentTeamId) {
-        await user.load('currentTeam')
+      // Load current tenant if exists
+      if (user.currentTenantId) {
+        await user.load('currentTenant')
       }
 
-      const effectiveTier = await this.getEffectiveTier(user.id, user.currentTeamId)
+      const effectiveTier = await this.getEffectiveTier(user.currentTenantId)
 
       response.ok({
         data: {
@@ -263,14 +288,15 @@ export default class AuthController {
           email: user.email,
           fullName: user.fullName,
           role: user.role,
-          balance: user.balance,
-          balanceCurrency: user.balanceCurrency,
-          currentTeamId: user.currentTeamId,
-          currentTeam: user.currentTeam
+          currentTenantId: user.currentTenantId,
+          currentTenant: user.currentTenant
             ? {
-                id: user.currentTeam.id,
-                name: user.currentTeam.name,
-                slug: user.currentTeam.slug,
+                id: user.currentTenant.id,
+                name: user.currentTenant.name,
+                slug: user.currentTenant.slug,
+                type: user.currentTenant.type,
+                balance: user.currentTenant.balance,
+                balanceCurrency: user.currentTenant.balanceCurrency,
               }
             : null,
           effectiveSubscriptionTier: this.serializeTier(effectiveTier),
@@ -279,7 +305,6 @@ export default class AuthController {
           avatarUrl: user.avatarUrl,
           createdAt: user.createdAt.toISO(),
           updatedAt: user.updatedAt?.toISO() ?? null,
-          subscription: null,
         },
         message: 'Login successful',
       })
@@ -326,12 +351,12 @@ export default class AuthController {
   async me({ response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
 
-    // Load current team if exists
-    if (user.currentTeamId) {
-      await user.load('currentTeam')
+    // Load current tenant if exists
+    if (user.currentTenantId) {
+      await user.load('currentTenant')
     }
 
-    const effectiveTier = await this.getEffectiveTier(user.id, user.currentTeamId)
+    const effectiveTier = await this.getEffectiveTier(user.currentTenantId)
 
     response.ok({
       data: {
@@ -339,14 +364,15 @@ export default class AuthController {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
-        balance: user.balance,
-        balanceCurrency: user.balanceCurrency,
-        currentTeamId: user.currentTeamId,
-        currentTeam: user.currentTeam
+        currentTenantId: user.currentTenantId,
+        currentTenant: user.currentTenant
           ? {
-              id: user.currentTeam.id,
-              name: user.currentTeam.name,
-              slug: user.currentTeam.slug,
+              id: user.currentTenant.id,
+              name: user.currentTenant.name,
+              slug: user.currentTenant.slug,
+              type: user.currentTenant.type,
+              balance: user.currentTenant.balance,
+              balanceCurrency: user.currentTenant.balanceCurrency,
             }
           : null,
         effectiveSubscriptionTier: this.serializeTier(effectiveTier),
@@ -355,7 +381,6 @@ export default class AuthController {
         avatarUrl: user.avatarUrl,
         createdAt: user.createdAt.toISO(),
         updatedAt: user.updatedAt?.toISO() ?? null,
-        subscription: null,
       },
     })
   }

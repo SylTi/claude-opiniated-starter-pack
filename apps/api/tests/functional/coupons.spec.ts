@@ -1,6 +1,6 @@
 import { test } from '@japa/runner'
 import User from '#models/user'
-import Team from '#models/team'
+import Tenant from '#models/tenant'
 import Coupon from '#models/coupon'
 import { truncateAllTables } from '../bootstrap.js'
 import request from 'supertest'
@@ -339,7 +339,7 @@ test.group('Billing API - Redeem Coupon', (group) => {
     const id = uniqueId()
     const { user, cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
 
-    const team = await Team.create({
+    const team = await Tenant.create({
       name: 'Test Team',
       slug: `test-team-${id}`,
       ownerId: user.id,
@@ -356,7 +356,7 @@ test.group('Billing API - Redeem Coupon', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/redeem-coupon')
       .set('Cookie', cookies)
-      .send({ code: couponCode, teamId: team.id })
+      .send({ code: couponCode, tenantId: team.id })
       .expect(200)
 
     assert.equal(response.body.data.success, true)
@@ -366,6 +366,34 @@ test.group('Billing API - Redeem Coupon', (group) => {
     // Verify team balance was updated
     await team.refresh()
     assert.equal(team.balance, 10000)
+  })
+
+  test('POST /api/v1/billing/redeem-coupon returns currency mismatch for user', async ({
+    assert,
+  }) => {
+    const id = uniqueId()
+    const { user, cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
+
+    user.balance = 1000
+    user.balanceCurrency = 'eur'
+    await user.save()
+
+    const couponCode = `CURRENCY${id}`.toUpperCase()
+    await Coupon.create({
+      code: couponCode,
+      creditAmount: 5000,
+      currency: 'usd',
+      isActive: true,
+    })
+
+    const response = await request(BASE_URL)
+      .post('/api/v1/billing/redeem-coupon')
+      .set('Cookie', cookies)
+      .send({ code: couponCode })
+      .expect(400)
+
+    assert.equal(response.body.error, 'CurrencyMismatch')
+    assert.exists(response.body.message)
   })
 
   test('POST /api/v1/billing/redeem-coupon rejects expired coupon', async ({ assert }) => {
@@ -468,7 +496,7 @@ test.group('Billing API - Redeem Coupon', (group) => {
       mfaEnabled: false,
     })
 
-    const team = await Team.create({
+    const team = await Tenant.create({
       name: 'Test Team',
       slug: `test-team-${id}`,
       ownerId: owner.id,
@@ -479,7 +507,7 @@ test.group('Billing API - Redeem Coupon', (group) => {
       'password123'
     )
 
-    await team.related('members').create({
+    await team.related('memberships').create({
       userId: member.id,
       role: 'member',
     })
@@ -495,7 +523,7 @@ test.group('Billing API - Redeem Coupon', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/redeem-coupon')
       .set('Cookie', cookies)
-      .send({ code: couponCode, teamId: team.id })
+      .send({ code: couponCode, tenantId: team.id })
       .expect(403)
 
     assert.exists(response.body.error)
@@ -532,7 +560,7 @@ test.group('Billing API - Get Balance', (group) => {
     const id = uniqueId()
     const { user, cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
 
-    const team = await Team.create({
+    const team = await Tenant.create({
       name: 'Test Team',
       slug: `test-team-${id}`,
       ownerId: user.id,

@@ -9,7 +9,7 @@ export interface DiscountCodeDTO {
   currency: string | null;
   minAmount: number | null;
   maxUses: number | null;
-  maxUsesPerUser: number | null;
+  maxUsesPerTenant: number | null;
   timesUsed: number;
   expiresAt: string | null;
   isActive: boolean;
@@ -25,7 +25,7 @@ export interface CreateDiscountCodeDTO {
   currency?: string | null;
   minAmount?: number | null;
   maxUses?: number | null;
-  maxUsesPerUser?: number | null;
+  maxUsesPerTenant?: number | null;
   expiresAt?: string | null;
   isActive?: boolean;
 }
@@ -38,7 +38,7 @@ export interface UpdateDiscountCodeDTO {
   currency?: string | null;
   minAmount?: number | null;
   maxUses?: number | null;
-  maxUsesPerUser?: number | null;
+  maxUsesPerTenant?: number | null;
   expiresAt?: string | null;
   isActive?: boolean;
 }
@@ -46,6 +46,8 @@ export interface UpdateDiscountCodeDTO {
 export interface DiscountCodeUsageDTO {
   id: number;
   discountCodeId: number;
+  tenantId: number;
+  tenantName: string;
   userId: number;
   userEmail: string;
   usedAt: string;
@@ -62,6 +64,8 @@ export interface CouponDTO {
   isActive: boolean;
   redeemedByUserId: number | null;
   redeemedByUserEmail: string | null;
+  redeemedForTenantId: number | null;
+  redeemedForTenantName: string | null;
   redeemedAt: string | null;
   createdAt: string;
   updatedAt: string | null;
@@ -88,6 +92,7 @@ export interface UpdateCouponDTO {
 export interface ValidateDiscountCodeRequest {
   code: string;
   priceId: number;
+  tenantId: number;
 }
 
 export interface ValidateDiscountCodeResponse {
@@ -101,6 +106,7 @@ export interface ValidateDiscountCodeResponse {
 
 export interface RedeemCouponRequest {
   code: string;
+  tenantId: number;
 }
 
 export interface RedeemCouponResponse {

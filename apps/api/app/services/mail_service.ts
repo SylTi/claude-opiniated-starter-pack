@@ -204,17 +204,17 @@ If you didn't request a password reset, you can safely ignore this email - your 
   }
 
   /**
-   * Send team invitation email
+   * Send tenant invitation email
    */
-  async sendTeamInvitationEmail(
+  async sendTenantInvitationEmail(
     email: string,
-    teamName: string,
+    tenantName: string,
     inviterName: string,
     token: string,
     role: string,
     expiresAt: Date
   ): Promise<SendResult> {
-    const inviteUrl = `${this.frontendUrl}/team/invite?token=${token}`
+    const inviteUrl = `${this.frontendUrl}/tenant/invite?token=${token}`
     const expiryDate = expiresAt.toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -223,7 +223,7 @@ If you didn't request a password reset, you can safely ignore this email - your 
     })
 
     // Escape user-provided values to prevent HTML injection
-    const safeTeamName = escapeHtml(teamName)
+    const safeTenantName = escapeHtml(tenantName)
     const safeInviterName = escapeHtml(inviterName)
     const safeRole = escapeHtml(role)
 
@@ -233,7 +233,7 @@ If you didn't request a password reset, you can safely ignore this email - your 
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Team Invitation</title>
+  <title>Workspace Invitation</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <div style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); padding: 30px; border-radius: 10px 10px 0 0;">
@@ -241,14 +241,14 @@ If you didn't request a password reset, you can safely ignore this email - your 
   </div>
   <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #eee; border-top: none;">
     <p>Hi there,</p>
-    <p><strong>${safeInviterName}</strong> has invited you to join <strong>${safeTeamName}</strong> as a <strong>${safeRole}</strong>.</p>
+    <p><strong>${safeInviterName}</strong> has invited you to join <strong>${safeTenantName}</strong> as a <strong>${safeRole}</strong>.</p>
     <div style="text-align: center; margin: 30px 0;">
       <a href="${inviteUrl}" style="background: #11998e; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">Accept Invitation</a>
     </div>
     <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
     <p style="color: #11998e; word-break: break-all; font-size: 14px;">${inviteUrl}</p>
     <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-    <p style="color: #999; font-size: 12px;">This invitation will expire on ${expiryDate}. If you don't want to join this team, you can safely ignore this email.</p>
+    <p style="color: #999; font-size: 12px;">This invitation will expire on ${expiryDate}. If you don't want to join this workspace, you can safely ignore this email.</p>
   </div>
 </body>
 </html>`
@@ -256,19 +256,19 @@ If you didn't request a password reset, you can safely ignore this email - your 
     const text = `
 Hi there,
 
-${safeInviterName} has invited you to join "${safeTeamName}" as a ${safeRole}.
+${safeInviterName} has invited you to join "${safeTenantName}" as a ${safeRole}.
 
 Click the link below to accept the invitation:
 ${inviteUrl}
 
 This invitation will expire on ${expiryDate}.
 
-If you don't want to join this team, you can safely ignore this email.
+If you don't want to join this workspace, you can safely ignore this email.
 `
 
     return this.send({
       to: email,
-      subject: `You've been invited to join ${safeTeamName}`,
+      subject: `You've been invited to join ${safeTenantName}`,
       html,
       text,
     })
@@ -280,15 +280,14 @@ If you don't want to join this team, you can safely ignore this email.
   async sendSubscriptionExpirationEmail(
     email: string,
     userName: string,
-    entityType: 'user' | 'team',
-    entityName: string,
+    tenantName: string,
     expiredTier: string
   ): Promise<SendResult> {
     const renewUrl = `${this.frontendUrl}/dashboard/billing`
 
     // Escape user-provided values to prevent HTML injection
     const safeName = escapeHtml(userName || 'there')
-    const safeEntityName = escapeHtml(entityName)
+    const safeTenantName = escapeHtml(tenantName)
     const safeTier = escapeHtml(expiredTier)
 
     const html = `
@@ -305,8 +304,8 @@ If you don't want to join this team, you can safely ignore this email.
   </div>
   <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #eee; border-top: none;">
     <p>Hi ${safeName},</p>
-    <p>Your <strong>${safeTier}</strong> subscription for ${entityType === 'team' ? `the team "${safeEntityName}"` : 'your account'} has expired.</p>
-    <p>Your account has been downgraded to the free tier. To regain access to premium features, please renew your subscription.</p>
+    <p>Your <strong>${safeTier}</strong> subscription for <strong>${safeTenantName}</strong> has expired.</p>
+    <p>Your workspace has been downgraded to the free tier. To regain access to premium features, please renew your subscription.</p>
     <div style="text-align: center; margin: 30px 0;">
       <a href="${renewUrl}" style="background: #fcb69f; color: #333; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">Renew Subscription</a>
     </div>
@@ -319,9 +318,9 @@ If you don't want to join this team, you can safely ignore this email.
     const text = `
 Hi ${safeName},
 
-Your ${safeTier} subscription for ${entityType === 'team' ? `the team "${safeEntityName}"` : 'your account'} has expired.
+Your ${safeTier} subscription for "${safeTenantName}" has expired.
 
-Your account has been downgraded to the free tier. To regain access to premium features, please renew your subscription:
+Your workspace has been downgraded to the free tier. To regain access to premium features, please renew your subscription:
 ${renewUrl}
 
 If you have any questions about your subscription, please contact our support team.

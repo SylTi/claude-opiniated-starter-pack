@@ -2,13 +2,13 @@ import vine from '@vinejs/vine'
 
 /**
  * Validator for creating a checkout session
+ * Tenant is the billing unit - tenantId is required
  */
 export const createCheckoutValidator = vine.compile(
   vine.object({
     priceId: vine.number().positive(),
+    tenantId: vine.number().positive(),
     discountCode: vine.string().optional(),
-    subscriberType: vine.enum(['user', 'team']).optional(),
-    subscriberId: vine.number().positive().optional(),
   })
 )
 
@@ -17,9 +17,8 @@ export const createCheckoutValidator = vine.compile(
  */
 export const createPortalValidator = vine.compile(
   vine.object({
+    tenantId: vine.number().positive(),
     returnUrl: vine.string().url().optional(),
-    subscriberType: vine.enum(['user', 'team']).optional(),
-    subscriberId: vine.number().positive().optional(),
   })
 )
 
@@ -28,8 +27,7 @@ export const createPortalValidator = vine.compile(
  */
 export const getSubscriptionValidator = vine.compile(
   vine.object({
-    subscriberType: vine.enum(['user', 'team']).optional(),
-    subscriberId: vine.number().positive().optional(),
+    tenantId: vine.number().positive(),
   })
 )
 
@@ -38,7 +36,6 @@ export const getSubscriptionValidator = vine.compile(
  */
 export const cancelSubscriptionValidator = vine.compile(
   vine.object({
-    subscriberType: vine.enum(['user', 'team']).optional(),
-    subscriberId: vine.number().positive().optional(),
+    tenantId: vine.number().positive(),
   })
 )

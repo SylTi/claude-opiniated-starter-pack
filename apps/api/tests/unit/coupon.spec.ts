@@ -2,7 +2,7 @@ import { test } from '@japa/runner'
 import { DateTime } from 'luxon'
 import Coupon from '#models/coupon'
 import User from '#models/user'
-import Team from '#models/team'
+import Tenant from '#models/tenant'
 import { truncateAllTables } from '../bootstrap.js'
 
 function uniqueId(): string {
@@ -132,7 +132,9 @@ test.group('Coupon Model', (group) => {
     assert.isFalse(coupon.isRedeemable())
   })
 
-  test('redeemForUser marks coupon as redeemed and updates user balance', async ({ assert }) => {
+  test('redeemForTenant marks coupon as redeemed and updates tenant balance', async ({
+    assert,
+  }) => {
     const id = uniqueId()
     const user = await User.create({
       email: `user-${id}@example.com`,
@@ -140,6 +142,14 @@ test.group('Coupon Model', (group) => {
       role: 'user',
       emailVerified: true,
       mfaEnabled: false,
+    })
+
+    // Create a personal tenant for the user (tenant is the billing unit)
+    const tenant = await Tenant.create({
+      name: `${user.fullName || 'User'}'s Workspace`,
+      slug: `personal-${id}`,
+      type: 'personal',
+      ownerId: user.id,
       balance: 1000,
       balanceCurrency: 'usd',
     })
@@ -153,7 +163,7 @@ test.group('Coupon Model', (group) => {
 
     // Refresh to get accurate values from DB
     await coupon.refresh()
-    const newBalance = await coupon.redeemForUser(user.id)
+    const newBalance = await coupon.redeemForTenant(tenant.id, user.id)
 
     assert.equal(newBalance, 6000) // 1000 + 5000
 
@@ -163,12 +173,12 @@ test.group('Coupon Model', (group) => {
     assert.isNotNull(coupon.redeemedAt)
     assert.isFalse(coupon.isActive)
 
-    // Verify user balance
-    await user.refresh()
-    assert.equal(user.balance, 6000)
+    // Verify tenant balance
+    await tenant.refresh()
+    assert.equal(tenant.balance, 6000)
   })
 
-  test('redeemForTeam marks coupon as redeemed and updates team balance', async ({ assert }) => {
+  test('redeemForTenant marks coupon as redeemed and updates team balance', async ({ assert }) => {
     const id = uniqueId()
     const user = await User.create({
       email: `owner-${id}@example.com`,
@@ -178,7 +188,7 @@ test.group('Coupon Model', (group) => {
       mfaEnabled: false,
     })
 
-    const team = await Team.create({
+    const team = await Tenant.create({
       name: 'Test Team',
       slug: `test-team-${id}`,
       ownerId: user.id,
@@ -195,7 +205,7 @@ test.group('Coupon Model', (group) => {
 
     // Refresh to get accurate values from DB
     await coupon.refresh()
-    const newBalance = await coupon.redeemForTeam(team.id, user.id)
+    const newBalance = await coupon.redeemForTenant(team.id, user.id)
 
     assert.equal(newBalance, 12000) // 2000 + 10000
 
@@ -210,7 +220,7 @@ test.group('Coupon Model', (group) => {
     assert.equal(team.balance, 12000)
   })
 
-  test('redeemForUser throws error for already redeemed coupon', async ({ assert }) => {
+  test('redeemForTenant throws error for already redeemed coupon', async ({ assert }) => {
     const id = uniqueId()
     const user = await User.create({
       email: `user-${id}@example.com`,
@@ -218,6 +228,13 @@ test.group('Coupon Model', (group) => {
       role: 'user',
       emailVerified: true,
       mfaEnabled: false,
+    })
+
+    const tenant = await Tenant.create({
+      name: 'Test Tenant',
+      slug: `test-tenant-${id}`,
+      type: 'personal',
+      ownerId: user.id,
     })
 
     const otherUser = await User.create({
@@ -238,7 +255,7 @@ test.group('Coupon Model', (group) => {
     })
 
     try {
-      await coupon.redeemForUser(user.id)
+      await coupon.redeemForTenant(tenant.id, user.id)
       assert.fail('Expected error to be thrown')
     } catch (error) {
       assert.instanceOf(error, Error)
@@ -321,7 +338,7 @@ test.group('Team Balance Methods', (group) => {
       mfaEnabled: false,
     })
 
-    const team = await Team.create({
+    const team = await Tenant.create({
       name: 'Test Team',
       slug: `test-team-${id}`,
       ownerId: user.id,
@@ -346,7 +363,7 @@ test.group('Team Balance Methods', (group) => {
       mfaEnabled: false,
     })
 
-    const team = await Team.create({
+    const team = await Tenant.create({
       name: 'Test Team',
       slug: `test-team-${id}`,
       ownerId: user.id,

@@ -30,19 +30,21 @@ export const updateCouponValidator = vine.compile(
 
 /**
  * Validator for redeeming a coupon
+ * Tenant is required (tenant is the billing unit)
  */
 export const redeemCouponValidator = vine.compile(
   vine.object({
     code: vine.string().trim().minLength(1),
-    teamId: vine.number().positive().optional(),
+    tenantId: vine.number().positive(),
   })
 )
 
 /**
  * Validator for getting balance
+ * Tenant is required (tenant is the billing unit)
  */
 export const getBalanceValidator = vine.compile(
   vine.object({
-    teamId: vine.number().positive().optional(),
+    tenantId: vine.number().positive(),
   })
 )

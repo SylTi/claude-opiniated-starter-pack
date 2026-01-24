@@ -3,16 +3,14 @@ import type {
   CheckoutSessionResult,
   CustomerPortalResult,
   WebhookResult,
-  SubscriberInfo,
+  TenantInfo,
 } from '#services/types/payment_provider'
 import StripeProvider from '#services/providers/stripe_provider'
-import User from '#models/user'
-import Team from '#models/team'
+import Tenant from '#models/tenant'
 import Price from '#models/price'
 import Product from '#models/product'
 import PaymentCustomer from '#models/payment_customer'
 import Subscription from '#models/subscription'
-import type { SubscriberType } from '#models/subscription'
 
 export default class PaymentService {
   private provider: PaymentProvider
@@ -36,17 +34,17 @@ export default class PaymentService {
   }
 
   /**
-   * Create a checkout session
+   * Create a checkout session for a tenant
+   * Tenant is the billing unit - no user-level subscriptions
    */
   async createCheckoutSession(
-    subscriberType: SubscriberType,
-    subscriberId: number,
+    tenantId: number,
     priceId: number,
     successUrl: string,
     cancelUrl: string
   ): Promise<CheckoutSessionResult> {
-    // Get subscriber info
-    const subscriberInfo = await this.getSubscriberInfo(subscriberType, subscriberId)
+    // Get tenant info
+    const tenantInfo = await this.getTenantInfo(tenantId)
 
     // Verify the price exists and is active
     const price = await Price.query()
@@ -60,7 +58,7 @@ export default class PaymentService {
     }
 
     return this.provider.createCheckoutSession({
-      subscriber: subscriberInfo,
+      tenant: tenantInfo,
       priceId,
       successUrl,
       cancelUrl,
@@ -68,29 +66,24 @@ export default class PaymentService {
   }
 
   /**
-   * Create a customer portal session
+   * Create a customer portal session for a tenant
    */
   async createCustomerPortalSession(
-    subscriberType: SubscriberType,
-    subscriberId: number,
+    tenantId: number,
     returnUrl: string
   ): Promise<CustomerPortalResult> {
-    // Check if subscriber has a payment customer
-    const paymentCustomer = await PaymentCustomer.findBySubscriber(
-      subscriberType,
-      subscriberId,
-      this.provider.name
-    )
+    // Check if tenant has a payment customer
+    const paymentCustomer = await PaymentCustomer.findByTenant(tenantId, this.provider.name)
 
     if (!paymentCustomer) {
       throw new Error('No billing account found. Please subscribe first.')
     }
 
-    // Get subscriber info
-    const subscriberInfo = await this.getSubscriberInfo(subscriberType, subscriberId)
+    // Get tenant info
+    const tenantInfo = await this.getTenantInfo(tenantId)
 
     return this.provider.createCustomerPortalSession({
-      subscriber: subscriberInfo,
+      tenant: tenantInfo,
       returnUrl,
     })
   }
@@ -128,63 +121,37 @@ export default class PaymentService {
   }
 
   /**
-   * Get current subscription for a subscriber
+   * Get current subscription for a tenant
    */
-  async getCurrentSubscription(
-    subscriberType: SubscriberType,
-    subscriberId: number
-  ): Promise<Subscription | null> {
-    if (subscriberType === 'user') {
-      return Subscription.getActiveForUser(subscriberId)
-    }
-    return Subscription.getActiveForTeam(subscriberId)
+  async getCurrentSubscription(tenantId: number): Promise<Subscription | null> {
+    return Subscription.getActiveForTenant(tenantId)
   }
 
   /**
-   * Check if subscriber can manage billing
+   * Check if tenant can manage billing
    */
-  async canManageBilling(subscriberType: SubscriberType, subscriberId: number): Promise<boolean> {
-    const paymentCustomer = await PaymentCustomer.findBySubscriber(
-      subscriberType,
-      subscriberId,
-      this.provider.name
-    )
+  async canManageBilling(tenantId: number): Promise<boolean> {
+    const paymentCustomer = await PaymentCustomer.findByTenant(tenantId, this.provider.name)
     return paymentCustomer !== null
   }
 
   /**
-   * Get subscriber info for payment operations
+   * Get tenant info for payment operations
    */
-  private async getSubscriberInfo(
-    subscriberType: SubscriberType,
-    subscriberId: number
-  ): Promise<SubscriberInfo> {
-    if (subscriberType === 'user') {
-      const user = await User.findOrFail(subscriberId)
-      return {
-        type: 'user',
-        id: user.id,
-        email: user.email,
-        name: user.fullName ?? undefined,
-      }
-    }
+  private async getTenantInfo(tenantId: number): Promise<TenantInfo> {
+    const tenant = await Tenant.query().where('id', tenantId).preload('owner').firstOrFail()
 
-    // For team, use the owner's info for billing
-    const team = await Team.query().where('id', subscriberId).preload('owner').firstOrFail()
-
-    // Defensive check for zombie teams (teams without owner)
-    // This should not happen with the RESTRICT constraint, but handle gracefully
-    if (!team.owner) {
+    // Use the owner's email for billing
+    if (!tenant.owner) {
       throw new Error(
-        `Team ${team.id} has no owner. This is a data integrity issue that must be resolved.`
+        `Tenant ${tenant.id} has no owner. This is a data integrity issue that must be resolved.`
       )
     }
 
     return {
-      type: 'team',
-      id: team.id,
-      email: team.owner.email,
-      name: team.name,
+      tenantId: tenant.id,
+      email: tenant.owner.email,
+      name: tenant.name,
     }
   }
 }

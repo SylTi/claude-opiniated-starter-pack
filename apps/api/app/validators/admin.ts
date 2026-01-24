@@ -11,9 +11,9 @@ export const updateUserTierValidator = vine.compile(
 )
 
 /**
- * Validator for updating a team's subscription tier (admin)
+ * Validator for updating a tenant's subscription tier (admin)
  */
-export const updateTeamTierValidator = vine.compile(
+export const updateTenantTierValidator = vine.compile(
   vine.object({
     subscriptionTier: vine.string().minLength(1),
     subscriptionExpiresAt: vine.date().optional(),

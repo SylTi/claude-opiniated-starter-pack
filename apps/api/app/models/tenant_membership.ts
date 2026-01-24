@@ -2,11 +2,13 @@ import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import User from '#models/user'
-import Team from '#models/team'
+import Tenant from '#models/tenant'
 
-export type TeamRole = 'owner' | 'admin' | 'member'
+export type TenantRole = 'owner' | 'admin' | 'member'
 
-export default class TeamMember extends BaseModel {
+export default class TenantMembership extends BaseModel {
+  static table = 'tenant_memberships'
+
   @column({ isPrimary: true })
   declare id: number
 
@@ -14,10 +16,10 @@ export default class TeamMember extends BaseModel {
   declare userId: number
 
   @column()
-  declare teamId: number
+  declare tenantId: number
 
   @column()
-  declare role: TeamRole
+  declare role: TenantRole
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -28,8 +30,8 @@ export default class TeamMember extends BaseModel {
   @belongsTo(() => User)
   declare user: BelongsTo<typeof User>
 
-  @belongsTo(() => Team)
-  declare team: BelongsTo<typeof Team>
+  @belongsTo(() => Tenant)
+  declare tenant: BelongsTo<typeof Tenant>
 
   /**
    * Check if member has admin privileges (owner or admin)

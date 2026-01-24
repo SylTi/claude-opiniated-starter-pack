@@ -39,10 +39,14 @@ export default class DashboardController {
       .where('userId', user.id)
       .count('* as total')
 
-    // Get subscription info
-    const subscription = await Subscription.getActiveForUser(user.id)
-    const subscriptionTier = subscription?.tier?.slug ?? 'free'
-    const subscriptionExpiresAt = subscription?.expiresAt?.toISO() ?? null
+    // Get subscription info for user's current tenant (tenant is the billing unit)
+    let subscriptionTier = 'free'
+    let subscriptionExpiresAt: string | null = null
+    if (user.currentTenantId) {
+      const subscription = await Subscription.getActiveForTenant(user.currentTenantId)
+      subscriptionTier = subscription?.tier?.slug ?? 'free'
+      subscriptionExpiresAt = subscription?.expiresAt?.toISO() ?? null
+    }
 
     response.json({
       data: {

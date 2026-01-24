@@ -1,6 +1,6 @@
 import { test } from '@japa/runner'
 import User from '#models/user'
-import Team from '#models/team'
+import Tenant from '#models/tenant'
 import SubscriptionTier from '#models/subscription_tier'
 import Subscription from '#models/subscription'
 import Product from '#models/product'
@@ -127,7 +127,7 @@ test.group('Billing API - Subscription', (group) => {
 
     // Create a subscription for the user
     const tier = await SubscriptionTier.findBySlugOrFail('tier1')
-    await Subscription.createForUser(user.id, tier.id)
+    await Subscription.createForTenant(user.id, tier.id)
 
     const response = await request(BASE_URL)
       .get('/api/v1/billing/subscription')
@@ -151,19 +151,19 @@ test.group('Billing API - Subscription', (group) => {
     )
 
     // Create team
-    const team = await Team.create({
+    const team = await Tenant.create({
       name: 'Test Team',
       slug: `test-team-${id}`,
       ownerId: user.id,
     })
 
     // Set user's current team
-    user.currentTeamId = team.id
+    user.currentTenantId = team.id
     await user.save()
 
     // Create subscription for team
     const tier = await SubscriptionTier.findBySlugOrFail('tier2')
-    await Subscription.createForTeam(team.id, tier.id)
+    await Subscription.createForTenant(team.id, tier.id)
 
     // Pass team context explicitly via query params
     const response = await request(BASE_URL)
@@ -286,7 +286,7 @@ test.group('Billing API - Cancel', (group) => {
 
     // Create subscription without provider (local only)
     const tier = await SubscriptionTier.findBySlugOrFail('tier1')
-    await Subscription.createForUser(user.id, tier.id)
+    await Subscription.createForTenant(user.id, tier.id)
 
     const response = await request(BASE_URL)
       .post('/api/v1/billing/cancel')
@@ -318,7 +318,7 @@ test.group('Billing API - Team Owner Authorization', (group) => {
     })
 
     // Create team
-    const team = await Team.create({
+    const team = await Tenant.create({
       name: 'Test Team',
       slug: `test-team-${id}`,
       ownerId: owner.id,
@@ -329,11 +329,11 @@ test.group('Billing API - Team Owner Authorization', (group) => {
       `member-${id}@example.com`,
       'password123'
     )
-    member.currentTeamId = team.id
+    member.currentTenantId = team.id
     await member.save()
 
     // Add member to team
-    await team.related('members').create({
+    await team.related('memberships').create({
       userId: member.id,
       role: 'member',
     })
@@ -361,7 +361,7 @@ test.group('Billing API - Team Owner Authorization', (group) => {
       .set('Cookie', cookies)
       .send({
         priceId: price.id,
-        subscriberType: 'team',
+        tenantId: 'team',
         subscriberId: team.id,
       })
       .expect(403)
@@ -379,10 +379,17 @@ test.group('Billing API - Payment Customer', (group) => {
     const id = uniqueId()
     const { user, cookies } = await createUserAndLogin(`customer-${id}@example.com`, 'password123')
 
-    // Create payment customer
+    // Create personal tenant for the user
+    const tenant = await Tenant.create({
+      name: `${user.fullName}'s Workspace`,
+      slug: `personal-${id}`,
+      type: 'personal',
+      ownerId: user.id,
+    })
+
+    // Create payment customer for tenant
     await PaymentCustomer.create({
-      subscriberType: 'user',
-      subscriberId: user.id,
+      tenantId: tenant.id,
       provider: 'stripe',
       providerCustomerId: `cus_${uniqueId()}`,
     })

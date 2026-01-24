@@ -2,7 +2,8 @@ import type { HttpContext } from '@adonisjs/core/http'
 import { DateTime } from 'luxon'
 import Coupon from '#models/coupon'
 import CouponService from '#services/coupon_service'
-import Team from '#models/team'
+import Tenant from '#models/tenant'
+import TenantMembership from '#models/tenant_membership'
 import db from '@adonisjs/lucid/services/db'
 import {
   createCouponValidator,
@@ -12,12 +13,22 @@ import {
 } from '#validators/coupon'
 
 export default class CouponsController {
+  private isRowNotFound(error: unknown): boolean {
+    return Boolean((error as { code?: string }).code === 'E_ROW_NOT_FOUND')
+  }
+
+  private isCurrencyMismatch(error: unknown): boolean {
+    return error instanceof Error && error.message.startsWith('Currency mismatch:')
+  }
   /**
    * List all coupons (admin)
    * GET /api/v1/admin/coupons
    */
   async index({ response }: HttpContext): Promise<void> {
-    const coupons = await Coupon.query().preload('redeemedByUser').orderBy('createdAt', 'desc')
+    const coupons = await Coupon.query()
+      .preload('redeemedByUser')
+      .preload('redeemedForTenant')
+      .orderBy('createdAt', 'desc')
 
     response.json({
       data: coupons.map((coupon) => ({
@@ -30,6 +41,8 @@ export default class CouponsController {
         isActive: coupon.isActive,
         redeemedByUserId: coupon.redeemedByUserId,
         redeemedByUserEmail: coupon.redeemedByUser?.email ?? null,
+        redeemedForTenantId: coupon.redeemedForTenantId,
+        redeemedForTenantName: coupon.redeemedForTenant?.name ?? null,
         redeemedAt: coupon.redeemedAt?.toISO() ?? null,
         createdAt: coupon.createdAt.toISO(),
         updatedAt: coupon.updatedAt?.toISO() ?? null,
@@ -45,6 +58,7 @@ export default class CouponsController {
     const coupon = await Coupon.query()
       .where('id', params.id)
       .preload('redeemedByUser')
+      .preload('redeemedForTenant')
       .firstOrFail()
 
     response.json({
@@ -58,6 +72,8 @@ export default class CouponsController {
         isActive: coupon.isActive,
         redeemedByUserId: coupon.redeemedByUserId,
         redeemedByUserEmail: coupon.redeemedByUser?.email ?? null,
+        redeemedForTenantId: coupon.redeemedForTenantId,
+        redeemedForTenantName: coupon.redeemedForTenant?.name ?? null,
         redeemedAt: coupon.redeemedAt?.toISO() ?? null,
         createdAt: coupon.createdAt.toISO(),
         updatedAt: coupon.updatedAt?.toISO() ?? null,
@@ -113,6 +129,7 @@ export default class CouponsController {
         expiresAt: coupon.expiresAt?.toISO() ?? null,
         isActive: coupon.isActive,
         redeemedByUserId: coupon.redeemedByUserId,
+        redeemedForTenantId: coupon.redeemedForTenantId,
         redeemedAt: coupon.redeemedAt?.toISO() ?? null,
         createdAt: coupon.createdAt.toISO(),
         updatedAt: coupon.updatedAt?.toISO() ?? null,
@@ -167,6 +184,7 @@ export default class CouponsController {
         expiresAt: coupon.expiresAt?.toISO() ?? null,
         isActive: coupon.isActive,
         redeemedByUserId: coupon.redeemedByUserId,
+        redeemedForTenantId: coupon.redeemedForTenantId,
         redeemedAt: coupon.redeemedAt?.toISO() ?? null,
         createdAt: coupon.createdAt.toISO(),
         updatedAt: coupon.updatedAt?.toISO() ?? null,
@@ -189,37 +207,63 @@ export default class CouponsController {
   }
 
   /**
-   * Redeem a coupon (user)
+   * Redeem a coupon for a tenant (tenant is the billing unit)
    * POST /api/v1/billing/redeem-coupon
    */
   async redeem({ request, response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
-    const { code, teamId } = await request.validateUsing(redeemCouponValidator)
+    const { code, tenantId } = await request.validateUsing(redeemCouponValidator)
 
-    // Check team ownership before redemption
-    if (teamId) {
-      const team = await Team.find(teamId)
-      if (!team) {
-        return response.notFound({
-          error: 'NotFound',
-          message: 'Team not found',
-        })
-      }
-      if (team.ownerId !== user.id) {
-        return response.forbidden({
-          error: 'Forbidden',
-          message: 'Only team owners can redeem coupons for the team',
-        })
-      }
+    // Tenant is required for redemption (tenant is the billing unit)
+    if (!tenantId) {
+      return response.badRequest({
+        error: 'ValidationError',
+        message: 'Tenant ID is required for coupon redemption',
+      })
+    }
+
+    // Verify tenant exists and user has permission
+    const tenant = await Tenant.find(tenantId)
+    if (!tenant) {
+      return response.notFound({
+        error: 'NotFound',
+        message: 'Tenant not found',
+      })
+    }
+
+    // Check user is an admin of the tenant (owner or admin)
+    const membership = await TenantMembership.query()
+      .where('tenantId', tenantId)
+      .where('userId', user.id)
+      .first()
+
+    if (!membership || !membership.isAdmin()) {
+      return response.forbidden({
+        error: 'Forbidden',
+        message: 'Only tenant owners or admins can redeem coupons',
+      })
     }
 
     const service = new CouponService()
 
     let result
-    if (teamId) {
-      result = await service.redeemCouponForTeam(code, teamId, user.id)
-    } else {
-      result = await service.redeemCoupon(code, user.id)
+    try {
+      // Redeem for tenant - tenantId for billing, user.id for audit
+      result = await service.redeemCouponForTenant(code, tenantId, user.id)
+    } catch (error) {
+      if (this.isRowNotFound(error)) {
+        return response.notFound({
+          error: 'NotFound',
+          message: 'Tenant not found',
+        })
+      }
+      if (this.isCurrencyMismatch(error)) {
+        return response.badRequest({
+          error: 'CurrencyMismatch',
+          message: (error as Error).message,
+        })
+      }
+      throw error
     }
 
     if (!result.success) {
@@ -235,37 +279,61 @@ export default class CouponsController {
         creditAmount: result.creditAmount,
         currency: result.currency,
         newBalance: result.newBalance,
+        tenantId,
       },
-      message: `Successfully added ${result.creditAmount / 100} ${result.currency.toUpperCase()} to your balance`,
+      message: `Successfully added ${result.creditAmount / 100} ${result.currency.toUpperCase()} to tenant balance`,
     })
   }
 
   /**
-   * Get user's balance
+   * Get tenant's balance
    * GET /api/v1/billing/balance
    */
   async getBalance({ request, response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
-    const { teamId } = await request.validateUsing(getBalanceValidator)
+    const { tenantId } = await request.validateUsing(getBalanceValidator)
+
+    // Tenant is required (tenant is the billing unit)
+    if (!tenantId) {
+      return response.badRequest({
+        error: 'ValidationError',
+        message: 'Tenant ID is required',
+      })
+    }
 
     const service = new CouponService()
 
     let balance
-    if (teamId) {
-      const team = await Team.find(teamId)
-      if (!team || team.ownerId !== user.id) {
+    try {
+      // Verify user is a member of this tenant
+      const membership = await TenantMembership.query()
+        .where('tenantId', tenantId)
+        .where('userId', user.id)
+        .first()
+
+      if (!membership) {
         return response.forbidden({
           error: 'Forbidden',
-          message: 'Only team owners can view team balance',
+          message: 'You are not a member of this tenant',
         })
       }
-      balance = await service.getTeamBalance(teamId)
-    } else {
-      balance = await service.getUserBalance(user.id)
+
+      balance = await service.getTenantBalance(tenantId)
+    } catch (error) {
+      if (this.isRowNotFound(error)) {
+        return response.notFound({
+          error: 'NotFound',
+          message: 'Tenant not found',
+        })
+      }
+      throw error
     }
 
     response.json({
-      data: balance,
+      data: {
+        ...balance,
+        tenantId,
+      },
     })
   }
 }

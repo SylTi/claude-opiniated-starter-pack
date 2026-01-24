@@ -16,33 +16,22 @@ export default class CheckExpiredSubscriptions extends BaseCommand {
     const subscriptionService = new SubscriptionService()
 
     try {
-      const { expiredUsers, expiredTeams } = await subscriptionService.processExpiredSubscriptions()
+      // All subscriptions are tenant-based (tenant is the billing unit)
+      const expiredSubscriptions = await subscriptionService.processExpiredSubscriptions()
 
-      this.logger.info(`Found ${expiredUsers.length} expired user subscriptions`)
-      this.logger.info(`Found ${expiredTeams.length} expired team subscriptions`)
+      this.logger.info(`Found ${expiredSubscriptions.length} expired tenant subscriptions`)
 
       // Send expiration emails
-      for (const user of expiredUsers) {
+      for (const subscription of expiredSubscriptions) {
         try {
-          await subscriptionService.sendExpirationEmail(user)
-          this.logger.info(`Sent expiration email to user: ${user.email}`)
+          await subscriptionService.sendExpirationEmail(subscription)
+          this.logger.info(`Sent expiration email to tenant owner: ${subscription.ownerEmail}`)
         } catch (error) {
-          this.logger.error(`Failed to send email to ${user.email}: ${error}`)
+          this.logger.error(`Failed to send email to ${subscription.ownerEmail}: ${error}`)
         }
       }
 
-      for (const team of expiredTeams) {
-        try {
-          await subscriptionService.sendExpirationEmail(team)
-          this.logger.info(`Sent expiration email to team owner: ${team.email}`)
-        } catch (error) {
-          this.logger.error(`Failed to send email to ${team.email}: ${error}`)
-        }
-      }
-
-      this.logger.success(
-        `Processed ${expiredUsers.length + expiredTeams.length} expired subscriptions`
-      )
+      this.logger.success(`Processed ${expiredSubscriptions.length} expired subscriptions`)
     } catch (error) {
       this.logger.error(`Error processing subscriptions: ${error}`)
       throw error

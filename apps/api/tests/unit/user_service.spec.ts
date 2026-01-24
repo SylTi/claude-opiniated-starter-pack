@@ -121,7 +121,7 @@ test.group('UserService (Unit - DB Mocked)', (group) => {
       fullName: 'Old Name',
       role: 'user' as const,
       avatarUrl: null,
-      currentTeamId: null,
+      currentTenantId: null,
       save: sandbox.stub().resolves(),
     }
 
@@ -132,7 +132,7 @@ test.group('UserService (Unit - DB Mocked)', (group) => {
       fullName: 'New Name',
       role: 'admin',
       avatarUrl: 'https://example.com/avatar.png',
-      currentTeamId: 5,
+      currentTenantId: 5,
     })
 
     assert.isNotNull(result)
@@ -140,7 +140,7 @@ test.group('UserService (Unit - DB Mocked)', (group) => {
     assert.equal(mockUser.fullName, 'New Name')
     assert.equal(mockUser.role, 'admin')
     assert.equal(mockUser.avatarUrl, 'https://example.com/avatar.png')
-    assert.equal(mockUser.currentTeamId, 5)
+    assert.equal(mockUser.currentTenantId, 5)
     assert.isTrue(mockUser.save.calledOnce)
   })
 
@@ -184,18 +184,18 @@ test.group('UserService (Unit - DB Mocked)', (group) => {
     assert.equal(mockUser.role, 'user') // Unchanged
   })
 
-  test('updateUser can set currentTeamId to null', async ({ assert }) => {
+  test('updateUser can set currentTenantId to null', async ({ assert }) => {
     const mockUser = {
       id: 1,
-      currentTeamId: 5,
+      currentTenantId: 5,
       save: sandbox.stub().resolves(),
     }
 
     sandbox.stub(User, 'find').resolves(mockUser as unknown as User)
 
-    await userService.updateUser(1, { currentTeamId: null })
+    await userService.updateUser(1, { currentTenantId: null })
 
-    assert.isNull(mockUser.currentTeamId)
+    assert.isNull(mockUser.currentTenantId)
   })
 
   // ==================== deleteUser() tests ====================
@@ -483,7 +483,7 @@ test.group('UserService (Unit - DB Mocked)', (group) => {
       emailVerified: true,
       mfaEnabled: false,
       avatarUrl: 'https://example.com/avatar.png',
-      currentTeamId: 3,
+      currentTenantId: 3,
       password: 'should_not_be_included',
       mfaSecret: 'should_not_be_included',
       createdAt: new Date(),
@@ -498,7 +498,7 @@ test.group('UserService (Unit - DB Mocked)', (group) => {
     assert.isTrue(dto.emailVerified)
     assert.isFalse(dto.mfaEnabled)
     assert.equal(dto.avatarUrl, 'https://example.com/avatar.png')
-    assert.equal(dto.currentTeamId, 3)
+    assert.equal(dto.currentTenantId, 3)
     assert.notProperty(dto, 'password')
     assert.notProperty(dto, 'mfaSecret')
     assert.notProperty(dto, 'createdAt')
@@ -513,14 +513,14 @@ test.group('UserService (Unit - DB Mocked)', (group) => {
       emailVerified: false,
       mfaEnabled: false,
       avatarUrl: null,
-      currentTeamId: null,
+      currentTenantId: null,
     } as unknown as User
 
     const dto = userService.toDTO(mockUser)
 
     assert.isNull(dto.fullName)
     assert.isNull(dto.avatarUrl)
-    assert.isNull(dto.currentTeamId)
+    assert.isNull(dto.currentTenantId)
   })
 
   // ==================== validateEmail() tests ====================

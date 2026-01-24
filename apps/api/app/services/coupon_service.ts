@@ -1,6 +1,6 @@
 import Coupon from '#models/coupon'
-import User from '#models/user'
-import Team from '#models/team'
+import Tenant from '#models/tenant'
+import TenantMembership from '#models/tenant_membership'
 
 export interface RedeemCouponResult {
   success: boolean
@@ -11,65 +11,15 @@ export interface RedeemCouponResult {
 }
 
 export default class CouponService {
-  async redeemCoupon(code: string, userId: number): Promise<RedeemCouponResult> {
-    const coupon = await Coupon.findByCode(code)
-
-    if (!coupon) {
-      return {
-        success: false,
-        creditAmount: 0,
-        currency: 'usd',
-        newBalance: 0,
-        message: 'Coupon not found',
-      }
-    }
-
-    if (!coupon.isActive) {
-      return {
-        success: false,
-        creditAmount: 0,
-        currency: coupon.currency,
-        newBalance: 0,
-        message: 'Coupon is inactive',
-      }
-    }
-
-    if (coupon.isExpired()) {
-      return {
-        success: false,
-        creditAmount: 0,
-        currency: coupon.currency,
-        newBalance: 0,
-        message: 'Coupon has expired',
-      }
-    }
-
-    if (coupon.isRedeemed()) {
-      return {
-        success: false,
-        creditAmount: 0,
-        currency: coupon.currency,
-        newBalance: 0,
-        message: 'Coupon has already been redeemed',
-      }
-    }
-
-    const user = await User.findOrFail(userId)
-
-    await coupon.redeem(userId)
-    const newBalance = await user.addCredit(coupon.creditAmount, coupon.currency)
-
-    return {
-      success: true,
-      creditAmount: coupon.creditAmount,
-      currency: coupon.currency,
-      newBalance,
-    }
-  }
-
-  async redeemCouponForTeam(
+  /**
+   * Redeem a coupon for a tenant (tenant is the billing unit)
+   * @param code - Coupon code
+   * @param tenantId - Which tenant receives the credit (billing context)
+   * @param userId - Who is performing the redemption (audit trail)
+   */
+  async redeemCouponForTenant(
     code: string,
-    teamId: number,
+    tenantId: number,
     userId: number
   ): Promise<RedeemCouponResult> {
     const coupon = await Coupon.findByCode(code)
@@ -99,20 +49,35 @@ export default class CouponService {
       }
     }
 
-    const team = await Team.findOrFail(teamId)
-
-    if (team.ownerId !== userId) {
+    const tenant = await Tenant.find(tenantId)
+    if (!tenant) {
       return {
         success: false,
         creditAmount: 0,
         currency: coupon.currency,
         newBalance: 0,
-        message: 'Only team owners can redeem coupons for the team',
+        message: 'Tenant not found',
       }
     }
 
-    await coupon.redeem(userId)
-    const newBalance = await team.addCredit(coupon.creditAmount, coupon.currency)
+    // Check if user has permission to redeem for this tenant (owner or admin)
+    const membership = await TenantMembership.query()
+      .where('tenantId', tenantId)
+      .where('userId', userId)
+      .first()
+
+    if (!membership || !membership.isAdmin()) {
+      return {
+        success: false,
+        creditAmount: 0,
+        currency: coupon.currency,
+        newBalance: 0,
+        message: 'Only tenant owners or admins can redeem coupons',
+      }
+    }
+
+    // Redeem the coupon - tenantId for billing, userId for audit
+    const newBalance = await coupon.redeemForTenant(tenantId, userId)
 
     return {
       success: true,
@@ -122,13 +87,11 @@ export default class CouponService {
     }
   }
 
-  async getUserBalance(userId: number): Promise<{ balance: number; currency: string }> {
-    const user = await User.findOrFail(userId)
-    return user.getBalance()
-  }
-
-  async getTeamBalance(teamId: number): Promise<{ balance: number; currency: string }> {
-    const team = await Team.findOrFail(teamId)
-    return team.getBalance()
+  /**
+   * Get tenant's credit balance
+   */
+  async getTenantBalance(tenantId: number): Promise<{ balance: number; currency: string }> {
+    const tenant = await Tenant.findOrFail(tenantId)
+    return tenant.getBalance()
   }
 }

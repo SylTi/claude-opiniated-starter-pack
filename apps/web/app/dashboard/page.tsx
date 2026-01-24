@@ -33,10 +33,7 @@ import {
   Users,
   Building2,
 } from "lucide-react";
-import {
-  type BillingTierDTO,
-  type SubscriptionTierDTO,
-} from "@saas/shared";
+import { type BillingTierDTO, type SubscriptionTierDTO } from "@saas/shared";
 
 interface UserStats {
   accountAgeDays: number;
@@ -59,19 +56,23 @@ function hasAccessToLevel(userLevel: number, requiredLevel: number): boolean {
 }
 
 function getTierBadgeVariant(
-  level: number
+  level: number,
 ): "default" | "secondary" | "destructive" | "outline" {
   if (level >= 2) return "default";
   if (level >= 1) return "secondary";
   return "outline";
 }
 
-function formatTierFeatures(features: Record<string, unknown> | null): string[] {
+function formatTierFeatures(
+  features: Record<string, unknown> | null,
+): string[] {
   if (!features) return [];
   return Object.entries(features).reduce<string[]>((acc, [key, value]) => {
     if (typeof value === "boolean") {
       if (value) {
-        acc.push(key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()));
+        acc.push(
+          key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+        );
       }
     } else if (typeof value === "number") {
       acc.push(`${value} ${key.replace(/_/g, " ")}`);
@@ -234,14 +235,17 @@ export default function DashboardPage(): React.ReactElement {
       </div>
 
       {/* Team & Subscription Info */}
-      {(user.currentTeamId || user.effectiveSubscriptionTier.slug !== "free") && (
+      {(user.currentTenantId ||
+        user.effectiveSubscriptionTier.slug !== "free") && (
         <Card className="mb-8">
           <CardHeader>
             <div className="flex items-center gap-2">
               <Building2 className="h-5 w-5 text-blue-600" />
               <CardTitle>Subscription & Team</CardTitle>
             </div>
-            <CardDescription>Your current subscription and team information</CardDescription>
+            <CardDescription>
+              Your current subscription and team information
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-2">
@@ -253,32 +257,36 @@ export default function DashboardPage(): React.ReactElement {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">Plan:</span>
-                    <Badge variant={getTierBadgeVariant(user.effectiveSubscriptionTier.level)}>
+                    <Badge
+                      variant={getTierBadgeVariant(
+                        user.effectiveSubscriptionTier.level,
+                      )}
+                    >
                       {user.effectiveSubscriptionTier.name}
                     </Badge>
                   </div>
-                  {user.currentTeam?.subscription?.expiresAt && (
+                  {user.currentTenant?.subscription?.expiresAt && (
                     <div className="text-sm text-muted-foreground">
-                      Expires: {new Date(user.currentTeam.subscription.expiresAt).toLocaleDateString()}
-                    </div>
-                  )}
-                  {!user.currentTeamId && user.subscription?.expiresAt && (
-                    <div className="text-sm text-muted-foreground">
-                      Expires: {new Date(user.subscription.expiresAt).toLocaleDateString()}
+                      Expires:{" "}
+                      {new Date(
+                        user.currentTenant.subscription.expiresAt,
+                      ).toLocaleDateString()}
                     </div>
                   )}
                 </div>
               </div>
-              {user.currentTeam && (
+              {user.currentTenant && (
                 <div className="p-4 bg-gray-50 rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
                     <Users className="h-4 w-4 text-blue-500" />
                     <span className="font-medium">Team</span>
                   </div>
                   <div className="space-y-1">
-                    <div className="text-sm font-medium">{user.currentTeam.name}</div>
+                    <div className="text-sm font-medium">
+                      {user.currentTenant.name}
+                    </div>
                     <div className="text-sm text-muted-foreground">
-                      Slug: {user.currentTeam.slug}
+                      Slug: {user.currentTenant.slug}
                     </div>
                     {hasPaidTier && (
                       <Link href="/team">
@@ -391,11 +399,17 @@ export default function DashboardPage(): React.ReactElement {
             <h2 className="text-2xl font-bold">Features by Subscription</h2>
             <p className="text-muted-foreground">
               Your current plan:{" "}
-              <Badge variant={getTierBadgeVariant(user.effectiveSubscriptionTier.level)}>
+              <Badge
+                variant={getTierBadgeVariant(
+                  user.effectiveSubscriptionTier.level,
+                )}
+              >
                 {user.effectiveSubscriptionTier.name}
               </Badge>
-              {user.currentTeam && (
-                <span className="ml-2 text-sm">(via {user.currentTeam.name})</span>
+              {user.currentTenant && (
+                <span className="ml-2 text-sm">
+                  (via {user.currentTenant.name})
+                </span>
               )}
             </p>
           </div>
@@ -417,20 +431,20 @@ export default function DashboardPage(): React.ReactElement {
               const features = formatTierFeatures(tier.features);
               const canAccess = hasAccessToLevel(
                 user.effectiveSubscriptionTier.level,
-                tier.level
+                tier.level,
               );
               const isPremium = tier.level >= 2;
               const isMid = tier.level === 1;
               const cardBorder = isPremium
                 ? "border-yellow-200"
                 : isMid
-                ? "border-blue-200"
-                : "border-gray-200";
+                  ? "border-blue-200"
+                  : "border-gray-200";
               const featureBg = isPremium
                 ? "bg-yellow-50"
                 : isMid
-                ? "bg-blue-50"
-                : "bg-gray-50";
+                  ? "bg-blue-50"
+                  : "bg-gray-50";
               const Icon = isPremium ? Crown : isMid ? Zap : Star;
 
               return (
@@ -443,8 +457,8 @@ export default function DashboardPage(): React.ReactElement {
                             isPremium
                               ? "text-yellow-500"
                               : isMid
-                              ? "text-blue-500"
-                              : "text-gray-500"
+                                ? "text-blue-500"
+                                : "text-gray-500"
                           }`}
                         />
                         <CardTitle>{tier.name} Features</CardTitle>

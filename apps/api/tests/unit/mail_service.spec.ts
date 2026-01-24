@@ -177,12 +177,12 @@ test.group('MailService', (group) => {
     assert.include(callArgs.text, 'Hi there')
   })
 
-  // ==================== sendTeamInvitationEmail() tests ====================
+  // ==================== sendTenantInvitationEmail() tests ====================
 
-  test('sendTeamInvitationEmail sends with correct subject', async ({ assert }) => {
+  test('sendTenantInvitationEmail sends with correct subject', async ({ assert }) => {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
-    await mailService.sendTeamInvitationEmail(
+    await mailService.sendTenantInvitationEmail(
       'invitee@example.com',
       'Awesome Team',
       'John Doe',
@@ -197,10 +197,10 @@ test.group('MailService', (group) => {
     assert.equal(callArgs.to, 'invitee@example.com')
   })
 
-  test('sendTeamInvitationEmail includes invite link with token', async ({ assert }) => {
+  test('sendTenantInvitationEmail includes invite link with token', async ({ assert }) => {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
-    await mailService.sendTeamInvitationEmail(
+    await mailService.sendTenantInvitationEmail(
       'invitee@example.com',
       'Awesome Team',
       'John Doe',
@@ -214,10 +214,10 @@ test.group('MailService', (group) => {
     assert.include(callArgs.text, 'http://localhost:3000/team/invite?token=my-invite-token')
   })
 
-  test('sendTeamInvitationEmail includes team name and inviter name', async ({ assert }) => {
+  test('sendTenantInvitationEmail includes team name and inviter name', async ({ assert }) => {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
-    await mailService.sendTeamInvitationEmail(
+    await mailService.sendTenantInvitationEmail(
       'invitee@example.com',
       'My Super Team',
       'Alice Johnson',
@@ -233,10 +233,10 @@ test.group('MailService', (group) => {
     assert.include(callArgs.text, 'My Super Team')
   })
 
-  test('sendTeamInvitationEmail includes role information', async ({ assert }) => {
+  test('sendTenantInvitationEmail includes role information', async ({ assert }) => {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
-    await mailService.sendTeamInvitationEmail(
+    await mailService.sendTenantInvitationEmail(
       'invitee@example.com',
       'Team',
       'Inviter',
@@ -250,10 +250,10 @@ test.group('MailService', (group) => {
     assert.include(callArgs.text, 'as a admin')
   })
 
-  test('sendTeamInvitationEmail includes expiration date', async ({ assert }) => {
+  test('sendTenantInvitationEmail includes expiration date', async ({ assert }) => {
     const expiresAt = new Date('2025-12-31T00:00:00.000Z')
 
-    await mailService.sendTeamInvitationEmail(
+    await mailService.sendTenantInvitationEmail(
       'invitee@example.com',
       'Team',
       'Inviter',
@@ -274,8 +274,7 @@ test.group('MailService', (group) => {
     await mailService.sendSubscriptionExpirationEmail(
       'user@example.com',
       'John Doe',
-      'user',
-      'John Doe',
+      'My Workspace',
       'tier2'
     )
 
@@ -285,43 +284,25 @@ test.group('MailService', (group) => {
     assert.equal(callArgs.to, 'user@example.com')
   })
 
-  test('sendSubscriptionExpirationEmail for user subscription', async ({ assert }) => {
+  test('sendSubscriptionExpirationEmail includes tenant and tier info', async ({ assert }) => {
     await mailService.sendSubscriptionExpirationEmail(
       'user@example.com',
       'John Doe',
-      'user',
-      'John Doe',
+      'My Workspace',
       'Premium'
     )
 
     const callArgs = sendStub.firstCall.args[0]
     assert.include(callArgs.html, 'Hi John Doe')
     assert.include(callArgs.html, '<strong>Premium</strong>')
-    assert.include(callArgs.html, 'your account')
-    assert.notInclude(callArgs.html, 'the team')
-  })
-
-  test('sendSubscriptionExpirationEmail for team subscription', async ({ assert }) => {
-    await mailService.sendSubscriptionExpirationEmail(
-      'owner@example.com',
-      'Jane Doe',
-      'team',
-      'Awesome Team',
-      'Enterprise'
-    )
-
-    const callArgs = sendStub.firstCall.args[0]
-    assert.include(callArgs.html, 'Hi Jane Doe')
-    assert.include(callArgs.html, '<strong>Enterprise</strong>')
-    assert.include(callArgs.html, 'the team "Awesome Team"')
+    assert.include(callArgs.html, 'My Workspace')
   })
 
   test('sendSubscriptionExpirationEmail includes renewal link', async ({ assert }) => {
     await mailService.sendSubscriptionExpirationEmail(
       'user@example.com',
       'John',
-      'user',
-      'John',
+      'Personal Workspace',
       'tier1'
     )
 
@@ -335,8 +316,7 @@ test.group('MailService', (group) => {
     await mailService.sendSubscriptionExpirationEmail(
       'user@example.com',
       'John',
-      'user',
-      'John',
+      'Team Workspace',
       'Pro'
     )
 

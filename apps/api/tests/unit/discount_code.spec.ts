@@ -124,7 +124,7 @@ test.group('DiscountCode Model', (group) => {
     assert.isFalse(code.isUsable())
   })
 
-  test('canBeUsedBy returns true for user within per-user limit', async ({ assert }) => {
+  test('canBeUsedByTenant returns true for user within per-user limit', async ({ assert }) => {
     const id = uniqueId()
     const user = await User.create({
       email: `user-${id}@example.com`,
@@ -139,7 +139,7 @@ test.group('DiscountCode Model', (group) => {
       discountType: 'percent',
       discountValue: 20,
       isActive: true,
-      maxUsesPerUser: 2,
+      maxUsesPerTenant: 2,
     })
 
     // Record one usage
@@ -150,11 +150,11 @@ test.group('DiscountCode Model', (group) => {
       checkoutSessionId: `session_${uniqueId()}`,
     })
 
-    const canUse = await code.canBeUsedBy(user.id)
+    const canUse = await code.canBeUsedByTenant(user.id)
     assert.isTrue(canUse)
   })
 
-  test('canBeUsedBy returns false for user at per-user limit', async ({ assert }) => {
+  test('canBeUsedByTenant returns false for user at per-user limit', async ({ assert }) => {
     const id = uniqueId()
     const user = await User.create({
       email: `user-${id}@example.com`,
@@ -169,7 +169,7 @@ test.group('DiscountCode Model', (group) => {
       discountType: 'percent',
       discountValue: 20,
       isActive: true,
-      maxUsesPerUser: 1,
+      maxUsesPerTenant: 1,
     })
 
     // Record one usage
@@ -180,7 +180,7 @@ test.group('DiscountCode Model', (group) => {
       checkoutSessionId: `session_${uniqueId()}`,
     })
 
-    const canUse = await code.canBeUsedBy(user.id)
+    const canUse = await code.canBeUsedByTenant(user.id)
     assert.isFalse(canUse)
   })
 

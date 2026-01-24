@@ -1,19 +1,21 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import Team from '#models/team'
+import Tenant from '#models/tenant'
 import User from '#models/user'
 import { randomBytes } from 'node:crypto'
 
 export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'expired'
 export type InvitationRole = 'admin' | 'member'
 
-export default class TeamInvitation extends BaseModel {
+export default class TenantInvitation extends BaseModel {
+  static table = 'tenant_invitations'
+
   @column({ isPrimary: true })
   declare id: number
 
   @column()
-  declare teamId: number
+  declare tenantId: number
 
   @column()
   declare invitedById: number
@@ -39,8 +41,8 @@ export default class TeamInvitation extends BaseModel {
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
 
-  @belongsTo(() => Team)
-  declare team: BelongsTo<typeof Team>
+  @belongsTo(() => Tenant)
+  declare tenant: BelongsTo<typeof Tenant>
 
   @belongsTo(() => User, { foreignKey: 'invitedById' })
   declare invitedBy: BelongsTo<typeof User>

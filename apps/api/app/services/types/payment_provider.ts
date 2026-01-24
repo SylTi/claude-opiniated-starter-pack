@@ -1,11 +1,9 @@
-import type { SubscriberType } from '#models/subscription'
-
 /**
- * Information about the subscriber initiating a payment action
+ * Information about the tenant initiating a payment action
+ * Tenant is the billing unit - no user-level subscriptions
  */
-export interface SubscriberInfo {
-  type: SubscriberType
-  id: number
+export interface TenantInfo {
+  tenantId: number
   email: string
   name?: string
 }
@@ -14,7 +12,7 @@ export interface SubscriberInfo {
  * Parameters for creating a checkout session
  */
 export interface CheckoutSessionParams {
-  subscriber: SubscriberInfo
+  tenant: TenantInfo
   priceId: number
   successUrl: string
   cancelUrl: string
@@ -33,7 +31,7 @@ export interface CheckoutSessionResult {
  * Parameters for creating a customer portal session
  */
 export interface CustomerPortalParams {
-  subscriber: SubscriberInfo
+  tenant: TenantInfo
   returnUrl: string
 }
 

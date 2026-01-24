@@ -6,10 +6,8 @@ import type { HasMany, BelongsTo } from '@adonisjs/lucid/types/relations'
 import { withAuthFinder } from '@adonisjs/auth/mixins/lucid'
 import OAuthAccount from '#models/oauth_account'
 import LoginHistory from '#models/login_history'
-import Team from '#models/team'
-import TeamMember from '#models/team_member'
-import Subscription from '#models/subscription'
-import SubscriptionTier from '#models/subscription_tier'
+import Tenant from '#models/tenant'
+import TenantMembership from '#models/tenant_membership'
 
 const AuthFinder = withAuthFinder(() => hash.use('scrypt'), {
   uids: ['email'],
@@ -53,7 +51,7 @@ export default class User extends compose(BaseModel, AuthFinder) {
   declare avatarUrl: string | null
 
   @column()
-  declare currentTeamId: number | null
+  declare currentTenantId: number | null
 
   @column()
   declare balance: number
@@ -73,11 +71,11 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @hasMany(() => LoginHistory)
   declare loginHistory: HasMany<typeof LoginHistory>
 
-  @belongsTo(() => Team, { foreignKey: 'currentTeamId' })
-  declare currentTeam: BelongsTo<typeof Team>
+  @belongsTo(() => Tenant, { foreignKey: 'currentTenantId' })
+  declare currentTenant: BelongsTo<typeof Tenant>
 
-  @hasMany(() => TeamMember)
-  declare teamMemberships: HasMany<typeof TeamMember>
+  @hasMany(() => TenantMembership)
+  declare tenantMemberships: HasMany<typeof TenantMembership>
 
   /**
    * Check if user has a specific role
@@ -94,94 +92,10 @@ export default class User extends compose(BaseModel, AuthFinder) {
   }
 
   /**
-   * Get active subscription for this user
+   * Check if user has a current tenant set
    */
-  async getActiveSubscription(): Promise<Subscription | null> {
-    return Subscription.getActiveForUser(this.id)
-  }
-
-  /**
-   * Get all subscriptions for this user (including history)
-   */
-  async getSubscriptions(): Promise<Subscription[]> {
-    return Subscription.getAllForUser(this.id)
-  }
-
-  /**
-   * Get the active subscription tier for this user
-   */
-  async getSubscriptionTier(): Promise<SubscriptionTier> {
-    const subscription = await this.getActiveSubscription()
-    if (subscription) {
-      return subscription.tier
-    }
-    return SubscriptionTier.getFreeTier()
-  }
-
-  /**
-   * Get effective subscription tier (checks team subscription first)
-   */
-  async getEffectiveSubscriptionTier(): Promise<SubscriptionTier> {
-    // Team members use team subscription
-    if (this.currentTeamId) {
-      const teamSubscription = await Subscription.getActiveForTeam(this.currentTeamId)
-      if (teamSubscription && !teamSubscription.isExpired()) {
-        return teamSubscription.tier
-      }
-    }
-    // Individual users use personal subscription
-    const subscription = await this.getActiveSubscription()
-    if (subscription && !subscription.isExpired()) {
-      return subscription.tier
-    }
-    return SubscriptionTier.getFreeTier()
-  }
-
-  /**
-   * Get effective subscription (checks team subscription first)
-   */
-  async getEffectiveSubscription(): Promise<Subscription | null> {
-    // Team members use team subscription
-    if (this.currentTeamId) {
-      const teamSubscription = await Subscription.getActiveForTeam(this.currentTeamId)
-      if (teamSubscription && !teamSubscription.isExpired()) {
-        return teamSubscription
-      }
-    }
-    // Individual users use personal subscription
-    return this.getActiveSubscription()
-  }
-
-  /**
-   * Check if user's subscription is expired
-   */
-  async isSubscriptionExpired(): Promise<boolean> {
-    const subscription = await this.getEffectiveSubscription()
-    if (!subscription) return false
-    return subscription.isExpired()
-  }
-
-  /**
-   * Check if user has access to a specific tier
-   */
-  async hasAccessToTier(tier: SubscriptionTier): Promise<boolean> {
-    const effectiveTier = await this.getEffectiveSubscriptionTier()
-    return effectiveTier.hasAccessToTier(tier)
-  }
-
-  /**
-   * Check if user has access to a tier by slug
-   */
-  async hasAccessToTierBySlug(tierSlug: string): Promise<boolean> {
-    const tier = await SubscriptionTier.findBySlugOrFail(tierSlug)
-    return this.hasAccessToTier(tier)
-  }
-
-  /**
-   * Check if user is a team member
-   */
-  isTeamMember(): boolean {
-    return this.currentTeamId !== null
+  hasTenant(): boolean {
+    return this.currentTenantId !== null
   }
 
   /**
@@ -204,14 +118,13 @@ export default class User extends compose(BaseModel, AuthFinder) {
   }
 
   /**
-   * Add credit to user's balance
+   * Add credit to user's balance (for personal expenses, not tenant billing)
+   * @deprecated Use Tenant.addCredit() instead - Tenant is the billing unit
    */
   async addCredit(amount: number, currency?: string): Promise<number> {
-    // Only check for currency mismatch if user already has a currency set
     if (this.balanceCurrency && currency && currency !== this.balanceCurrency) {
       throw new Error(`Currency mismatch: expected ${this.balanceCurrency}, got ${currency}`)
     }
-    // Ensure both balance and amount are numbers (they might come as strings from DB)
     const currentBalance = Number(this.balance) || 0
     const creditAmount = Number(amount) || 0
     this.balance = currentBalance + creditAmount
@@ -224,6 +137,7 @@ export default class User extends compose(BaseModel, AuthFinder) {
 
   /**
    * Get user's balance
+   * @deprecated Use Tenant.getBalance() instead - Tenant is the billing unit
    */
   getBalance(): { balance: number; currency: string } {
     return {

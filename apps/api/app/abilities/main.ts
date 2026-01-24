@@ -8,10 +8,10 @@
 */
 
 import User from '#models/user'
-import Team from '#models/team'
+import Tenant from '#models/tenant'
+import TenantMembership from '#models/tenant_membership'
 import SubscriptionTier from '#models/subscription_tier'
 import { Bouncer } from '@adonisjs/bouncer'
-import type { SubscriberType } from '#models/subscription'
 
 /**
  * Check if user is an admin
@@ -49,35 +49,44 @@ export const viewUserProfile = Bouncer.ability((user: User, targetUser: User) =>
 })
 
 /**
- * Check if user can manage billing for a subscriber (user or team)
+ * Check if user can manage billing for a tenant (tenant is the billing unit)
  */
-export const manageBilling = Bouncer.ability(
-  async (user: User, subscriberType: SubscriberType, subscriberId: number) => {
-    if (subscriberType === 'user') {
-      return user.id === subscriberId
-    }
+export const manageBilling = Bouncer.ability(async (user: User, tenantId: number) => {
+  // Must be owner or admin of the tenant
+  const membership = await TenantMembership.query()
+    .where('tenantId', tenantId)
+    .where('userId', user.id)
+    .first()
 
-    // For team, must be owner
-    const team = await Team.find(subscriberId)
-    if (!team) return false
-    return team.ownerId === user.id
-  }
-)
+  if (!membership) return false
+  return membership.isAdmin()
+})
 
 /**
- * Check if user has access to a feature based on tier
+ * Check if user has access to a feature based on their current tenant's tier
  */
 export const accessFeature = Bouncer.ability(async (user: User, requiredTierSlug: string) => {
-  const effectiveTier = await user.getEffectiveSubscriptionTier()
+  if (!user.currentTenantId) return false
+
+  const tenant = await Tenant.find(user.currentTenantId)
+  if (!tenant) return false
+
+  const effectiveTier = await tenant.getSubscriptionTier()
   const requiredTier = await SubscriptionTier.findBySlug(requiredTierSlug)
   if (!requiredTier) return false
   return effectiveTier.hasAccessToTier(requiredTier)
 })
 
 /**
- * Check if user can upgrade subscription
+ * Check if user can upgrade subscription for a tenant
  */
-export const canUpgradeSubscription = Bouncer.ability((_user: User) => {
-  // All authenticated users can initiate upgrades
-  return true
+export const canUpgradeSubscription = Bouncer.ability(async (user: User, tenantId: number) => {
+  // Must be owner or admin of the tenant
+  const membership = await TenantMembership.query()
+    .where('tenantId', tenantId)
+    .where('userId', user.id)
+    .first()
+
+  if (!membership) return false
+  return membership.isAdmin()
 })

@@ -1,7 +1,7 @@
 import { test } from '@japa/runner'
 import User from '#models/user'
-import Team from '#models/team'
-import TeamMember from '#models/team_member'
+import Tenant from '#models/tenant'
+import TeamMember from '#models/tenant_membership'
 import EmailVerificationToken from '#models/email_verification_token'
 import PasswordResetToken from '#models/password_reset_token'
 import LoginHistory from '#models/login_history'
@@ -204,7 +204,7 @@ test.group('Auth API - Profile', (group) => {
     })
 
     // Create a team and assign user to it
-    const team = await Team.create({
+    const team = await Tenant.create({
       name: 'Test Team',
       slug: `test-team-${id}`,
       ownerId: user.id,
@@ -212,12 +212,12 @@ test.group('Auth API - Profile', (group) => {
 
     await TeamMember.create({
       userId: user.id,
-      teamId: team.id,
+      tenantId: team.id,
       role: 'owner',
     })
 
-    // Update user's currentTeamId
-    user.currentTeamId = team.id
+    // Update user's currentTenantId
+    user.currentTenantId = team.id
     await user.save()
 
     const response = await request(BASE_URL)
@@ -226,7 +226,7 @@ test.group('Auth API - Profile', (group) => {
       .expect(200)
 
     assert.equal(response.body.data.id, user.id)
-    assert.equal(response.body.data.currentTeamId, team.id)
+    assert.equal(response.body.data.currentTenantId, team.id)
     assert.exists(response.body.data.currentTeam)
     assert.equal(response.body.data.currentTeam.id, team.id)
     assert.equal(response.body.data.currentTeam.name, 'Test Team')
@@ -519,18 +519,18 @@ test.group('Auth API - Registration Edge Cases', (group) => {
       mfaEnabled: false,
     })
 
-    const team = await Team.create({
+    const team = await Tenant.create({
       name: 'Test Team',
       slug: `test-team-${id}`,
       ownerId: owner.id,
     })
 
-    await TeamMember.create({ userId: owner.id, teamId: team.id, role: 'owner' })
-    const { default: TeamInvitation } = await import('#models/team_invitation')
+    await TeamMember.create({ userId: owner.id, tenantId: team.id, role: 'owner' })
+    const { default: TeamInvitation } = await import('#models/tenant_invitation')
 
     const token = TeamInvitation.generateToken()
     await TeamInvitation.create({
-      teamId: team.id,
+      tenantId: team.id,
       invitedById: owner.id,
       email: `newuser-${id}@example.com`,
       token: token,
@@ -575,7 +575,7 @@ test.group('Auth API - Registration Edge Cases', (group) => {
       )
     }
 
-    const team = await Team.create({
+    const team = await Tenant.create({
       name: 'Full Team',
       slug: `full-team-${id}`,
       ownerId: owner.id,
@@ -583,18 +583,18 @@ test.group('Auth API - Registration Edge Cases', (group) => {
     })
 
     // Add owner
-    await TeamMember.create({ userId: owner.id, teamId: team.id, role: 'owner' })
+    await TeamMember.create({ userId: owner.id, tenantId: team.id, role: 'owner' })
 
     // Add 4 members (total 5)
     for (const member of teamMembers) {
-      await TeamMember.create({ userId: member.id, teamId: team.id, role: 'member' })
+      await TeamMember.create({ userId: member.id, tenantId: team.id, role: 'member' })
     }
 
-    const { default: TeamInvitation } = await import('#models/team_invitation')
+    const { default: TeamInvitation } = await import('#models/tenant_invitation')
 
     const token = TeamInvitation.generateToken()
     await TeamInvitation.create({
-      teamId: team.id,
+      tenantId: team.id,
       invitedById: owner.id,
       email: `newuser-${id}@example.com`,
       token: token,

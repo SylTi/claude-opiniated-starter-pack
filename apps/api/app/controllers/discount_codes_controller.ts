@@ -3,6 +3,7 @@ import { DateTime } from 'luxon'
 import DiscountCode from '#models/discount_code'
 import DiscountCodeUsage from '#models/discount_code_usage'
 import DiscountCodeService from '#services/discount_code_service'
+import TenantMembership from '#models/tenant_membership'
 import db from '@adonisjs/lucid/services/db'
 import {
   createDiscountCodeValidator,
@@ -28,7 +29,7 @@ export default class DiscountCodesController {
         currency: code.currency,
         minAmount: code.minAmount,
         maxUses: code.maxUses,
-        maxUsesPerUser: code.maxUsesPerUser,
+        maxUsesPerTenant: code.maxUsesPerTenant,
         timesUsed: code.timesUsed,
         expiresAt: code.expiresAt?.toISO() ?? null,
         isActive: code.isActive,
@@ -47,6 +48,7 @@ export default class DiscountCodesController {
     const usages = await DiscountCodeUsage.query()
       .where('discountCodeId', discountCode.id)
       .preload('user')
+      .preload('tenant')
       .orderBy('usedAt', 'desc')
 
     response.json({
@@ -59,7 +61,7 @@ export default class DiscountCodesController {
         currency: discountCode.currency,
         minAmount: discountCode.minAmount,
         maxUses: discountCode.maxUses,
-        maxUsesPerUser: discountCode.maxUsesPerUser,
+        maxUsesPerTenant: discountCode.maxUsesPerTenant,
         timesUsed: discountCode.timesUsed,
         expiresAt: discountCode.expiresAt?.toISO() ?? null,
         isActive: discountCode.isActive,
@@ -67,6 +69,8 @@ export default class DiscountCodesController {
         updatedAt: discountCode.updatedAt?.toISO() ?? null,
         usages: usages.map((usage) => ({
           id: usage.id,
+          tenantId: usage.tenantId,
+          tenantName: usage.tenant?.name ?? null,
           userId: usage.userId,
           userEmail: usage.user?.email ?? null,
           usedAt: usage.usedAt.toISO(),
@@ -110,7 +114,7 @@ export default class DiscountCodesController {
           currency: data.currency?.toLowerCase() ?? null,
           minAmount: data.minAmount ?? null,
           maxUses: data.maxUses ?? null,
-          maxUsesPerUser: data.maxUsesPerUser ?? null,
+          maxUsesPerTenant: data.maxUsesPerTenant ?? null,
           expiresAt: data.expiresAt ? DateTime.fromJSDate(data.expiresAt) : null,
           isActive: data.isActive ?? true,
           timesUsed: 0,
@@ -136,7 +140,7 @@ export default class DiscountCodesController {
         currency: discountCode.currency,
         minAmount: discountCode.minAmount,
         maxUses: discountCode.maxUses,
-        maxUsesPerUser: discountCode.maxUsesPerUser,
+        maxUsesPerTenant: discountCode.maxUsesPerTenant,
         timesUsed: discountCode.timesUsed,
         expiresAt: discountCode.expiresAt?.toISO() ?? null,
         isActive: discountCode.isActive,
@@ -172,7 +176,7 @@ export default class DiscountCodesController {
     if (data.currency !== undefined) discountCode.currency = data.currency?.toLowerCase() ?? null
     if (data.minAmount !== undefined) discountCode.minAmount = data.minAmount
     if (data.maxUses !== undefined) discountCode.maxUses = data.maxUses
-    if (data.maxUsesPerUser !== undefined) discountCode.maxUsesPerUser = data.maxUsesPerUser
+    if (data.maxUsesPerTenant !== undefined) discountCode.maxUsesPerTenant = data.maxUsesPerTenant
     if (data.expiresAt !== undefined) {
       discountCode.expiresAt = data.expiresAt ? DateTime.fromJSDate(data.expiresAt) : null
     }
@@ -190,7 +194,7 @@ export default class DiscountCodesController {
         currency: discountCode.currency,
         minAmount: discountCode.minAmount,
         maxUses: discountCode.maxUses,
-        maxUsesPerUser: discountCode.maxUsesPerUser,
+        maxUsesPerTenant: discountCode.maxUsesPerTenant,
         timesUsed: discountCode.timesUsed,
         expiresAt: discountCode.expiresAt?.toISO() ?? null,
         isActive: discountCode.isActive,
@@ -215,15 +219,36 @@ export default class DiscountCodesController {
   }
 
   /**
-   * Validate a discount code (user)
+   * Validate a discount code for a tenant (tenant is the billing unit)
    * POST /api/v1/billing/validate-discount-code
    */
   async validate({ request, response, auth }: HttpContext): Promise<void> {
     const user = auth.user!
-    const { code, priceId } = await request.validateUsing(validateDiscountCodeValidator)
+    const { code, priceId, tenantId } = await request.validateUsing(validateDiscountCodeValidator)
+
+    // Tenant is required for validation (tenant is the billing unit)
+    if (!tenantId) {
+      return response.badRequest({
+        error: 'ValidationError',
+        message: 'Tenant ID is required for discount code validation',
+      })
+    }
+
+    // Verify user is a member of this tenant
+    const membership = await TenantMembership.query()
+      .where('tenantId', tenantId)
+      .where('userId', user.id)
+      .first()
+
+    if (!membership) {
+      return response.forbidden({
+        error: 'Forbidden',
+        message: 'You are not a member of this tenant',
+      })
+    }
 
     const service = new DiscountCodeService()
-    const result = await service.validateCode(code, priceId, user.id)
+    const result = await service.validateCode(code, priceId, tenantId)
 
     if (!result.valid) {
       return response.json({

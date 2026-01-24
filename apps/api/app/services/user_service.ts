@@ -13,7 +13,7 @@ interface UpdateUserData {
   fullName?: string
   role?: UserRole
   avatarUrl?: string
-  currentTeamId?: number | null
+  currentTenantId?: number | null
 }
 
 interface UserDTO {
@@ -24,7 +24,7 @@ interface UserDTO {
   emailVerified: boolean
   mfaEnabled: boolean
   avatarUrl: string | null
-  currentTeamId: number | null
+  currentTenantId: number | null
 }
 
 export default class UserService {
@@ -67,8 +67,8 @@ export default class UserService {
     if (data.avatarUrl !== undefined) {
       user.avatarUrl = data.avatarUrl
     }
-    if (data.currentTeamId !== undefined) {
-      user.currentTeamId = data.currentTeamId
+    if (data.currentTenantId !== undefined) {
+      user.currentTenantId = data.currentTenantId
     }
 
     await user.save()
@@ -165,7 +165,7 @@ export default class UserService {
       emailVerified: user.emailVerified,
       mfaEnabled: user.mfaEnabled,
       avatarUrl: user.avatarUrl,
-      currentTeamId: user.currentTeamId,
+      currentTenantId: user.currentTenantId,
     }
   }
 

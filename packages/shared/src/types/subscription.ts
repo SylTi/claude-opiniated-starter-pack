@@ -1,5 +1,8 @@
-export type SubscriptionStatus = "active" | "expired" | "cancelled";
-export type SubscriberType = "user" | "team";
+export type SubscriptionStatus =
+  | "active"
+  | "expired"
+  | "cancelled"
+  | "past_due";
 
 // Tier slug type for convenience
 export type SubscriptionTier = "free" | "tier1" | "tier2";
@@ -33,8 +36,7 @@ export interface SubscriptionTierDTO {
 
 export interface SubscriptionDTO {
   id: number;
-  subscriberType: SubscriberType;
-  subscriberId: number;
+  tenantId: number;
   tier: SubscriptionTierDTO;
   status: SubscriptionStatus;
   startsAt: string;

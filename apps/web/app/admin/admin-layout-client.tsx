@@ -2,13 +2,23 @@
 
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { LayoutDashboard, Users, Tag, Ticket, Layers } from "lucide-react"
+import {
+  LayoutDashboard,
+  Users,
+  UsersRound,
+  Tag,
+  Ticket,
+  Layers,
+  CreditCard,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const navigation = [
   { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { name: "Users", href: "/admin/users", icon: Users },
+  { name: "Teams", href: "/admin/teams", icon: UsersRound },
   { name: "Tiers", href: "/admin/tiers", icon: Layers },
+  { name: "Stripe", href: "/admin/stripe", icon: CreditCard },
   { name: "Discount Codes", href: "/admin/discount-codes", icon: Tag },
   { name: "Coupons", href: "/admin/coupons", icon: Ticket },
 ]

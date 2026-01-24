@@ -26,19 +26,7 @@ All responses follow this format:
 
 ---
 
-## Billing
-
-### Get Subscription Tiers
-
-Get all available subscription tiers with their prices. Tiers without active prices return an empty `prices` array.
-
-```
-GET /api/v1/billing/tiers
-```
-
----
-
-## Admin
+## Admin - Subscription Tiers
 
 ### List Subscription Tiers
 
@@ -86,6 +74,18 @@ DELETE /api/v1/admin/tiers/:id
 
 **Authentication:** Admin required
 
+---
+
+## Billing
+
+### Get Subscription Tiers
+
+Get all available subscription tiers with their prices.
+
+```
+GET /api/v1/billing/tiers
+```
+
 **Authentication:** Not required
 
 **Response:**
@@ -121,21 +121,20 @@ DELETE /api/v1/admin/tiers/:id
 
 ### Create Checkout Session
 
-Create a checkout session for subscription purchase.
+Create a checkout session for subscription purchase. **Tenant is the billing unit** - all subscriptions are scoped to tenants.
 
 ```
 POST /api/v1/billing/checkout
 ```
 
-**Authentication:** Required
+**Authentication:** Required (must be tenant admin)
 
 **Request Body:**
 ```json
 {
   "priceId": 1,
-  "subscriberType": "user",       // Optional: "user" | "team"
-  "subscriberId": 1,              // Optional: required if subscriberType is "team"
-  "discountCode": "SUMMER20"      // Optional: discount code to apply
+  "tenantId": 1,                   // Required: tenant to subscribe
+  "discountCode": "SUMMER20"       // Optional: discount code to apply
 }
 ```
 
@@ -157,14 +156,13 @@ Create a session to manage billing in the customer portal.
 POST /api/v1/billing/portal
 ```
 
-**Authentication:** Required
+**Authentication:** Required (must be tenant admin)
 
 **Request Body:**
 ```json
 {
   "returnUrl": "https://example.com/billing",
-  "subscriberType": "user",       // Optional
-  "subscriberId": 1               // Optional
+  "tenantId": 1                    // Required: tenant to manage billing for
 }
 ```
 
@@ -179,17 +177,16 @@ POST /api/v1/billing/portal
 
 ### Get Current Subscription
 
-Get the current user's or team's subscription status.
+Get the tenant's current subscription status.
 
 ```
 GET /api/v1/billing/subscription
 ```
 
-**Authentication:** Required
+**Authentication:** Required (must be tenant member)
 
 **Query Parameters:**
-- `subscriberType` (optional): "user" | "team"
-- `subscriberId` (optional): Required if subscriberType is "team"
+- `tenantId` (required): ID of the tenant
 
 **Response:**
 ```json
@@ -197,9 +194,18 @@ GET /api/v1/billing/subscription
   "data": {
     "subscription": {
       "id": 1,
-      "subscriberType": "user",
-      "subscriberId": 1,
-      "tier": { ... },
+      "tenantId": 1,
+      "tier": {
+        "id": 2,
+        "slug": "tier1",
+        "name": "Pro",
+        "level": 1,
+        "maxTeamMembers": 20,
+        "priceMonthly": 1999,
+        "yearlyDiscountPercent": 20,
+        "features": {"support": "email"},
+        "isActive": true
+      },
       "status": "active",
       "startsAt": "2024-01-01T00:00:00.000Z",
       "expiresAt": "2025-01-01T00:00:00.000Z",
@@ -220,13 +226,12 @@ Cancel the current subscription.
 POST /api/v1/billing/cancel
 ```
 
-**Authentication:** Required
+**Authentication:** Required (must be tenant admin)
 
 **Request Body:**
 ```json
 {
-  "subscriberType": "user",       // Optional
-  "subscriberId": 1               // Optional
+  "tenantId": 1                    // Required: tenant to cancel subscription for
 }
 ```
 
@@ -244,7 +249,8 @@ POST /api/v1/billing/validate-discount-code
 ```json
 {
   "code": "SUMMER20",
-  "priceId": 1
+  "priceId": 1,
+  "tenantId": 1                    // Required: tenant to validate against
 }
 ```
 
@@ -262,7 +268,7 @@ POST /api/v1/billing/validate-discount-code
       "currency": null,
       "minAmount": null,
       "maxUses": 100,
-      "maxUsesPerUser": 1,
+      "maxUsesPerTenant": 1,
       "timesUsed": 5,
       "expiresAt": "2024-12-31T23:59:59.000Z",
       "isActive": true
@@ -277,19 +283,19 @@ POST /api/v1/billing/validate-discount-code
 
 ### Redeem Coupon
 
-Redeem a coupon to add credit to the user's or team's balance.
+Redeem a coupon to add credit to the tenant's balance.
 
 ```
 POST /api/v1/billing/redeem-coupon
 ```
 
-**Authentication:** Required
+**Authentication:** Required (must be tenant admin)
 
 **Request Body:**
 ```json
 {
   "code": "GIFT50",
-  "teamId": 1         // Optional: redeem for team instead of user
+  "tenantId": 1                    // Required: tenant to add credit to
 }
 ```
 
@@ -301,23 +307,23 @@ POST /api/v1/billing/redeem-coupon
     "creditAmount": 5000,
     "currency": "usd",
     "newBalance": 5000,
-    "message": "Coupon redeemed successfully! $50.00 has been added to your balance."
+    "message": "Coupon redeemed successfully! $50.00 has been added to your tenant balance."
   }
 }
 ```
 
 ### Get Balance
 
-Get the current credit balance for user or team.
+Get the current credit balance for a tenant.
 
 ```
 GET /api/v1/billing/balance
 ```
 
-**Authentication:** Required
+**Authentication:** Required (must be tenant member)
 
 **Query Parameters:**
-- `teamId` (optional): Get balance for a specific team
+- `tenantId` (required): Get balance for the specified tenant
 
 **Response:**
 ```json
@@ -356,7 +362,7 @@ GET /api/v1/admin/discount-codes
       "currency": null,
       "minAmount": null,
       "maxUses": 100,
-      "maxUsesPerUser": 1,
+      "maxUsesPerTenant": 1,
       "timesUsed": 5,
       "expiresAt": "2024-12-31T23:59:59.000Z",
       "isActive": true,
@@ -393,7 +399,7 @@ POST /api/v1/admin/discount-codes
   "currency": "usd",                       // Required for "fixed" type
   "minAmount": 1000,                       // Optional: minimum order in cents
   "maxUses": 100,                          // Optional: total usage limit
-  "maxUsesPerUser": 1,                     // Optional: per-user limit
+  "maxUsesPerTenant": 1,                   // Optional: per-tenant limit
   "expiresAt": "2024-12-31",               // Optional: expiration date
   "isActive": true                         // Optional: defaults to true
 }
@@ -445,6 +451,8 @@ GET /api/v1/admin/coupons
       "isActive": true,
       "redeemedByUserId": null,
       "redeemedByUserEmail": null,
+      "redeemedForTenantId": null,
+      "redeemedForTenantName": null,
       "redeemedAt": null,
       "createdAt": "2024-01-01T00:00:00.000Z",
       "updatedAt": "2024-01-01T00:00:00.000Z"
@@ -529,7 +537,7 @@ GET /api/v1/admin/users
       "avatarUrl": null,
       "balance": 0,
       "balanceCurrency": "usd",
-      "currentTeamId": null,
+      "currentTenantId": null,
       "createdAt": "2024-01-01T00:00:00.000Z",
       "updatedAt": "2024-01-01T00:00:00.000Z"
     }
@@ -555,24 +563,560 @@ PUT /api/v1/admin/users/:id
 
 ---
 
-## Admin - Teams
+## Admin - Tenants
 
-Admin endpoints for managing teams.
+Admin endpoints for managing tenants.
 
-### List Teams
+### List Tenants
 
 ```
-GET /api/v1/admin/teams
+GET /api/v1/admin/tenants
+```
+
+**Authentication:** Required (Admin)
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "Acme Corp",
+      "slug": "acme-corp",
+      "type": "team",
+      "ownerId": 1,
+      "maxMembers": null,
+      "balance": 5000,
+      "balanceCurrency": "usd",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+### Update Tenant Tier
+
+```
+PUT /api/v1/admin/tenants/:id/tier
 ```
 
 **Authentication:** Required (Admin)
 
-**Response includes balance and balanceCurrency fields.**
+**Request Body:**
+```json
+{
+  "tierId": 2
+}
+```
 
-### Get Team
+---
+
+## Admin - Users (Additional Actions)
+
+### Verify User Email
+
+Manually verify a user's email address.
 
 ```
-GET /api/v1/admin/teams/:id
+POST /api/v1/admin/users/:id/verify-email
 ```
 
 **Authentication:** Required (Admin)
+
+### Unverify User Email
+
+Remove email verification from a user.
+
+```
+POST /api/v1/admin/users/:id/unverify-email
+```
+
+**Authentication:** Required (Admin)
+
+### Update User Tier
+
+```
+PUT /api/v1/admin/users/:id/tier
+```
+
+**Authentication:** Required (Admin)
+
+**Request Body:**
+```json
+{
+  "tierId": 2
+}
+```
+
+### Delete User
+
+```
+DELETE /api/v1/admin/users/:id
+```
+
+**Authentication:** Required (Admin)
+
+---
+
+## Admin - Products
+
+Admin endpoints for managing payment products (Stripe integration). Requires admin role.
+
+### List Products
+
+```
+GET /api/v1/admin/products
+```
+
+**Authentication:** Required (Admin)
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "tierId": 2,
+      "provider": "stripe",
+      "providerProductId": "prod_xxx",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+### Create Product
+
+Link a Stripe product to a subscription tier.
+
+```
+POST /api/v1/admin/products
+```
+
+**Authentication:** Required (Admin)
+
+**Request Body:**
+```json
+{
+  "tierId": 2,
+  "provider": "stripe",
+  "providerProductId": "prod_xxx"
+}
+```
+
+### Update Product
+
+```
+PUT /api/v1/admin/products/:id
+```
+
+**Authentication:** Required (Admin)
+
+**Request Body:**
+```json
+{
+  "providerProductId": "prod_yyy"
+}
+```
+
+### Delete Product
+
+```
+DELETE /api/v1/admin/products/:id
+```
+
+**Authentication:** Required (Admin)
+
+---
+
+## Admin - Prices
+
+Admin endpoints for managing payment prices (Stripe integration). Requires admin role.
+
+### List Prices
+
+```
+GET /api/v1/admin/prices
+```
+
+**Authentication:** Required (Admin)
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "productId": 1,
+      "provider": "stripe",
+      "providerPriceId": "price_xxx",
+      "interval": "month",
+      "currency": "usd",
+      "unitAmount": 1999,
+      "taxBehavior": "exclusive",
+      "isActive": true,
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+### Create Price
+
+Link a Stripe price to a product.
+
+```
+POST /api/v1/admin/prices
+```
+
+**Authentication:** Required (Admin)
+
+**Request Body:**
+```json
+{
+  "productId": 1,
+  "provider": "stripe",
+  "providerPriceId": "price_xxx",
+  "interval": "month",
+  "currency": "usd",
+  "unitAmount": 1999,
+  "taxBehavior": "exclusive",
+  "isActive": true
+}
+```
+
+### Update Price
+
+```
+PUT /api/v1/admin/prices/:id
+```
+
+**Authentication:** Required (Admin)
+
+**Request Body:**
+```json
+{
+  "isActive": false
+}
+```
+
+### Delete Price
+
+```
+DELETE /api/v1/admin/prices/:id
+```
+
+**Authentication:** Required (Admin)
+
+---
+
+## Webhooks
+
+### Handle Stripe Webhook
+
+Receives and processes Stripe webhook events. Uses signature verification for security.
+
+```
+POST /api/v1/webhooks/stripe
+```
+
+**Authentication:** Stripe signature verification (no user auth)
+
+**Headers:**
+- `stripe-signature`: Stripe webhook signature
+
+**Supported Events:**
+- `checkout.session.completed` - Creates/updates subscription after successful checkout
+- `customer.subscription.updated` - Handles subscription changes (plan upgrades/downgrades)
+- `customer.subscription.deleted` - Handles subscription cancellation
+- `invoice.payment_failed` - Logs payment failures, optionally marks subscription as past_due
+- `invoice.payment_succeeded` - Updates subscription expiration, sends confirmation
+
+**Response:**
+```json
+{
+  "received": true
+}
+```
+
+**Error Response (400):**
+```json
+{
+  "error": "Webhook Error",
+  "message": "Invalid signature"
+}
+```
+
+---
+
+## Tenants
+
+User-facing endpoints for managing tenants.
+
+### List User's Tenants
+
+```
+GET /api/v1/tenants
+```
+
+**Authentication:** Required
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "Personal Workspace",
+      "slug": "personal-1",
+      "type": "personal",
+      "ownerId": 1,
+      "role": "owner",
+      "memberCount": 1
+    },
+    {
+      "id": 2,
+      "name": "Acme Corp",
+      "slug": "acme-corp",
+      "type": "team",
+      "ownerId": 5,
+      "role": "member",
+      "memberCount": 10
+    }
+  ]
+}
+```
+
+### Create Tenant
+
+```
+POST /api/v1/tenants
+```
+
+**Authentication:** Required
+
+**Request Body:**
+```json
+{
+  "name": "My Team",
+  "slug": "my-team"
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "id": 3,
+    "name": "My Team",
+    "slug": "my-team",
+    "type": "team",
+    "ownerId": 1
+  }
+}
+```
+
+### Get Tenant
+
+```
+GET /api/v1/tenants/:id
+```
+
+**Authentication:** Required (must be member)
+
+### Update Tenant
+
+```
+PUT /api/v1/tenants/:id
+```
+
+**Authentication:** Required (must be admin)
+
+**Request Body:**
+```json
+{
+  "name": "New Name",
+  "slug": "new-slug"
+}
+```
+
+### Switch to Tenant
+
+Switch the current user's active tenant.
+
+```
+POST /api/v1/tenants/:id/switch
+```
+
+**Authentication:** Required (must be member)
+
+**Response:**
+```json
+{
+  "data": null,
+  "message": "Switched to tenant successfully"
+}
+```
+
+### Add Member
+
+```
+POST /api/v1/tenants/:id/members
+```
+
+**Authentication:** Required (must be admin)
+
+**Request Body:**
+```json
+{
+  "userId": 5,
+  "role": "member"
+}
+```
+
+### Remove Member
+
+```
+DELETE /api/v1/tenants/:id/members/:userId
+```
+
+**Authentication:** Required (must be admin)
+
+### Leave Tenant
+
+```
+POST /api/v1/tenants/:id/leave
+```
+
+**Authentication:** Required (must be member, cannot leave if owner)
+
+### Delete Tenant
+
+```
+DELETE /api/v1/tenants/:id
+```
+
+**Authentication:** Required (must be owner)
+
+### Send Invitation
+
+```
+POST /api/v1/tenants/:id/invitations
+```
+
+**Authentication:** Required (must be admin)
+
+**Request Body:**
+```json
+{
+  "email": "invitee@example.com",
+  "role": "member"
+}
+```
+
+### List Invitations
+
+```
+GET /api/v1/tenants/:id/invitations
+```
+
+**Authentication:** Required (must be admin)
+
+### Cancel Invitation
+
+```
+DELETE /api/v1/tenants/:id/invitations/:invitationId
+```
+
+**Authentication:** Required (must be admin)
+
+### Get Invitation by Token (Public)
+
+```
+GET /api/v1/invitations/:token
+```
+
+**Authentication:** Not required
+
+### Accept Invitation
+
+```
+POST /api/v1/invitations/:token/accept
+```
+
+**Authentication:** Required
+
+### Decline Invitation
+
+```
+POST /api/v1/invitations/:token/decline
+```
+
+**Authentication:** Required
+
+---
+
+## Dashboard
+
+### Get User Stats
+
+Get statistics for the current user's dashboard.
+
+```
+GET /api/v1/dashboard/stats
+```
+
+**Authentication:** Required
+
+**Response:**
+```json
+{
+  "data": {
+    "totalTenants": 2,
+    "ownedTenants": 1,
+    "memberTenants": 1,
+    "currentTenant": {
+      "id": 1,
+      "name": "Personal Workspace",
+      "type": "personal"
+    },
+    "currentSubscription": {
+      "tier": "pro",
+      "status": "active",
+      "expiresAt": "2025-01-01T00:00:00.000Z"
+    }
+  }
+}
+```
+
+---
+
+## Admin - Stats
+
+### Get Admin Stats
+
+Get system-wide statistics for admin dashboard.
+
+```
+GET /api/v1/admin/stats
+```
+
+**Authentication:** Required (Admin)
+
+**Response:**
+```json
+{
+  "data": {
+    "totalUsers": 150,
+    "totalTenants": 45,
+    "activeSubscriptions": 78,
+    "revenue": {
+      "monthly": 15000,
+      "yearly": 180000
+    }
+  }
+}
+```

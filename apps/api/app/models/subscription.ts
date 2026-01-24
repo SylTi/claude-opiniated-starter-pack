@@ -2,8 +2,8 @@ import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, scope } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import SubscriptionTier from '#models/subscription_tier'
+import Tenant from '#models/tenant'
 
-export type SubscriberType = 'user' | 'team'
 export type SubscriptionStatus = 'active' | 'expired' | 'cancelled'
 
 export default class Subscription extends BaseModel {
@@ -11,10 +11,7 @@ export default class Subscription extends BaseModel {
   declare id: number
 
   @column()
-  declare subscriberType: SubscriberType
-
-  @column()
-  declare subscriberId: number
+  declare tenantId: number
 
   @column()
   declare tierId: number
@@ -43,6 +40,9 @@ export default class Subscription extends BaseModel {
   @belongsTo(() => SubscriptionTier, { foreignKey: 'tierId' })
   declare tier: BelongsTo<typeof SubscriptionTier>
 
+  @belongsTo(() => Tenant, { foreignKey: 'tenantId' })
+  declare tenant: BelongsTo<typeof Tenant>
+
   /**
    * Scope: only active subscriptions
    */
@@ -51,17 +51,10 @@ export default class Subscription extends BaseModel {
   })
 
   /**
-   * Scope: subscriptions for a specific user
+   * Scope: subscriptions for a specific tenant
    */
-  static forUser = scope((query, userId: number) => {
-    query.where('subscriberType', 'user').where('subscriberId', userId)
-  })
-
-  /**
-   * Scope: subscriptions for a specific team
-   */
-  static forTeam = scope((query, teamId: number) => {
-    query.where('subscriberType', 'team').where('subscriberId', teamId)
+  static forTenant = scope((query, tenantId: number) => {
+    query.where('tenantId', tenantId)
   })
 
   /**
@@ -87,11 +80,11 @@ export default class Subscription extends BaseModel {
   }
 
   /**
-   * Get active subscription for a user
+   * Get active subscription for a tenant
    */
-  static async getActiveForUser(userId: number): Promise<Subscription | null> {
+  static async getActiveForTenant(tenantId: number): Promise<Subscription | null> {
     return this.query()
-      .withScopes((scopes) => scopes.forUser(userId))
+      .withScopes((scopes) => scopes.forTenant(tenantId))
       .withScopes((scopes) => scopes.active())
       .preload('tier')
       .orderBy('createdAt', 'desc')
@@ -99,48 +92,25 @@ export default class Subscription extends BaseModel {
   }
 
   /**
-   * Get active subscription for a team
+   * Get all subscriptions for a tenant (including history)
    */
-  static async getActiveForTeam(teamId: number): Promise<Subscription | null> {
+  static async getAllForTenant(tenantId: number): Promise<Subscription[]> {
     return this.query()
-      .withScopes((scopes) => scopes.forTeam(teamId))
-      .withScopes((scopes) => scopes.active())
-      .preload('tier')
-      .orderBy('createdAt', 'desc')
-      .first()
-  }
-
-  /**
-   * Get all subscriptions for a user (including history)
-   */
-  static async getAllForUser(userId: number): Promise<Subscription[]> {
-    return this.query()
-      .withScopes((scopes) => scopes.forUser(userId))
+      .withScopes((scopes) => scopes.forTenant(tenantId))
       .preload('tier')
       .orderBy('createdAt', 'desc')
   }
 
   /**
-   * Get all subscriptions for a team (including history)
+   * Create a new subscription for a tenant
    */
-  static async getAllForTeam(teamId: number): Promise<Subscription[]> {
-    return this.query()
-      .withScopes((scopes) => scopes.forTeam(teamId))
-      .preload('tier')
-      .orderBy('createdAt', 'desc')
-  }
-
-  /**
-   * Create a new subscription for a user
-   */
-  static async createForUser(
-    userId: number,
+  static async createForTenant(
+    tenantId: number,
     tierId: number,
     expiresAt: DateTime | null = null
   ): Promise<Subscription> {
     const subscription = await this.create({
-      subscriberType: 'user',
-      subscriberId: userId,
+      tenantId,
       tierId,
       status: 'active',
       startsAt: DateTime.now(),
@@ -151,32 +121,12 @@ export default class Subscription extends BaseModel {
   }
 
   /**
-   * Create a new subscription for a team
+   * Cancel all active subscriptions for a tenant and create a new free one
    */
-  static async createForTeam(
-    teamId: number,
-    tierId: number,
-    expiresAt: DateTime | null = null
-  ): Promise<Subscription> {
-    const subscription = await this.create({
-      subscriberType: 'team',
-      subscriberId: teamId,
-      tierId,
-      status: 'active',
-      startsAt: DateTime.now(),
-      expiresAt,
-    })
-    await subscription.load('tier')
-    return subscription
-  }
-
-  /**
-   * Cancel all active subscriptions for a user and create a new free one
-   */
-  static async downgradeUserToFree(userId: number): Promise<Subscription> {
+  static async downgradeTenantToFree(tenantId: number): Promise<Subscription> {
     // Cancel active subscriptions
     await this.query()
-      .withScopes((scopes) => scopes.forUser(userId))
+      .withScopes((scopes) => scopes.forTenant(tenantId))
       .withScopes((scopes) => scopes.active())
       .update({ status: 'cancelled' })
 
@@ -184,24 +134,7 @@ export default class Subscription extends BaseModel {
     const freeTier = await SubscriptionTier.getFreeTier()
 
     // Create new free subscription
-    return this.createForUser(userId, freeTier.id)
-  }
-
-  /**
-   * Cancel all active subscriptions for a team and create a new free one
-   */
-  static async downgradeTeamToFree(teamId: number): Promise<Subscription> {
-    // Cancel active subscriptions
-    await this.query()
-      .withScopes((scopes) => scopes.forTeam(teamId))
-      .withScopes((scopes) => scopes.active())
-      .update({ status: 'cancelled' })
-
-    // Get free tier
-    const freeTier = await SubscriptionTier.getFreeTier()
-
-    // Create new free subscription
-    return this.createForTeam(teamId, freeTier.id)
+    return this.createForTenant(tenantId, freeTier.id)
   }
 
   /**
@@ -222,16 +155,14 @@ export default class Subscription extends BaseModel {
    * Create subscription with provider info
    */
   static async createWithProvider(
-    subscriberType: SubscriberType,
-    subscriberId: number,
+    tenantId: number,
     tierId: number,
     providerName: string,
     providerSubscriptionId: string,
     expiresAt: DateTime | null = null
   ): Promise<Subscription> {
     const subscription = await this.create({
-      subscriberType,
-      subscriberId,
+      tenantId,
       tierId,
       status: 'active',
       startsAt: DateTime.now(),

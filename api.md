@@ -77,6 +77,9 @@ Toutes les routes sont préfixées par `/api/v1`.
 *   `POST /billing/portal` - Créer une session de portail client Stripe.
 *   `GET /billing/subscription` - Obtenir l'abonnement actuel de l'utilisateur/équipe.
 *   `POST /billing/cancel` - Annuler l'abonnement actuel.
+*   `POST /billing/validate-discount-code` - Valider un code de réduction.
+*   `POST /billing/redeem-coupon` - Utiliser un coupon pour ajouter du crédit.
+*   `GET /billing/balance` - Obtenir le solde de crédit de l'utilisateur/équipe.
 
 ---
 
@@ -101,6 +104,7 @@ Toutes les routes sont préfixées par `/api/v1`.
 *   `GET /admin/tiers` - Lister tous les niveaux d'abonnement.
 *   `POST /admin/tiers` - Créer un nouveau niveau d'abonnement.
 *   `PUT /admin/tiers/:id` - Mettre à jour un niveau d'abonnement.
+*   `DELETE /admin/tiers/:id` - Supprimer un niveau d'abonnement.
 
 #### Gestion des produits (Products - lien Tier <-> Stripe Product)
 *   `GET /admin/products` - Lister tous les produits.
@@ -113,3 +117,17 @@ Toutes les routes sont préfixées par `/api/v1`.
 *   `POST /admin/prices` - Créer un prix (lier à un produit).
 *   `PUT /admin/prices/:id` - Mettre à jour un prix (activer/désactiver).
 *   `DELETE /admin/prices/:id` - Supprimer un prix.
+
+#### Gestion des codes de réduction (Discount Codes)
+*   `GET /admin/discount-codes` - Lister tous les codes de réduction.
+*   `GET /admin/discount-codes/:id` - Afficher un code de réduction.
+*   `POST /admin/discount-codes` - Créer un code de réduction.
+*   `PUT /admin/discount-codes/:id` - Mettre à jour un code de réduction.
+*   `DELETE /admin/discount-codes/:id` - Supprimer un code de réduction.
+
+#### Gestion des coupons (Coupons - usage unique)
+*   `GET /admin/coupons` - Lister tous les coupons.
+*   `GET /admin/coupons/:id` - Afficher un coupon.
+*   `POST /admin/coupons` - Créer un coupon.
+*   `PUT /admin/coupons/:id` - Mettre à jour un coupon.
+*   `DELETE /admin/coupons/:id` - Supprimer un coupon.

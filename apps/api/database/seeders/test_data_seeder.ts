@@ -2,8 +2,8 @@ import { BaseSeeder } from '@adonisjs/lucid/seeders'
 import { DateTime } from 'luxon'
 import app from '@adonisjs/core/services/app'
 import User from '#models/user'
-import Team from '#models/team'
-import TeamMember from '#models/team_member'
+import Tenant from '#models/tenant'
+import TenantMembership from '#models/tenant_membership'
 import SubscriptionTier from '#models/subscription_tier'
 import Subscription from '#models/subscription'
 import Product from '#models/product'
@@ -27,11 +27,11 @@ export default class extends BaseSeeder {
     // Create products and prices
     await this.seedProductsAndPrices()
 
-    // Create test users
+    // Create test users with personal tenants
     const users = await this.seedUsers()
 
-    // Create teams
-    await this.seedTeams(users)
+    // Create team tenants
+    await this.seedTenants(users)
 
     // Create coupons
     await this.seedCoupons()
@@ -126,19 +126,18 @@ export default class extends BaseSeeder {
         tier: 'tier2',
       },
       {
-        key: 'teamOwner',
+        key: 'tenantOwner',
         email: 'owner@test.com',
         password: 'password123',
-        fullName: 'Team Owner',
+        fullName: 'Tenant Owner',
         role: 'user' as const,
         emailVerified: true,
-        balance: 5000,
       },
       {
-        key: 'teamMember',
+        key: 'tenantMember',
         email: 'member@test.com',
         password: 'password123',
-        fullName: 'Team Member',
+        fullName: 'Tenant Member',
         role: 'user' as const,
         emailVerified: true,
       },
@@ -168,17 +167,35 @@ export default class extends BaseSeeder {
         fullName: userData.fullName,
         role: userData.role,
         emailVerified: userData.emailVerified,
-        balance: userData.balance ?? 0,
+      })
+
+      // Create personal tenant for each user (tenant is the billing unit)
+      const personalTenant = await Tenant.create({
+        name: `${userData.fullName}'s Workspace`,
+        slug: `personal-${userData.key}`,
+        type: 'personal',
+        ownerId: user.id,
+        balance: userData.key === 'tenantOwner' ? 5000 : 0,
         balanceCurrency: 'usd',
       })
 
-      // Create subscription if tier specified
+      // Create owner membership
+      await TenantMembership.create({
+        userId: user.id,
+        tenantId: personalTenant.id,
+        role: 'owner',
+      })
+
+      // Set current tenant
+      user.currentTenantId = personalTenant.id
+      await user.save()
+
+      // Create subscription for the tenant if tier specified
       if (userData.tier) {
         const tier = await SubscriptionTier.findBySlug(userData.tier)
         if (tier) {
           await Subscription.create({
-            subscriberType: 'user',
-            subscriberId: user.id,
+            tenantId: personalTenant.id,
             tierId: tier.id,
             status: 'active',
             startsAt: DateTime.now(),
@@ -188,7 +205,7 @@ export default class extends BaseSeeder {
       }
 
       users[userData.key] = user
-      console.log(`  Created user: ${userData.email}`)
+      console.log(`  Created user: ${userData.email} with personal tenant`)
     }
 
     return users
@@ -259,57 +276,57 @@ export default class extends BaseSeeder {
     }
   }
 
-  private async seedTeams(users: Record<string, User>): Promise<void> {
-    const owner = users['teamOwner']
-    const member = users['teamMember']
+  private async seedTenants(users: Record<string, User>): Promise<void> {
+    const owner = users['tenantOwner']
+    const member = users['tenantMember']
 
     if (!owner || !member) {
-      console.log('  Skipping team creation - required users not found')
+      console.log('  Skipping team tenant creation - required users not found')
       return
     }
 
-    // Check if team already exists
-    const existingTeam = await Team.findBy('slug', 'test-team')
-    if (existingTeam) {
-      console.log('  Team already exists: test-team')
+    // Check if tenant already exists
+    const existingTenant = await Tenant.findBy('slug', 'test-team')
+    if (existingTenant) {
+      console.log('  Tenant already exists: test-team')
       return
     }
 
-    // Create team
-    const team = await Team.create({
+    // Create team tenant
+    const tenant = await Tenant.create({
       name: 'Test Team',
       slug: 'test-team',
+      type: 'team',
       ownerId: owner.id,
       balance: 10000,
       balanceCurrency: 'usd',
     })
 
     // Add owner as member
-    await TeamMember.create({
+    await TenantMembership.create({
       userId: owner.id,
-      teamId: team.id,
+      tenantId: tenant.id,
       role: 'owner',
     })
 
     // Add member
-    await TeamMember.create({
+    await TenantMembership.create({
       userId: member.id,
-      teamId: team.id,
+      tenantId: tenant.id,
       role: 'member',
     })
 
-    // Update current team for users
-    owner.currentTeamId = team.id
+    // Update current tenant for users
+    owner.currentTenantId = tenant.id
     await owner.save()
-    member.currentTeamId = team.id
+    member.currentTenantId = tenant.id
     await member.save()
 
-    // Create team subscription
+    // Create tenant subscription
     const tier = await SubscriptionTier.findBySlug('tier1')
     if (tier) {
       await Subscription.create({
-        subscriberType: 'team',
-        subscriberId: team.id,
+        tenantId: tenant.id,
         tierId: tier.id,
         status: 'active',
         startsAt: DateTime.now(),
@@ -317,7 +334,7 @@ export default class extends BaseSeeder {
       })
     }
 
-    console.log(`  Created team: ${team.name} with 2 members`)
+    console.log(`  Created team tenant: ${tenant.name} with 2 members`)
   }
 
   private async seedCoupons(): Promise<void> {
@@ -375,7 +392,7 @@ export default class extends BaseSeeder {
         discountType: 'percent' as const,
         discountValue: 20,
         maxUses: 100,
-        maxUsesPerUser: 1,
+        maxUsesPerTenant: 1,
         expiresAt: DateTime.now().plus({ months: 3 }),
         isActive: true,
       },
@@ -387,7 +404,7 @@ export default class extends BaseSeeder {
         currency: 'usd',
         minAmount: 2000,
         maxUses: 50,
-        maxUsesPerUser: 1,
+        maxUsesPerTenant: 1,
         expiresAt: DateTime.now().plus({ months: 1 }),
         isActive: true,
       },
@@ -397,7 +414,7 @@ export default class extends BaseSeeder {
         discountType: 'percent' as const,
         discountValue: 10,
         maxUses: null,
-        maxUsesPerUser: null,
+        maxUsesPerTenant: null,
         expiresAt: null,
         isActive: true,
       },

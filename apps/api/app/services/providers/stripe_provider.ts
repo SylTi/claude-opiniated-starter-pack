@@ -32,9 +32,10 @@ export default class StripeProvider implements PaymentProvider {
 
   /**
    * Create a checkout session for subscription
+   * Tenant is the billing unit - no user-level subscriptions
    */
   async createCheckoutSession(params: CheckoutSessionParams): Promise<CheckoutSessionResult> {
-    const { subscriber, priceId, successUrl, cancelUrl, metadata } = params
+    const { tenant, priceId, successUrl, cancelUrl, metadata } = params
 
     // Get the price from our database
     const price = await Price.query()
@@ -45,16 +46,12 @@ export default class StripeProvider implements PaymentProvider {
       })
       .firstOrFail()
 
-    // Build client_reference_id: user_123 or team_456
-    const clientReferenceId = `${subscriber.type}_${subscriber.id}`
+    // Build client_reference_id: tenant_123
+    const clientReferenceId = `tenant_${tenant.tenantId}`
 
     // Check if we have an existing Stripe customer
     let customerId: string | undefined
-    const existingCustomer = await PaymentCustomer.findBySubscriber(
-      subscriber.type,
-      subscriber.id,
-      this.name
-    )
+    const existingCustomer = await PaymentCustomer.findByTenant(tenant.tenantId, this.name)
     if (existingCustomer) {
       customerId = existingCustomer.providerCustomerId
     }
@@ -77,11 +74,10 @@ export default class StripeProvider implements PaymentProvider {
       cancel_url: cancelUrl,
       client_reference_id: clientReferenceId,
       customer: customerId,
-      customer_email: customerId ? undefined : subscriber.email,
+      customer_email: customerId ? undefined : tenant.email,
       metadata: {
         ...metadata,
-        subscriber_type: subscriber.type,
-        subscriber_id: String(subscriber.id),
+        tenant_id: String(tenant.tenantId),
         tier_id: String(price.product.tierId),
       },
     })
@@ -100,17 +96,13 @@ export default class StripeProvider implements PaymentProvider {
    * Create a customer portal session
    */
   async createCustomerPortalSession(params: CustomerPortalParams): Promise<CustomerPortalResult> {
-    const { subscriber, returnUrl } = params
+    const { tenant, returnUrl } = params
 
     // Find existing payment customer
-    const paymentCustomer = await PaymentCustomer.findBySubscriber(
-      subscriber.type,
-      subscriber.id,
-      this.name
-    )
+    const paymentCustomer = await PaymentCustomer.findByTenant(tenant.tenantId, this.name)
 
     if (!paymentCustomer) {
-      throw new Error('No payment customer found for this subscriber')
+      throw new Error('No payment customer found for this tenant')
     }
 
     if (app.inTest) {
@@ -233,21 +225,23 @@ export default class StripeProvider implements PaymentProvider {
 
   /**
    * Handle checkout.session.completed event
+   * Tenant is the billing unit - extract tenantId from client_reference_id
    */
   private async handleCheckoutCompleted(
     session: Stripe.Checkout.Session,
     trx: TransactionClientContract
   ): Promise<void> {
-    // Extract subscriber info from client_reference_id
+    // Extract tenant info from client_reference_id
     const clientReferenceId = session.client_reference_id
     if (!clientReferenceId) {
       throw new Error('Missing client_reference_id in checkout session')
     }
 
-    const [subscriberType, subscriberIdStr] = clientReferenceId.split('_')
-    const subscriberId = Number.parseInt(subscriberIdStr, 10)
+    // Format: tenant_123
+    const [prefix, tenantIdStr] = clientReferenceId.split('_')
+    const tenantId = Number.parseInt(tenantIdStr, 10)
 
-    if (!subscriberType || !subscriberId || Number.isNaN(subscriberId)) {
+    if (prefix !== 'tenant' || !tenantId || Number.isNaN(tenantId)) {
       throw new Error(`Invalid client_reference_id format: ${clientReferenceId}`)
     }
 
@@ -272,18 +266,12 @@ export default class StripeProvider implements PaymentProvider {
       throw new Error(`Price not found for Stripe price ID: ${stripePriceId}`)
     }
 
-    // Create or update payment customer
-    await PaymentCustomer.upsertBySubscriber(
-      subscriberType as 'user' | 'team',
-      subscriberId,
-      this.name,
-      session.customer as string
-    )
+    // Create or update payment customer for the tenant
+    await PaymentCustomer.upsertByTenant(tenantId, this.name, session.customer as string)
 
     // Cancel existing active subscriptions
     await Subscription.query({ client: trx })
-      .where('subscriberType', subscriberType)
-      .where('subscriberId', subscriberId)
+      .where('tenantId', tenantId)
       .where('status', 'active')
       .update({ status: 'cancelled' })
 
@@ -294,8 +282,7 @@ export default class StripeProvider implements PaymentProvider {
     // Create new subscription
     await Subscription.create(
       {
-        subscriberType: subscriberType as 'user' | 'team',
-        subscriberId,
+        tenantId,
         tierId: price.product.tierId,
         status: 'active',
         startsAt: DateTime.now(),
@@ -377,12 +364,8 @@ export default class StripeProvider implements PaymentProvider {
     subscription.useTransaction(trx)
     await subscription.save()
 
-    // Create free tier subscription
-    if (subscription.subscriberType === 'user') {
-      await Subscription.downgradeUserToFree(subscription.subscriberId)
-    } else {
-      await Subscription.downgradeTeamToFree(subscription.subscriberId)
-    }
+    // Downgrade tenant to free tier
+    await Subscription.downgradeTenantToFree(subscription.tenantId)
   }
 
   /**

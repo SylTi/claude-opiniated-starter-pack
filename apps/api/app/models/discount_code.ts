@@ -40,7 +40,7 @@ export default class DiscountCode extends BaseModel {
   declare maxUses: number | null
 
   @column()
-  declare maxUsesPerUser: number | null
+  declare maxUsesPerTenant: number | null
 
   @column()
   declare timesUsed: number
@@ -72,17 +72,21 @@ export default class DiscountCode extends BaseModel {
     return true
   }
 
-  async canBeUsedBy(userId: number): Promise<boolean> {
+  /**
+   * Check if discount code can be used by a tenant
+   * @param tenantId - Tenant is the billing unit
+   */
+  async canBeUsedByTenant(tenantId: number): Promise<boolean> {
     if (!this.isUsable()) return false
-    if (this.maxUsesPerUser === null) return true
+    if (this.maxUsesPerTenant === null) return true
 
     const usageCount = await DiscountCodeUsage.query()
       .where('discountCodeId', this.id)
-      .where('userId', userId)
+      .where('tenantId', tenantId)
       .count('* as total')
 
     const count = Number(usageCount[0].$extras.total)
-    return count < this.maxUsesPerUser
+    return count < this.maxUsesPerTenant
   }
 
   calculateDiscount(amount: number): number {
