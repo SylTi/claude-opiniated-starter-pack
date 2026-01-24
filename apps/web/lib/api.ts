@@ -36,6 +36,37 @@ function getXsrfToken(): string | null {
   return match ? match[1] : null
 }
 
+function getTenantId(): string | null {
+  if (typeof document === "undefined") {
+    return null
+  }
+  const match = document.cookie.match(/(?:^|; )tenant_id=([^;]+)/)
+  return match ? match[1] : null
+}
+
+/**
+ * Set the current tenant ID in a cookie
+ */
+export function setTenantId(tenantId: number | string | null): void {
+  if (typeof document === "undefined") {
+    return
+  }
+  if (tenantId === null) {
+    document.cookie = "tenant_id=; path=/; max-age=0"
+  } else {
+    // Cookie expires in 30 days
+    document.cookie = `tenant_id=${tenantId}; path=/; max-age=${30 * 24 * 60 * 60}`
+  }
+}
+
+/**
+ * Get the current tenant ID from cookie (exported for external use)
+ */
+export function getCurrentTenantId(): number | null {
+  const id = getTenantId()
+  return id ? parseInt(id, 10) : null
+}
+
 async function ensureXsrfToken(): Promise<string | null> {
   const existing = getXsrfToken()
   if (existing || typeof window === "undefined") {
@@ -96,11 +127,13 @@ export const api = {
    * GET request
    */
   async get<T>(endpoint: string): Promise<ApiResponse<T>> {
+    const tenantId = getTenantId()
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
+        ...(tenantId ? { "X-Tenant-ID": tenantId } : {}),
       },
       credentials: "include",
     })
@@ -113,12 +146,14 @@ export const api = {
    */
   async post<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
     const xsrfToken = await ensureXsrfToken()
+    const tenantId = getTenantId()
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
         ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {}),
+        ...(tenantId ? { "X-Tenant-ID": tenantId } : {}),
       },
       credentials: "include",
       body: body ? JSON.stringify(body) : undefined,
@@ -132,12 +167,14 @@ export const api = {
    */
   async put<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
     const xsrfToken = await ensureXsrfToken()
+    const tenantId = getTenantId()
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
         ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {}),
+        ...(tenantId ? { "X-Tenant-ID": tenantId } : {}),
       },
       credentials: "include",
       body: body ? JSON.stringify(body) : undefined,
@@ -151,12 +188,14 @@ export const api = {
    */
   async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
     const xsrfToken = await ensureXsrfToken()
+    const tenantId = getTenantId()
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
         ...(xsrfToken ? { "X-XSRF-TOKEN": xsrfToken } : {}),
+        ...(tenantId ? { "X-Tenant-ID": tenantId } : {}),
       },
       credentials: "include",
     })
@@ -165,7 +204,7 @@ export const api = {
   },
 }
 
-// Import types for billing API
+// Import types for API
 import type {
   BillingTierDTO,
   CheckoutSessionDTO,
@@ -178,7 +217,171 @@ import type {
   ValidateDiscountCodeResponse,
   RedeemCouponResponse,
   BalanceDTO,
+  TenantDTO,
+  TenantWithMembersDTO,
+  TenantInvitationDTO,
+  InvitationDetailsDTO,
+  AcceptInvitationResponseDTO,
+  TenantRole,
+  InvitationRole,
 } from "@saas/shared"
+
+/**
+ * Tenants API client
+ */
+export const tenantsApi = {
+  /**
+   * Get all tenants for the current user
+   */
+  async list(): Promise<TenantDTO[]> {
+    const response = await api.get<TenantDTO[]>("/api/v1/tenants")
+    return response.data || []
+  },
+
+  /**
+   * Create a new tenant
+   */
+  async create(data: { name: string }): Promise<TenantDTO> {
+    const response = await api.post<TenantDTO>("/api/v1/tenants", data)
+    if (!response.data) {
+      throw new Error("Failed to create tenant")
+    }
+    return response.data
+  },
+
+  /**
+   * Get a tenant by ID with members
+   */
+  async get(id: number): Promise<TenantWithMembersDTO> {
+    const response = await api.get<TenantWithMembersDTO>(`/api/v1/tenants/${id}`)
+    if (!response.data) {
+      throw new Error("Failed to get tenant")
+    }
+    return response.data
+  },
+
+  /**
+   * Update a tenant
+   */
+  async update(id: number, data: { name?: string }): Promise<TenantDTO> {
+    const response = await api.put<TenantDTO>(`/api/v1/tenants/${id}`, data)
+    if (!response.data) {
+      throw new Error("Failed to update tenant")
+    }
+    return response.data
+  },
+
+  /**
+   * Delete a tenant
+   */
+  async delete(id: number): Promise<void> {
+    await api.delete(`/api/v1/tenants/${id}`)
+  },
+
+  /**
+   * Switch current tenant
+   */
+  async switch(tenantId: number): Promise<void> {
+    await api.post(`/api/v1/tenants/${tenantId}/switch`)
+    setTenantId(tenantId)
+  },
+
+  /**
+   * Add a member to a tenant
+   */
+  async addMember(
+    tenantId: number,
+    data: { email: string; role?: TenantRole },
+  ): Promise<void> {
+    await api.post(`/api/v1/tenants/${tenantId}/members`, data)
+  },
+
+  /**
+   * Remove a member from a tenant
+   */
+  async removeMember(tenantId: number, userId: number): Promise<void> {
+    await api.delete(`/api/v1/tenants/${tenantId}/members/${userId}`)
+  },
+
+  /**
+   * Leave a tenant
+   */
+  async leave(tenantId: number): Promise<void> {
+    await api.post(`/api/v1/tenants/${tenantId}/leave`)
+  },
+
+  /**
+   * Get pending invitations for a tenant
+   */
+  async getInvitations(tenantId: number): Promise<TenantInvitationDTO[]> {
+    const response = await api.get<TenantInvitationDTO[]>(
+      `/api/v1/tenants/${tenantId}/invitations`,
+    )
+    return response.data || []
+  },
+
+  /**
+   * Send an invitation
+   */
+  async sendInvitation(
+    tenantId: number,
+    data: { email: string; role?: InvitationRole },
+  ): Promise<{ invitationLink: string }> {
+    const response = await api.post<{ invitationLink: string }>(
+      `/api/v1/tenants/${tenantId}/invitations`,
+      data,
+    )
+    if (!response.data) {
+      throw new Error("Failed to send invitation")
+    }
+    return response.data
+  },
+
+  /**
+   * Cancel an invitation
+   */
+  async cancelInvitation(tenantId: number, invitationId: number): Promise<void> {
+    await api.delete(`/api/v1/tenants/${tenantId}/invitations/${invitationId}`)
+  },
+}
+
+/**
+ * Invitations API client (public routes)
+ */
+export const invitationsApi = {
+  /**
+   * Get invitation details by token
+   */
+  async getByToken(token: string): Promise<InvitationDetailsDTO> {
+    const response = await api.get<InvitationDetailsDTO>(
+      `/api/v1/invitations/${token}`,
+    )
+    if (!response.data) {
+      throw new Error("Failed to get invitation")
+    }
+    return response.data
+  },
+
+  /**
+   * Accept an invitation
+   */
+  async accept(token: string): Promise<AcceptInvitationResponseDTO> {
+    const response = await api.post<AcceptInvitationResponseDTO>(
+      `/api/v1/invitations/${token}/accept`,
+    )
+    if (!response.data) {
+      throw new Error("Failed to accept invitation")
+    }
+    return response.data
+  },
+
+  /**
+   * Decline an invitation
+   */
+  async decline(token: string): Promise<void> {
+    await api.post(`/api/v1/invitations/${token}/decline`)
+  },
+}
 
 /**
  * Billing API client
@@ -267,11 +470,11 @@ export const billingApi = {
    */
   async redeemCoupon(
     code: string,
-    teamId?: number,
+    tenantId?: number,
   ): Promise<RedeemCouponResponse> {
     const response = await api.post<RedeemCouponResponse>(
       "/api/v1/billing/redeem-coupon",
-      { code, teamId },
+      { code, tenantId },
     )
     if (!response.data) {
       throw new Error("Failed to redeem coupon")
@@ -282,9 +485,9 @@ export const billingApi = {
   /**
    * Get current balance
    */
-  async getBalance(teamId?: number): Promise<BalanceDTO> {
-    const endpoint = teamId
-      ? `/api/v1/billing/balance?teamId=${teamId}`
+  async getBalance(tenantId?: number): Promise<BalanceDTO> {
+    const endpoint = tenantId
+      ? `/api/v1/billing/balance?tenantId=${tenantId}`
       : "/api/v1/billing/balance"
     const response = await api.get<BalanceDTO>(endpoint)
     if (!response.data) {
@@ -506,30 +709,33 @@ export interface StripePriceDTO {
 }
 
 /**
- * Admin API for managing teams
+ * Admin API for managing tenants
  */
-export const adminTeamsApi = {
+export const adminTenantsApi = {
   /**
-   * List all teams with admin details
+   * List all tenants with admin details
    */
-  async list(): Promise<AdminTeamDTO[]> {
-    const response = await api.get<AdminTeamDTO[]>("/api/v1/admin/teams")
+  async list(): Promise<AdminTenantDTO[]> {
+    const response = await api.get<AdminTenantDTO[]>("/api/v1/admin/tenants")
     return response.data || []
   },
 
   /**
-   * Update a team's subscription tier
+   * Update a tenant's subscription tier
    */
   async updateTier(
     id: number,
     data: { subscriptionTier: string },
   ): Promise<void> {
-    await api.put(`/api/v1/admin/teams/${id}/tier`, data)
+    await api.put(`/api/v1/admin/tenants/${id}/tier`, data)
   },
 }
 
-// Import admin team type
-import type { AdminTeamDTO } from "@saas/shared"
+/** @deprecated Use adminTenantsApi instead */
+export const adminTeamsApi = adminTenantsApi
+
+// Import admin tenant type
+import type { AdminTenantDTO } from "@saas/shared"
 
 /**
  * Admin API for managing discount codes

@@ -79,8 +79,7 @@ function createMockSubscription(tierSlug: string, expiresAt: string | null = nul
   const tier = createMockTier(tierSlug, tierSlug === "free" ? 0 : tierSlug === "tier1" ? 1 : 2);
   return {
     id: 1,
-    subscriberType: "team",
-    subscriberId: 1,
+    tenantId: 1,
     tier,
     status: "active",
     startsAt: new Date().toISOString(),
@@ -98,8 +97,8 @@ interface MockUser {
   fullName: string | null;
   role: string;
   subscription?: SubscriptionDTO | null;
-  currentTeamId: number | null;
-  currentTeam: {
+  currentTenantId: number | null;
+  currentTenant: {
     id: number;
     name: string;
     slug: string;
@@ -190,8 +189,8 @@ describe("Dashboard Page", () => {
       fullName: "Free User",
       role: "user",
       subscription: null,
-      currentTeamId: null,
-      currentTeam: null,
+      currentTenantId: null,
+      currentTenant: null,
       effectiveSubscriptionTier: createMockTier("free", 0),
       emailVerified: true,
       mfaEnabled: false,
@@ -293,8 +292,8 @@ describe("Dashboard Page", () => {
       fullName: "Team Member",
       role: "user",
       subscription: null,
-      currentTeamId: 1,
-      currentTeam: {
+      currentTenantId: 1,
+      currentTenant: {
         id: 1,
         name: "Premium Team",
         slug: "premium-team",
@@ -409,8 +408,8 @@ describe("Dashboard Page", () => {
       fullName: "Enterprise User",
       role: "user",
       subscription: null,
-      currentTeamId: 2,
-      currentTeam: {
+      currentTenantId: 2,
+      currentTenant: {
         id: 2,
         name: "Enterprise Corp",
         slug: "enterprise-corp",
@@ -460,8 +459,8 @@ describe("Dashboard Page", () => {
       fullName: "Expired User",
       role: "user",
       subscription: null,
-      currentTeamId: 3,
-      currentTeam: {
+      currentTenantId: 3,
+      currentTenant: {
         id: 3,
         name: "Expired Team",
         slug: "expired-team",
@@ -508,8 +507,8 @@ describe("Dashboard Page", () => {
       fullName: "Active User",
       role: "user",
       subscription: null,
-      currentTeamId: null,
-      currentTeam: null,
+      currentTenantId: null,
+      currentTenant: null,
       effectiveSubscriptionTier: createMockTier("free", 0),
       emailVerified: true,
       mfaEnabled: false,

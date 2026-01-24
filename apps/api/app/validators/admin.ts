@@ -1,6 +1,16 @@
 import vine from '@vinejs/vine'
 
 /**
+ * Validator for pagination query params
+ */
+export const paginationValidator = vine.compile(
+  vine.object({
+    page: vine.number().min(1).optional(),
+    limit: vine.number().min(1).max(100).optional(),
+  })
+)
+
+/**
  * Validator for updating a user's subscription tier (admin)
  */
 export const updateUserTierValidator = vine.compile(

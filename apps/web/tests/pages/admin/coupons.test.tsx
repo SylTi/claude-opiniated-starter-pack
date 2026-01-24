@@ -68,6 +68,8 @@ function createMockCoupon(overrides: Partial<CouponDTO> = {}): CouponDTO {
     isActive: true,
     redeemedByUserId: null,
     redeemedByUserEmail: null,
+    redeemedForTenantId: null,
+    redeemedForTenantName: null,
     redeemedAt: null,
     createdAt: new Date().toISOString(),
     updatedAt: null,

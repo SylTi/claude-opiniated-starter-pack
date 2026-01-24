@@ -1,6 +1,6 @@
 import { authenticator } from 'otplib'
 import * as QRCode from 'qrcode'
-import { randomBytes } from 'node:crypto'
+import { randomBytes, createHash } from 'node:crypto'
 import User from '#models/user'
 
 interface MfaSetupResult {
@@ -13,6 +13,24 @@ export default class MfaService {
   private readonly appName = 'SaaS App'
 
   /**
+   * Hash a backup code using SHA-256
+   * We use SHA-256 instead of bcrypt/scrypt because:
+   * 1. Backup codes are already high-entropy random strings (8 hex chars = 32 bits)
+   * 2. Fast hashing is acceptable for high-entropy inputs
+   * 3. No need for salting since each code is unique and random
+   */
+  private hashBackupCode(code: string): string {
+    return createHash('sha256').update(code.toUpperCase()).digest('hex')
+  }
+
+  /**
+   * Hash an array of backup codes for storage
+   */
+  private hashBackupCodes(codes: string[]): string[] {
+    return codes.map((code) => this.hashBackupCode(code))
+  }
+
+  /**
    * Generate MFA setup data for a user
    */
   async generateSetup(user: User): Promise<MfaSetupResult> {
@@ -22,7 +40,7 @@ export default class MfaService {
     // Generate QR code as data URL
     const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUrl)
 
-    // Generate backup codes
+    // Generate backup codes (plaintext - returned to user)
     const backupCodes = this.generateBackupCodes()
 
     return {
@@ -34,6 +52,7 @@ export default class MfaService {
 
   /**
    * Enable MFA for a user
+   * Stores hashed backup codes, not plaintext
    */
   async enable(user: User, secret: string, code: string, backupCodes: string[]): Promise<boolean> {
     // Verify the code before enabling
@@ -43,7 +62,8 @@ export default class MfaService {
 
     user.mfaEnabled = true
     user.mfaSecret = secret
-    user.setMfaBackupCodes(backupCodes)
+    // Store HASHED backup codes, not plaintext
+    user.setMfaBackupCodes(this.hashBackupCodes(backupCodes))
     await user.save()
 
     return true
@@ -68,6 +88,7 @@ export default class MfaService {
 
   /**
    * Verify MFA code for a user (TOTP or backup code)
+   * Backup codes are stored as hashes, so we hash the input before comparing
    */
   async verifyUserMfa(user: User, code: string): Promise<boolean> {
     if (!user.mfaEnabled || !user.mfaSecret) {
@@ -79,14 +100,15 @@ export default class MfaService {
       return true
     }
 
-    // Then try backup codes
-    const backupCodes = user.getMfaBackupCodes()
-    const codeIndex = backupCodes.indexOf(code)
+    // Then try backup codes (stored as hashes)
+    const storedHashes = user.getMfaBackupCodes()
+    const inputHash = this.hashBackupCode(code)
+    const hashIndex = storedHashes.indexOf(inputHash)
 
-    if (codeIndex !== -1) {
-      // Remove used backup code
-      backupCodes.splice(codeIndex, 1)
-      user.setMfaBackupCodes(backupCodes)
+    if (hashIndex !== -1) {
+      // Remove used backup code hash
+      storedHashes.splice(hashIndex, 1)
+      user.setMfaBackupCodes(storedHashes)
       await user.save()
       return true
     }
@@ -109,10 +131,12 @@ export default class MfaService {
 
   /**
    * Regenerate backup codes for a user
+   * Returns plaintext codes for user to save, stores hashed codes in DB
    */
   async regenerateBackupCodes(user: User): Promise<string[]> {
     const backupCodes = this.generateBackupCodes()
-    user.setMfaBackupCodes(backupCodes)
+    // Store HASHED codes, return plaintext to user
+    user.setMfaBackupCodes(this.hashBackupCodes(backupCodes))
     await user.save()
     return backupCodes
   }

@@ -76,7 +76,7 @@ interface MockUser {
   role: string;
   subscription?: SubscriptionDTO | null;
   effectiveSubscriptionTier: SubscriptionTierDTO;
-  currentTeamId: number | null;
+  currentTenantId: number | null;
   emailVerified: boolean;
   mfaEnabled: boolean;
 }
@@ -89,8 +89,8 @@ const mockUsers = [
     role: "admin",
     subscriptionTier: "tier2" as SubscriptionTier,
     subscriptionExpiresAt: null,
-    currentTeamId: null,
-    currentTeamName: null,
+    currentTenantId: null,
+    currentTenantName: null,
     emailVerified: true,
     emailVerifiedAt: "2024-01-01T00:00:00.000Z",
     mfaEnabled: true,
@@ -105,8 +105,8 @@ const mockUsers = [
     role: "user",
     subscriptionTier: "free" as SubscriptionTier,
     subscriptionExpiresAt: null,
-    currentTeamId: null,
-    currentTeamName: null,
+    currentTenantId: null,
+    currentTenantName: null,
     emailVerified: false,
     emailVerifiedAt: null,
     mfaEnabled: false,
@@ -133,7 +133,7 @@ describe("Admin Users Page", () => {
       role: "admin",
       subscription: null,
       effectiveSubscriptionTier: createMockTier("tier2", 2),
-      currentTeamId: null,
+      currentTenantId: null,
       emailVerified: true,
       mfaEnabled: true,
     };

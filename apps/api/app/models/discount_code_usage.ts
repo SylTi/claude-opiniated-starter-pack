@@ -1,9 +1,11 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import db from '@adonisjs/lucid/services/db'
 import DiscountCode from '#models/discount_code'
 import User from '#models/user'
 import Tenant from '#models/tenant'
+import { DiscountCodeLimitReachedError } from '#exceptions/billing_errors'
 
 export default class DiscountCodeUsage extends BaseModel {
   static table = 'discount_code_usages'
@@ -40,11 +42,14 @@ export default class DiscountCodeUsage extends BaseModel {
   declare user: BelongsTo<typeof User>
 
   /**
-   * Record discount code usage
+   * Record discount code usage atomically with row locking to prevent race conditions.
+   * Re-validates limits inside the transaction to ensure strict enforcement.
+   *
    * @param discountCodeId - The discount code that was used
    * @param tenantId - Which tenant used the discount (billing context)
    * @param userId - Who performed the action (audit trail)
    * @param checkoutSessionId - Optional checkout session reference
+   * @throws {DiscountCodeLimitReachedError} If the discount code has reached its usage limit
    */
   static async recordUsage(
     discountCodeId: number,
@@ -52,17 +57,49 @@ export default class DiscountCodeUsage extends BaseModel {
     userId: number,
     checkoutSessionId?: string | null
   ): Promise<DiscountCodeUsage> {
-    const usage = await this.create({
-      discountCodeId,
-      tenantId,
-      userId,
-      usedAt: DateTime.now(),
-      checkoutSessionId: checkoutSessionId ?? null,
+    return await db.transaction(async (trx) => {
+      // Lock the discount code row to prevent race conditions
+      const discountCode = await DiscountCode.query({ client: trx })
+        .where('id', discountCodeId)
+        .forUpdate()
+        .firstOrFail()
+
+      // Re-validate global usage limit inside transaction
+      if (discountCode.maxUses !== null && discountCode.timesUsed >= discountCode.maxUses) {
+        throw new DiscountCodeLimitReachedError(discountCodeId, 'global_limit')
+      }
+
+      // Re-validate tenant-specific usage limit inside transaction
+      if (discountCode.maxUsesPerTenant !== null) {
+        const tenantUsageCount = await this.query({ client: trx })
+          .where('discountCodeId', discountCodeId)
+          .where('tenantId', tenantId)
+          .count('* as total')
+
+        const count = Number(tenantUsageCount[0].$extras.total)
+        if (count >= discountCode.maxUsesPerTenant) {
+          throw new DiscountCodeLimitReachedError(discountCodeId, 'tenant_limit')
+        }
+      }
+
+      // Create usage record
+      const usage = await this.create(
+        {
+          discountCodeId,
+          tenantId,
+          userId,
+          usedAt: DateTime.now(),
+          checkoutSessionId: checkoutSessionId ?? null,
+        },
+        { client: trx }
+      )
+
+      // Increment times_used counter
+      discountCode.timesUsed += 1
+      await discountCode.useTransaction(trx).save()
+
+      return usage
     })
-
-    await DiscountCode.query().where('id', discountCodeId).increment('times_used', 1)
-
-    return usage
   }
 
   /**

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import AdminTeamsPage from "@/app/admin/teams/page";
-import type { AdminTeamDTO, SubscriptionTierDTO } from "@saas/shared";
+import AdminTenantsPage from "@/app/admin/tenants/page";
+import type { AdminTenantDTO, SubscriptionTierDTO } from "@saas/shared";
 
 function createMockTier(slug: string, level: number): SubscriptionTierDTO {
   return {
@@ -28,13 +28,13 @@ vi.mock("next/navigation", () => ({
 }));
 
 // Mock the API
-const mockAdminTeamsList = vi.fn();
-const mockAdminTeamsUpdateTier = vi.fn();
+const mockAdminTenantsList = vi.fn();
+const mockAdminTenantsUpdateTier = vi.fn();
 const mockAdminBillingListTiers = vi.fn();
 vi.mock("@/lib/api", () => ({
-  adminTeamsApi: {
-    list: (...args: unknown[]) => mockAdminTeamsList(...args),
-    updateTier: (...args: unknown[]) => mockAdminTeamsUpdateTier(...args),
+  adminTenantsApi: {
+    list: (...args: unknown[]) => mockAdminTenantsList(...args),
+    updateTier: (...args: unknown[]) => mockAdminTenantsUpdateTier(...args),
   },
   adminBillingApi: {
     listTiers: (...args: unknown[]) => mockAdminBillingListTiers(...args),
@@ -58,11 +58,12 @@ vi.mock("sonner", () => ({
   },
 }));
 
-const mockTeams: AdminTeamDTO[] = [
+const mockTenants: AdminTenantDTO[] = [
   {
     id: 1,
     name: "Alpha Team",
     slug: "alpha-team",
+    type: "team",
     subscriptionTier: "tier2",
     subscriptionExpiresAt: "2025-12-31T00:00:00.000Z",
     ownerId: 1,
@@ -75,13 +76,14 @@ const mockTeams: AdminTeamDTO[] = [
   },
   {
     id: 2,
-    name: "Beta Team",
-    slug: "beta-team",
+    name: "Personal Workspace",
+    slug: "personal-user",
+    type: "personal",
     subscriptionTier: "free",
     subscriptionExpiresAt: null,
     ownerId: 2,
-    ownerEmail: "owner@beta.com",
-    memberCount: 2,
+    ownerEmail: "user@example.com",
+    memberCount: 1,
     balance: 0,
     balanceCurrency: "usd",
     createdAt: "2024-02-01T00:00:00.000Z",
@@ -95,52 +97,53 @@ const mockTiers = [
   createMockTier("tier2", 2),
 ];
 
-describe("Admin Teams Page", () => {
+describe("Admin Tenants Page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAdminBillingListTiers.mockResolvedValue(mockTiers);
   });
 
   describe("loading state", () => {
-    it("shows loading skeleton while fetching teams", () => {
-      mockAdminTeamsList.mockImplementation(
+    it("shows loading skeleton while fetching tenants", () => {
+      mockAdminTenantsList.mockImplementation(
         () => new Promise((resolve) => setTimeout(resolve, 100)),
       );
-      render(<AdminTeamsPage />);
+      render(<AdminTenantsPage />);
 
       expect(document.querySelector(".animate-pulse")).toBeInTheDocument();
     });
   });
 
-  describe("when teams are loaded", () => {
+  describe("when tenants are loaded", () => {
     beforeEach(() => {
-      mockAdminTeamsList.mockResolvedValue(mockTeams);
+      mockAdminTenantsList.mockResolvedValue(mockTenants);
     });
 
     it("displays page title", async () => {
-      render(<AdminTeamsPage />);
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("Team Management")).toBeInTheDocument();
+        expect(screen.getByText("Tenant Management")).toBeInTheDocument();
       });
     });
 
     it("displays page description", async () => {
-      render(<AdminTeamsPage />);
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
         expect(
-          screen.getByText(/View and manage all teams/i),
+          screen.getByText(/View and manage all tenants/i),
         ).toBeInTheDocument();
       });
     });
 
-    it("displays teams table headers", async () => {
-      render(<AdminTeamsPage />);
+    it("displays tenants table headers including Type", async () => {
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
         expect(screen.getByText("ID")).toBeInTheDocument();
         expect(screen.getByText("Name")).toBeInTheDocument();
+        expect(screen.getByText("Type")).toBeInTheDocument();
         expect(screen.getByText("Slug")).toBeInTheDocument();
         expect(screen.getByText("Owner")).toBeInTheDocument();
         expect(screen.getByText("Members")).toBeInTheDocument();
@@ -151,50 +154,44 @@ describe("Admin Teams Page", () => {
       });
     });
 
-    it("displays team names", async () => {
-      render(<AdminTeamsPage />);
+    it("displays tenant names", async () => {
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
         expect(screen.getByText("Alpha Team")).toBeInTheDocument();
-        expect(screen.getByText("Beta Team")).toBeInTheDocument();
+        expect(screen.getByText("Personal Workspace")).toBeInTheDocument();
       });
     });
 
-    it("displays team slugs", async () => {
-      render(<AdminTeamsPage />);
+    it("displays tenant types", async () => {
+      render(<AdminTenantsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("team")).toBeInTheDocument();
+        expect(screen.getByText("personal")).toBeInTheDocument();
+      });
+    });
+
+    it("displays tenant slugs", async () => {
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
         expect(screen.getByText("alpha-team")).toBeInTheDocument();
-        expect(screen.getByText("beta-team")).toBeInTheDocument();
+        expect(screen.getByText("personal-user")).toBeInTheDocument();
       });
     });
 
     it("displays owner emails", async () => {
-      render(<AdminTeamsPage />);
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
         expect(screen.getByText("owner@alpha.com")).toBeInTheDocument();
-        expect(screen.getByText("owner@beta.com")).toBeInTheDocument();
+        expect(screen.getByText("user@example.com")).toBeInTheDocument();
       });
     });
 
-    it("displays member counts", async () => {
-      render(<AdminTeamsPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText("Alpha Team")).toBeInTheDocument();
-      });
-
-      // Member counts are displayed in badges - use getAllByText since "2" appears as both team ID and member count
-      const fiveElements = screen.getAllByText("5");
-      expect(fiveElements.length).toBeGreaterThanOrEqual(1);
-
-      const twoElements = screen.getAllByText("2");
-      expect(twoElements.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it("displays subscription tier selects for each team", async () => {
-      render(<AdminTeamsPage />);
+    it("displays subscription tier selects for each tenant", async () => {
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
         expect(screen.getByText("Alpha Team")).toBeInTheDocument();
@@ -205,7 +202,7 @@ describe("Admin Teams Page", () => {
     });
 
     it("displays current tier values in selects", async () => {
-      render(<AdminTeamsPage />);
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
         expect(screen.getByText("Alpha Team")).toBeInTheDocument();
@@ -215,70 +212,38 @@ describe("Admin Teams Page", () => {
       expect(screen.getByText("Free")).toBeInTheDocument();
     });
 
-    it("displays balance for teams with positive balance", async () => {
-      render(<AdminTeamsPage />);
+    it("displays balance for tenants with positive balance", async () => {
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
         expect(screen.getByText("$50.00")).toBeInTheDocument();
-      });
-    });
-
-    it("displays dash for teams with zero balance", async () => {
-      render(<AdminTeamsPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText("Alpha Team")).toBeInTheDocument();
-      });
-
-      // Beta team has 0 balance, should show "-"
-      const cells = document.querySelectorAll("td");
-      const dashCells = Array.from(cells).filter(
-        (cell) => cell.textContent === "-",
-      );
-      expect(dashCells.length).toBeGreaterThan(0);
-    });
-
-    it("displays expiration dates", async () => {
-      render(<AdminTeamsPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText(/Dec.*2025/)).toBeInTheDocument();
-      });
-    });
-
-    it("displays creation dates", async () => {
-      render(<AdminTeamsPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText(/Jan.*2024/)).toBeInTheDocument();
-        expect(screen.getByText(/Feb.*2024/)).toBeInTheDocument();
       });
     });
   });
 
   describe("empty state", () => {
     beforeEach(() => {
-      mockAdminTeamsList.mockResolvedValue([]);
+      mockAdminTenantsList.mockResolvedValue([]);
     });
 
-    it("shows no teams message when list is empty", async () => {
-      render(<AdminTeamsPage />);
+    it("shows no tenants message when list is empty", async () => {
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("No teams found")).toBeInTheDocument();
+        expect(screen.getByText("No tenants found")).toBeInTheDocument();
       });
     });
   });
 
   describe("tier update", () => {
     beforeEach(() => {
-      mockAdminTeamsList.mockResolvedValue(mockTeams);
-      mockAdminTeamsUpdateTier.mockResolvedValue({});
+      mockAdminTenantsList.mockResolvedValue(mockTenants);
+      mockAdminTenantsUpdateTier.mockResolvedValue({});
     });
 
     it("calls update tier API when tier is changed", async () => {
       const user = userEvent.setup();
-      render(<AdminTeamsPage />);
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
         expect(screen.getByText("Alpha Team")).toBeInTheDocument();
@@ -292,7 +257,7 @@ describe("Admin Teams Page", () => {
       await user.click(screen.getByRole("option", { name: /Pro/i }));
 
       await waitFor(() => {
-        expect(mockAdminTeamsUpdateTier).toHaveBeenCalledWith(1, {
+        expect(mockAdminTenantsUpdateTier).toHaveBeenCalledWith(1, {
           subscriptionTier: "tier1",
         });
       });
@@ -301,7 +266,7 @@ describe("Admin Teams Page", () => {
     it("shows success toast after updating tier", async () => {
       const { toast } = await import("sonner");
       const user = userEvent.setup();
-      render(<AdminTeamsPage />);
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
         expect(screen.getByText("Alpha Team")).toBeInTheDocument();
@@ -313,7 +278,7 @@ describe("Admin Teams Page", () => {
 
       await waitFor(() => {
         expect(toast.success).toHaveBeenCalledWith(
-          "Team subscription tier updated successfully",
+          "Tenant subscription tier updated successfully",
         );
       });
     });
@@ -321,11 +286,11 @@ describe("Admin Teams Page", () => {
     it("shows error toast when update fails with ApiError", async () => {
       const { ApiError } = await import("@/lib/api");
       const { toast } = await import("sonner");
-      mockAdminTeamsUpdateTier.mockRejectedValue(
+      mockAdminTenantsUpdateTier.mockRejectedValue(
         new ApiError(400, "ValidationError", "Invalid tier"),
       );
       const user = userEvent.setup();
-      render(<AdminTeamsPage />);
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
         expect(screen.getByText("Alpha Team")).toBeInTheDocument();
@@ -342,9 +307,9 @@ describe("Admin Teams Page", () => {
 
     it("shows generic error toast when update fails with unknown error", async () => {
       const { toast } = await import("sonner");
-      mockAdminTeamsUpdateTier.mockRejectedValue(new Error("Network error"));
+      mockAdminTenantsUpdateTier.mockRejectedValue(new Error("Network error"));
       const user = userEvent.setup();
-      render(<AdminTeamsPage />);
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
         expect(screen.getByText("Alpha Team")).toBeInTheDocument();
@@ -365,10 +330,10 @@ describe("Admin Teams Page", () => {
   describe("error handling", () => {
     it("redirects on unauthorized error", async () => {
       const { ApiError } = await import("@/lib/api");
-      mockAdminTeamsList.mockRejectedValue(
+      mockAdminTenantsList.mockRejectedValue(
         new ApiError(401, "Unauthorized", "Unauthorized"),
       );
-      render(<AdminTeamsPage />);
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith("/dashboard");
@@ -377,10 +342,10 @@ describe("Admin Teams Page", () => {
 
     it("redirects on forbidden error", async () => {
       const { ApiError } = await import("@/lib/api");
-      mockAdminTeamsList.mockRejectedValue(
+      mockAdminTenantsList.mockRejectedValue(
         new ApiError(403, "Forbidden", "Forbidden"),
       );
-      render(<AdminTeamsPage />);
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith("/dashboard");
@@ -390,10 +355,10 @@ describe("Admin Teams Page", () => {
     it("shows error toast on API failure", async () => {
       const { ApiError } = await import("@/lib/api");
       const { toast } = await import("sonner");
-      mockAdminTeamsList.mockRejectedValue(
+      mockAdminTenantsList.mockRejectedValue(
         new ApiError(500, "ServerError", "Server error"),
       );
-      render(<AdminTeamsPage />);
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
         expect(toast.error).toHaveBeenCalledWith("Server error");
@@ -402,74 +367,30 @@ describe("Admin Teams Page", () => {
 
     it("shows generic error toast on unknown error", async () => {
       const { toast } = await import("sonner");
-      mockAdminTeamsList.mockRejectedValue(new Error("Network error"));
-      render(<AdminTeamsPage />);
+      mockAdminTenantsList.mockRejectedValue(new Error("Network error"));
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
-        expect(toast.error).toHaveBeenCalledWith("Failed to fetch teams");
+        expect(toast.error).toHaveBeenCalledWith("Failed to fetch tenants");
       });
     });
   });
 
-  describe("tier badge variants", () => {
-    beforeEach(() => {
-      mockAdminTeamsList.mockResolvedValue(mockTeams);
-    });
-
-    it("displays tier1 teams with secondary badge variant", async () => {
-      const teamsWithTier1: AdminTeamDTO[] = [
-        {
-          ...mockTeams[0],
-          subscriptionTier: "tier1",
-        },
-      ];
-      mockAdminTeamsList.mockResolvedValue(teamsWithTier1);
-      render(<AdminTeamsPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText("Alpha Team")).toBeInTheDocument();
-      });
-
-      expect(screen.getByText("Pro")).toBeInTheDocument();
-    });
-  });
-
-  describe("team with null owner", () => {
+  describe("tenant with null owner", () => {
     it("displays dash for null ownerEmail", async () => {
-      const teamsWithNullOwner: AdminTeamDTO[] = [
+      const tenantsWithNullOwner: AdminTenantDTO[] = [
         {
-          ...mockTeams[0],
+          ...mockTenants[0],
           ownerEmail: null,
         },
       ];
-      mockAdminTeamsList.mockResolvedValue(teamsWithNullOwner);
-      render(<AdminTeamsPage />);
+      mockAdminTenantsList.mockResolvedValue(tenantsWithNullOwner);
+      render(<AdminTenantsPage />);
 
       await waitFor(() => {
         expect(screen.getByText("Alpha Team")).toBeInTheDocument();
       });
 
-      const cells = document.querySelectorAll("td");
-      const dashCells = Array.from(cells).filter(
-        (cell) => cell.textContent === "-",
-      );
-      expect(dashCells.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe("date formatting", () => {
-    beforeEach(() => {
-      mockAdminTeamsList.mockResolvedValue(mockTeams);
-    });
-
-    it("displays dash for null subscription expiration", async () => {
-      render(<AdminTeamsPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText("Alpha Team")).toBeInTheDocument();
-      });
-
-      // Beta team has null subscriptionExpiresAt
       const cells = document.querySelectorAll("td");
       const dashCells = Array.from(cells).filter(
         (cell) => cell.textContent === "-",

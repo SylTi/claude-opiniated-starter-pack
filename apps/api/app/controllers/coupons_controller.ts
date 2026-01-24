@@ -11,14 +11,11 @@ import {
   redeemCouponValidator,
   getBalanceValidator,
 } from '#validators/coupon'
+import { isCurrencyMismatchError } from '#exceptions/billing_errors'
 
 export default class CouponsController {
   private isRowNotFound(error: unknown): boolean {
     return Boolean((error as { code?: string }).code === 'E_ROW_NOT_FOUND')
-  }
-
-  private isCurrencyMismatch(error: unknown): boolean {
-    return error instanceof Error && error.message.startsWith('Currency mismatch:')
   }
   /**
    * List all coupons (admin)
@@ -257,10 +254,10 @@ export default class CouponsController {
           message: 'Tenant not found',
         })
       }
-      if (this.isCurrencyMismatch(error)) {
+      if (isCurrencyMismatchError(error)) {
         return response.badRequest({
           error: 'CurrencyMismatch',
-          message: (error as Error).message,
+          message: error.message,
         })
       }
       throw error

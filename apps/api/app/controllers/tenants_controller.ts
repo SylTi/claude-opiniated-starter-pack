@@ -16,6 +16,12 @@ import {
   sendInvitationValidator,
 } from '#validators/tenant'
 import { TENANT_ROLES } from '#constants/roles'
+import {
+  AlreadyMemberError,
+  MemberLimitReachedError,
+  isAlreadyMemberError,
+  isMemberLimitReachedError,
+} from '#exceptions/tenant_errors'
 
 export default class TenantsController {
   private mailService = new MailService()
@@ -278,13 +284,13 @@ export default class TenantsController {
           .first()
 
         if (existingMembership) {
-          throw new Error('ALREADY_MEMBER')
+          throw new AlreadyMemberError()
         }
 
         // Check max members limit (inside transaction with lock)
         if (!(await tenant.canAddMember(tenant.memberships.length))) {
           const maxMembers = await tenant.getEffectiveMaxMembers()
-          throw new Error(`LIMIT_REACHED:${maxMembers}`)
+          throw new MemberLimitReachedError(maxMembers ?? 0)
         }
 
         // Create member inside transaction
@@ -313,20 +319,17 @@ export default class TenantsController {
         message: 'Member added successfully',
       })
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message === 'ALREADY_MEMBER') {
-          return response.badRequest({
-            error: 'ValidationError',
-            message: 'User is already a member of this tenant',
-          })
-        }
-        if (error.message.startsWith('LIMIT_REACHED:')) {
-          const maxMembers = error.message.split(':')[1]
-          return response.badRequest({
-            error: 'LimitReached',
-            message: `Tenant has reached the maximum of ${maxMembers} members. Upgrade your subscription to add more.`,
-          })
-        }
+      if (isAlreadyMemberError(error)) {
+        return response.badRequest({
+          error: 'ValidationError',
+          message: error.message,
+        })
+      }
+      if (isMemberLimitReachedError(error)) {
+        return response.badRequest({
+          error: 'LimitReached',
+          message: `${error.message}. Upgrade your subscription to add more.`,
+        })
       }
       throw error
     }

@@ -12,6 +12,7 @@ import {
   getSubscriptionValidator,
   cancelSubscriptionValidator,
 } from '#validators/payment'
+import { isDiscountCodeLimitReachedError } from '#exceptions/billing_errors'
 
 /**
  * Validate that a return URL belongs to an allowed host to prevent open redirect attacks.
@@ -120,7 +121,7 @@ export default class PaymentController {
         cancelUrl
       )
 
-      // Record discount code usage if one was applied
+      // Record discount code usage if one was applied (atomic with race condition protection)
       if (validatedDiscountCode) {
         const discountCodeService = new DiscountCodeService()
         await discountCodeService.recordUsage(
@@ -138,6 +139,13 @@ export default class PaymentController {
         },
       })
     } catch (error) {
+      // Handle discount code limit reached (race condition protection)
+      if (isDiscountCodeLimitReachedError(error)) {
+        return response.badRequest({
+          error: 'DiscountCodeLimitReached',
+          message: error.message,
+        })
+      }
       response.badRequest({
         error: 'CheckoutError',
         message: error instanceof Error ? error.message : 'Failed to create checkout session',

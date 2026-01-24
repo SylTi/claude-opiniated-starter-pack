@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, beforeSave } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import db from '@adonisjs/lucid/services/db'
 import User from '#models/user'
 import Tenant from '#models/tenant'
 
@@ -91,19 +92,48 @@ export default class Coupon extends BaseModel {
 
   /**
    * Redeem coupon for a tenant (tenant is the billing unit)
+   * Uses transaction with row locking to prevent race conditions (double-spending)
    * @param tenantId - Which tenant receives the credit
    * @param userId - Who is performing the redemption (audit)
    * @returns New tenant balance
    */
   async redeemForTenant(tenantId: number, userId: number): Promise<number> {
-    if (!this.isRedeemable()) {
-      throw new Error('Coupon is not redeemable')
-    }
+    return await db.transaction(async (trx) => {
+      // Re-fetch coupon with row lock to prevent race conditions
+      const lockedCoupon = await Coupon.query({ client: trx })
+        .where('id', this.id)
+        .forUpdate()
+        .firstOrFail()
 
-    const tenant = await Tenant.findOrFail(tenantId)
-    await this.redeem(tenantId, userId)
-    const newBalance = await tenant.addCredit(this.creditAmount, this.currency)
-    return newBalance
+      if (!lockedCoupon.isRedeemable()) {
+        throw new Error('Coupon is not redeemable')
+      }
+
+      const tenant = await Tenant.query({ client: trx })
+        .where('id', tenantId)
+        .forUpdate()
+        .firstOrFail()
+
+      // Mark coupon as redeemed
+      lockedCoupon.redeemedForTenantId = tenantId
+      lockedCoupon.redeemedByUserId = userId
+      lockedCoupon.redeemedAt = DateTime.now()
+      lockedCoupon.isActive = false
+      lockedCoupon.useTransaction(trx)
+      await lockedCoupon.save()
+
+      // Add credit to tenant
+      const currentBalance = Number(tenant.balance) || 0
+      const creditAmount = Number(lockedCoupon.creditAmount) || 0
+      tenant.balance = currentBalance + creditAmount
+      if (!tenant.balanceCurrency) {
+        tenant.balanceCurrency = lockedCoupon.currency || 'usd'
+      }
+      tenant.useTransaction(trx)
+      await tenant.save()
+
+      return tenant.balance
+    })
   }
 
   static async findByCode(code: string): Promise<Coupon | null> {

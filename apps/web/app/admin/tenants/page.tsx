@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { adminTeamsApi, adminBillingApi, ApiError } from "@/lib/api"
+import { adminTenantsApi, adminBillingApi, ApiError } from "@/lib/api"
 import { Badge } from "@/components/ui/badge"
 import {
   Table,
@@ -27,22 +27,22 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
-import type { AdminTeamDTO, SubscriptionTierDTO } from "@saas/shared"
+import type { AdminTenantDTO, SubscriptionTierDTO } from "@saas/shared"
 
-export default function AdminTeamsPage(): React.ReactElement {
+export default function AdminTenantsPage(): React.ReactElement {
   const router = useRouter()
-  const [teams, setTeams] = useState<AdminTeamDTO[]>([])
+  const [tenants, setTenants] = useState<AdminTenantDTO[]>([])
   const [tiers, setTiers] = useState<SubscriptionTierDTO[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<number | null>(null)
 
   const fetchData = useCallback(async (): Promise<void> => {
     try {
-      const [teamsData, tiersData] = await Promise.all([
-        adminTeamsApi.list(),
+      const [tenantsData, tiersData] = await Promise.all([
+        adminTenantsApi.list(),
         adminBillingApi.listTiers(),
       ])
-      setTeams(teamsData)
+      setTenants(tenantsData)
       setTiers(tiersData)
     } catch (error) {
       if (error instanceof ApiError) {
@@ -51,7 +51,7 @@ export default function AdminTeamsPage(): React.ReactElement {
           router.push("/dashboard")
         }
       } else {
-        toast.error("Failed to fetch teams")
+        toast.error("Failed to fetch tenants")
       }
     } finally {
       setIsLoading(false)
@@ -62,11 +62,11 @@ export default function AdminTeamsPage(): React.ReactElement {
     fetchData()
   }, [fetchData])
 
-  async function handleUpdateTier(teamId: number, tier: string): Promise<void> {
-    setActionLoading(teamId)
+  async function handleUpdateTier(tenantId: number, tier: string): Promise<void> {
+    setActionLoading(tenantId)
     try {
-      await adminTeamsApi.updateTier(teamId, { subscriptionTier: tier })
-      toast.success("Team subscription tier updated successfully")
+      await adminTenantsApi.updateTier(tenantId, { subscriptionTier: tier })
+      toast.success("Tenant subscription tier updated successfully")
       fetchData()
     } catch (error) {
       if (error instanceof ApiError) {
@@ -85,6 +85,12 @@ export default function AdminTeamsPage(): React.ReactElement {
     if (level >= 2) return "default"
     if (level >= 1) return "secondary"
     return "outline"
+  }
+
+  function getTypeBadgeVariant(
+    type: string,
+  ): "default" | "secondary" | "outline" {
+    return type === "personal" ? "outline" : "secondary"
   }
 
   function getTierBySlug(slug: string): SubscriptionTierDTO | undefined {
@@ -123,9 +129,9 @@ export default function AdminTeamsPage(): React.ReactElement {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Team Management</CardTitle>
+        <CardTitle>Tenant Management</CardTitle>
         <CardDescription>
-          View and manage all teams. Update subscription tiers for teams.
+          View and manage all tenants (personal workspaces and teams). Update subscription tiers for tenants.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -134,6 +140,7 @@ export default function AdminTeamsPage(): React.ReactElement {
             <TableRow>
               <TableHead>ID</TableHead>
               <TableHead>Name</TableHead>
+              <TableHead>Type</TableHead>
               <TableHead>Slug</TableHead>
               <TableHead>Owner</TableHead>
               <TableHead>Members</TableHead>
@@ -144,43 +151,48 @@ export default function AdminTeamsPage(): React.ReactElement {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {teams.length === 0 ? (
+            {tenants.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={9}
+                  colSpan={10}
                   className="text-center text-muted-foreground py-8"
                 >
-                  No teams found
+                  No tenants found
                 </TableCell>
               </TableRow>
             ) : (
-              teams.map((team) => (
-                <TableRow key={team.id}>
-                  <TableCell className="font-mono text-sm">{team.id}</TableCell>
-                  <TableCell className="font-medium">{team.name}</TableCell>
-                  <TableCell className="font-mono text-sm text-muted-foreground">
-                    {team.slug}
-                  </TableCell>
-                  <TableCell>{team.ownerEmail || "-"}</TableCell>
+              tenants.map((tenant) => (
+                <TableRow key={tenant.id}>
+                  <TableCell className="font-mono text-sm">{tenant.id}</TableCell>
+                  <TableCell className="font-medium">{tenant.name}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{team.memberCount}</Badge>
+                    <Badge variant={getTypeBadgeVariant(tenant.type)}>
+                      {tenant.type}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-mono text-sm text-muted-foreground">
+                    {tenant.slug}
+                  </TableCell>
+                  <TableCell>{tenant.ownerEmail || "-"}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{tenant.memberCount}</Badge>
                   </TableCell>
                   <TableCell>
                     <Select
-                      value={team.subscriptionTier}
+                      value={tenant.subscriptionTier}
                       onValueChange={(value: string) =>
-                        handleUpdateTier(team.id, value)
+                        handleUpdateTier(tenant.id, value)
                       }
                       disabled={
-                        actionLoading === team.id || tierOptions.length === 0
+                        actionLoading === tenant.id || tierOptions.length === 0
                       }
                     >
                       <SelectTrigger className="w-[140px]">
                         <SelectValue>
                           {(() => {
-                            const tier = getTierBySlug(team.subscriptionTier)
+                            const tier = getTierBySlug(tenant.subscriptionTier)
                             const tierLabel =
-                              tier?.name ?? team.subscriptionTier
+                              tier?.name ?? tenant.subscriptionTier
                             const tierLevel = tier?.level ?? 0
                             return (
                               <Badge variant={getTierBadgeVariant(tierLevel)}>
@@ -200,9 +212,9 @@ export default function AdminTeamsPage(): React.ReactElement {
                             </SelectItem>
                           ))
                         ) : (
-                          <SelectItem value={team.subscriptionTier}>
+                          <SelectItem value={tenant.subscriptionTier}>
                             <Badge variant={getTierBadgeVariant(0)}>
-                              {team.subscriptionTier}
+                              {tenant.subscriptionTier}
                             </Badge>
                           </SelectItem>
                         )}
@@ -210,19 +222,19 @@ export default function AdminTeamsPage(): React.ReactElement {
                     </Select>
                   </TableCell>
                   <TableCell>
-                    {team.balance > 0 ? (
+                    {tenant.balance > 0 ? (
                       <Badge variant="secondary" className="bg-green-100">
-                        {formatBalance(team.balance, team.balanceCurrency)}
+                        {formatBalance(tenant.balance, tenant.balanceCurrency)}
                       </Badge>
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {formatDate(team.subscriptionExpiresAt)}
+                    {formatDate(tenant.subscriptionExpiresAt)}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {formatDate(team.createdAt)}
+                    {formatDate(tenant.createdAt)}
                   </TableCell>
                 </TableRow>
               ))

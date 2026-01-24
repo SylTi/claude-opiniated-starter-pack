@@ -8,6 +8,7 @@ import OAuthAccount from '#models/oauth_account'
 import LoginHistory from '#models/login_history'
 import Tenant from '#models/tenant'
 import TenantMembership from '#models/tenant_membership'
+import { CurrencyMismatchError } from '#exceptions/billing_errors'
 
 const AuthFinder = withAuthFinder(() => hash.use('scrypt'), {
   uids: ['email'],
@@ -123,7 +124,7 @@ export default class User extends compose(BaseModel, AuthFinder) {
    */
   async addCredit(amount: number, currency?: string): Promise<number> {
     if (this.balanceCurrency && currency && currency !== this.balanceCurrency) {
-      throw new Error(`Currency mismatch: expected ${this.balanceCurrency}, got ${currency}`)
+      throw new CurrencyMismatchError(this.balanceCurrency, currency)
     }
     const currentBalance = Number(this.balance) || 0
     const creditAmount = Number(amount) || 0

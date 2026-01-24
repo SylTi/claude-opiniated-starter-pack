@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "@/components/user-menu";
+import { TenantSwitcher } from "@/components/tenant-switcher";
 import { useAuth } from "@/contexts/auth-context";
 
 export function Header(): React.ReactElement {
@@ -19,6 +20,7 @@ export function Header(): React.ReactElement {
         <nav className="flex items-center gap-4">
           {user ? (
             <>
+              <TenantSwitcher />
               <Link href="/dashboard">
                 <Button variant="ghost">Dashboard</Button>
               </Link>

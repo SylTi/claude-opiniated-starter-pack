@@ -9,6 +9,7 @@ import Product from '#models/product'
 import Price from '#models/price'
 import SubscriptionService from '#services/subscription_service'
 import {
+  paginationValidator,
   updateUserTierValidator,
   updateTenantTierValidator,
   createProductValidator,
@@ -58,10 +59,14 @@ export default class AdminController {
   }
 
   /**
-   * List all users with admin details
+   * List users with admin details (paginated)
+   * GET /api/v1/admin/users?page=1&limit=20
    */
-  async listUsers({ response }: HttpContext): Promise<void> {
-    const users = await User.query()
+  async listUsers({ request, response }: HttpContext): Promise<void> {
+    const { page = 1, limit = 20 } = await request.validateUsing(paginationValidator)
+
+    // Paginated query with preloaded relations
+    const usersPaginated = await User.query()
       .select(
         'id',
         'email',
@@ -77,35 +82,59 @@ export default class AdminController {
       )
       .preload('currentTenant')
       .orderBy('createdAt', 'desc')
+      .paginate(page, limit)
 
-    // Get subscriptions for all users based on their current tenant
-    const usersWithSubscriptions = await Promise.all(
-      users.map(async (user) => {
-        let subscription = null
-        if (user.currentTenantId) {
-          subscription = await Subscription.getActiveForTenant(user.currentTenantId)
-        }
-        return {
-          id: user.id,
-          email: user.email,
-          fullName: user.fullName,
-          role: user.role,
-          subscriptionTier: subscription?.tier?.slug ?? 'free',
-          subscriptionExpiresAt: subscription?.expiresAt?.toISO() ?? null,
-          currentTenantId: user.currentTenantId,
-          currentTenantName: user.currentTenant?.name ?? null,
-          emailVerified: user.emailVerified,
-          emailVerifiedAt: user.emailVerifiedAt?.toISO() ?? null,
-          mfaEnabled: user.mfaEnabled,
-          avatarUrl: user.avatarUrl,
-          createdAt: user.createdAt.toISO(),
-          updatedAt: user.updatedAt?.toISO() ?? null,
-        }
-      })
-    )
+    // Get all unique tenant IDs from the current page
+    const tenantIds = usersPaginated
+      .all()
+      .map((u) => u.currentTenantId)
+      .filter((id): id is number => id !== null)
+
+    // Batch fetch subscriptions for all tenants in one query (avoids N+1)
+    const subscriptions =
+      tenantIds.length > 0
+        ? await Subscription.query()
+            .whereIn('tenantId', tenantIds)
+            .where('status', 'active')
+            .where((q) => {
+              q.whereNull('expiresAt').orWhere('expiresAt', '>', DateTime.now().toSQL())
+            })
+            .preload('tier')
+        : []
+
+    // Create a map for O(1) lookup
+    const subscriptionMap = new Map(subscriptions.map((s) => [s.tenantId, s]))
+
+    const usersData = usersPaginated.all().map((user) => {
+      const subscription = user.currentTenantId ? subscriptionMap.get(user.currentTenantId) : null
+      return {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        subscriptionTier: subscription?.tier?.slug ?? 'free',
+        subscriptionExpiresAt: subscription?.expiresAt?.toISO() ?? null,
+        currentTenantId: user.currentTenantId,
+        currentTenantName: user.currentTenant?.name ?? null,
+        currentTenantType: user.currentTenant?.type ?? null,
+        emailVerified: user.emailVerified,
+        emailVerifiedAt: user.emailVerifiedAt?.toISO() ?? null,
+        mfaEnabled: user.mfaEnabled,
+        avatarUrl: user.avatarUrl,
+        createdAt: user.createdAt.toISO(),
+        updatedAt: user.updatedAt?.toISO() ?? null,
+      }
+    })
 
     response.json({
-      data: usersWithSubscriptions,
+      data: usersData,
+      meta: {
+        total: usersPaginated.total,
+        perPage: usersPaginated.perPage,
+        currentPage: usersPaginated.currentPage,
+        lastPage: usersPaginated.lastPage,
+        firstPage: usersPaginated.firstPage,
+      },
     })
   }
 
@@ -239,38 +268,65 @@ export default class AdminController {
   }
 
   /**
-   * List all tenants with admin details
+   * List all tenants with admin details (paginated)
+   * GET /api/v1/admin/tenants?page=1&limit=20
    */
-  async listTenants({ response }: HttpContext): Promise<void> {
-    const tenants = await Tenant.query()
-      .preload('owner')
-      .preload('memberships')
-      .orderBy('createdAt', 'desc')
+  async listTenants({ request, response }: HttpContext): Promise<void> {
+    const { page = 1, limit = 20 } = await request.validateUsing(paginationValidator)
 
-    // Get subscriptions for all tenants
-    const tenantsWithSubscriptions = await Promise.all(
-      tenants.map(async (tenant: Tenant) => {
-        const subscription = await tenant.getActiveSubscription()
-        return {
-          id: tenant.id,
-          name: tenant.name,
-          slug: tenant.slug,
-          type: tenant.type,
-          subscriptionTier: subscription?.tier?.slug ?? 'free',
-          subscriptionExpiresAt: subscription?.expiresAt?.toISO() ?? null,
-          ownerId: tenant.ownerId,
-          ownerEmail: tenant.owner?.email ?? null,
-          memberCount: tenant.memberships.length,
-          balance: tenant.balance ?? 0,
-          balanceCurrency: tenant.balanceCurrency ?? 'usd',
-          createdAt: tenant.createdAt.toISO(),
-          updatedAt: tenant.updatedAt?.toISO() ?? null,
-        }
-      })
-    )
+    // Paginated query with preloaded relations
+    const tenantsPaginated = await Tenant.query()
+      .preload('owner')
+      .withCount('memberships', (q) => q.as('memberCount'))
+      .orderBy('createdAt', 'desc')
+      .paginate(page, limit)
+
+    // Get all tenant IDs from the current page
+    const tenantIds = tenantsPaginated.all().map((t) => t.id)
+
+    // Batch fetch active subscriptions for all tenants in one query (avoids N+1)
+    const subscriptions =
+      tenantIds.length > 0
+        ? await Subscription.query()
+            .whereIn('tenantId', tenantIds)
+            .where('status', 'active')
+            .where((q) => {
+              q.whereNull('expiresAt').orWhere('expiresAt', '>', DateTime.now().toSQL())
+            })
+            .preload('tier')
+        : []
+
+    // Create a map for O(1) lookup
+    const subscriptionMap = new Map(subscriptions.map((s) => [s.tenantId, s]))
+
+    const tenantsData = tenantsPaginated.all().map((tenant) => {
+      const subscription = subscriptionMap.get(tenant.id)
+      return {
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        type: tenant.type,
+        subscriptionTier: subscription?.tier?.slug ?? 'free',
+        subscriptionExpiresAt: subscription?.expiresAt?.toISO() ?? null,
+        ownerId: tenant.ownerId,
+        ownerEmail: tenant.owner?.email ?? null,
+        memberCount: Number(tenant.$extras.memberCount) || 0,
+        balance: tenant.balance ?? 0,
+        balanceCurrency: tenant.balanceCurrency ?? 'usd',
+        createdAt: tenant.createdAt.toISO(),
+        updatedAt: tenant.updatedAt?.toISO() ?? null,
+      }
+    })
 
     response.json({
-      data: tenantsWithSubscriptions,
+      data: tenantsData,
+      meta: {
+        total: tenantsPaginated.total,
+        perPage: tenantsPaginated.perPage,
+        currentPage: tenantsPaginated.currentPage,
+        lastPage: tenantsPaginated.lastPage,
+        firstPage: tenantsPaginated.firstPage,
+      },
     })
   }
 

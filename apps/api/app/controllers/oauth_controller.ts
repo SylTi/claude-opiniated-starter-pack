@@ -236,11 +236,13 @@ export default class OAuthController {
 
   /**
    * Find or create user from OAuth data
+   * Security: Only links accounts when email is verified by the OAuth provider
    */
   private async findOrCreateUser(
     oauthUser: {
       id: string
       email: string | null
+      emailVerificationState: 'verified' | 'unverified' | 'unsupported'
       name: string | null
       avatarUrl: string | null
       token: { token: string; refreshToken?: string | null; expiresAt?: Date | null }
@@ -267,12 +269,16 @@ export default class OAuthController {
     }
 
     // Check if a user exists with this email
+    // SECURITY: Only link to existing accounts if the OAuth provider verified the email
+    // This prevents account takeover via unverified OAuth emails (e.g., GitHub allows unverified emails)
     const email = oauthUser.email
-    if (email) {
+    const isEmailVerified = oauthUser.emailVerificationState === 'verified'
+
+    if (email && isEmailVerified) {
       const existingUser = await User.findBy('email', email)
 
       if (existingUser) {
-        // Link OAuth account to existing user
+        // Link OAuth account to existing user (safe: email is verified by provider)
         await OAuthAccount.create({
           userId: existingUser.id,
           provider,
@@ -298,12 +304,13 @@ export default class OAuthController {
     }
 
     // Create new user
+    // SECURITY: Only mark email as verified if the OAuth provider verified it
     const newUser = await User.create({
       email: email || `${provider}_${oauthUser.id}@oauth.local`,
       fullName: oauthUser.name,
       avatarUrl: oauthUser.avatarUrl,
       role: USER_ROLES.USER,
-      emailVerified: email !== null, // OAuth emails are considered verified
+      emailVerified: isEmailVerified,
       password: null, // No password for OAuth-only users
       mfaEnabled: false,
     })

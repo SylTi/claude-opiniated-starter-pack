@@ -38,8 +38,7 @@ function createMockSubscription(
   return {
     subscription: {
       id: 1,
-      subscriberType: 'user',
-      subscriberId: 1,
+      tenantId: 1,
       tier,
       status,
       startsAt: new Date().toISOString(),

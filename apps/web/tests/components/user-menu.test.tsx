@@ -38,8 +38,7 @@ function createMockSubscription(tierSlug: string, expiresAt: string | null = nul
   const tier = createMockTier(tierSlug, tierSlug === "free" ? 0 : tierSlug === "tier1" ? 1 : 2);
   return {
     id: 1,
-    subscriberType: "team",
-    subscriberId: 1,
+    tenantId: 1,
     tier,
     status: "active",
     startsAt: new Date().toISOString(),
@@ -57,9 +56,8 @@ function createMockUser(overrides: Partial<UserDTO> = {}): UserDTO {
     email: "user@example.com",
     fullName: "Test User",
     role: "user",
-    subscription: null,
-    currentTeamId: null,
-    currentTeam: null,
+    currentTenantId: null,
+    currentTenant: null,
     effectiveSubscriptionTier: createMockTier("free", 0),
     emailVerified: true,
     mfaEnabled: false,
@@ -352,11 +350,12 @@ describe("UserMenu Component", () => {
 
     it("does not show Team link for user with free tier team", async () => {
       const userWithFreeTeam = createMockUser({
-        currentTeamId: 1,
-        currentTeam: {
+        currentTenantId: 1,
+        currentTenant: {
           id: 1,
           name: "Free Team",
           slug: "free-team",
+          type: "team",
           subscription: null,
         },
         effectiveSubscriptionTier: createMockTier("free", 0),
@@ -377,11 +376,12 @@ describe("UserMenu Component", () => {
 
     it("shows Team link for user with tier1 team", async () => {
       const userWithTier1Team = createMockUser({
-        currentTeamId: 1,
-        currentTeam: {
+        currentTenantId: 1,
+        currentTenant: {
           id: 1,
           name: "Premium Team",
           slug: "premium-team",
+          type: "team",
           subscription: createMockSubscription("tier1", "2025-12-31T00:00:00.000Z"),
         },
         effectiveSubscriptionTier: createMockTier("tier1", 1),
@@ -402,11 +402,12 @@ describe("UserMenu Component", () => {
 
     it("shows Team link for user with tier2 team", async () => {
       const userWithTier2Team = createMockUser({
-        currentTeamId: 1,
-        currentTeam: {
+        currentTenantId: 1,
+        currentTenant: {
           id: 1,
           name: "Enterprise Team",
           slug: "enterprise-team",
+          type: "team",
           subscription: createMockSubscription("tier2"),
         },
         effectiveSubscriptionTier: createMockTier("tier2", 2),
@@ -427,11 +428,12 @@ describe("UserMenu Component", () => {
 
     it("navigates to team page when Team link clicked", async () => {
       const userWithPaidTeam = createMockUser({
-        currentTeamId: 1,
-        currentTeam: {
+        currentTenantId: 1,
+        currentTenant: {
           id: 1,
           name: "Premium Team",
           slug: "premium-team",
+          type: "team",
           subscription: createMockSubscription("tier1", "2025-12-31T00:00:00.000Z"),
         },
         effectiveSubscriptionTier: createMockTier("tier1", 1),
@@ -451,13 +453,14 @@ describe("UserMenu Component", () => {
       expect(mockPush).toHaveBeenCalledWith("/team");
     });
 
-    it("does not show Team link when user has currentTeamId but effective tier is free", async () => {
+    it("does not show Team link when user has currentTenantId but effective tier is free", async () => {
       const userWithTeamButFreeTier = createMockUser({
-        currentTeamId: 1,
-        currentTeam: {
+        currentTenantId: 1,
+        currentTenant: {
           id: 1,
           name: "My Team",
           slug: "my-team",
+          type: "team",
           subscription: null,
         },
         effectiveSubscriptionTier: createMockTier("free", 0),

@@ -57,8 +57,7 @@ function createMockSubscription(tierSlug: string, expiresAt: string | null = nul
   const tier = createMockTier(tierSlug, tierSlug === "free" ? 0 : tierSlug === "tier1" ? 1 : 2);
   return {
     id: 1,
-    subscriberType: "team",
-    subscriberId: 1,
+    tenantId: 1,
     tier,
     status: "active",
     startsAt: new Date().toISOString(),
@@ -85,8 +84,8 @@ interface MockUser {
   role: string;
   subscription?: SubscriptionDTO | null;
   effectiveSubscriptionTier: SubscriptionTierDTO;
-  currentTeamId: number | null;
-  currentTeam: {
+  currentTenantId: number | null;
+  currentTenant: {
     id: number;
     name: string;
     slug: string;
@@ -129,8 +128,8 @@ describe("Team Management Page", () => {
         role: "user",
         subscription: null,
         effectiveSubscriptionTier: createMockTier("free", 0),
-        currentTeamId: null,
-        currentTeam: null,
+        currentTenantId: null,
+        currentTenant: null,
         emailVerified: true,
         mfaEnabled: false,
         avatarUrl: null,
@@ -160,8 +159,8 @@ describe("Team Management Page", () => {
         role: "user",
         subscription: null,
         effectiveSubscriptionTier: createMockTier("free", 0),
-        currentTeamId: 1,
-        currentTeam: {
+        currentTenantId: 1,
+        currentTenant: {
           id: 1,
           name: "Free Team",
           slug: "free-team",
@@ -249,8 +248,8 @@ describe("Team Management Page", () => {
         role: "user",
         subscription: null,
         effectiveSubscriptionTier: createMockTier("tier1", 1),
-        currentTeamId: 1,
-        currentTeam: {
+        currentTenantId: 1,
+        currentTenant: {
           id: 1,
           name: "Premium Team",
           slug: "premium-team",
@@ -438,8 +437,8 @@ describe("Team Management Page", () => {
         role: "user",
         subscription: null,
         effectiveSubscriptionTier: createMockTier("tier1", 1),
-        currentTeamId: 1,
-        currentTeam: {
+        currentTenantId: 1,
+        currentTenant: {
           id: 1,
           name: "Premium Team",
           slug: "premium-team",
@@ -536,8 +535,8 @@ describe("Team Management Page", () => {
         role: "user",
         subscription: null,
         effectiveSubscriptionTier: createMockTier("tier1", 1),
-        currentTeamId: 1,
-        currentTeam: {
+        currentTenantId: 1,
+        currentTenant: {
           id: 1,
           name: "Premium Team",
           slug: "premium-team",
@@ -634,8 +633,8 @@ describe("Team Management Page", () => {
         role: "user",
         subscription: null,
         effectiveSubscriptionTier: createMockTier("tier1", 1),
-        currentTeamId: 1,
-        currentTeam: {
+        currentTenantId: 1,
+        currentTenant: {
           id: 1,
           name: "Premium Team",
           slug: "premium-team",
@@ -721,8 +720,8 @@ describe("Team Management Page", () => {
         role: "user",
         subscription: null,
         effectiveSubscriptionTier: createMockTier("tier1", 1),
-        currentTeamId: 1,
-        currentTeam: {
+        currentTenantId: 1,
+        currentTenant: {
           id: 1,
           name: "Premium Team",
           slug: "premium-team",
@@ -782,8 +781,8 @@ describe("Team Management Page", () => {
         role: "user",
         subscription: null,
         effectiveSubscriptionTier: createMockTier("tier1", 1),
-        currentTeamId: 1,
-        currentTeam: {
+        currentTenantId: 1,
+        currentTenant: {
           id: 1,
           name: "Premium Team",
           slug: "premium-team",
@@ -880,8 +879,8 @@ describe("Team Management Page", () => {
         role: "user",
         subscription: null,
         effectiveSubscriptionTier: createMockTier("free", 0),
-        currentTeamId: 1,
-        currentTeam: {
+        currentTenantId: 1,
+        currentTenant: {
           id: 1,
           name: "Free Team",
           slug: "free-team",
@@ -947,8 +946,8 @@ describe("Team Management Page", () => {
         role: "user",
         subscription: null,
         effectiveSubscriptionTier: createMockTier("tier1", 1),
-        currentTeamId: 1,
-        currentTeam: {
+        currentTenantId: 1,
+        currentTenant: {
           id: 1,
           name: "Pro Team",
           slug: "pro-team",
@@ -1026,8 +1025,8 @@ describe("Team Management Page", () => {
         role: "user",
         subscription: null,
         effectiveSubscriptionTier: createMockTier("tier1", 1),
-        currentTeamId: 1,
-        currentTeam: {
+        currentTenantId: 1,
+        currentTenant: {
           id: 1,
           name: "Premium Team",
           slug: "premium-team",

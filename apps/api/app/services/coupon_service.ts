@@ -13,6 +13,7 @@ export interface RedeemCouponResult {
 export default class CouponService {
   /**
    * Redeem a coupon for a tenant (tenant is the billing unit)
+   * Uses transaction with row locking to prevent double-spending race conditions.
    * @param code - Coupon code
    * @param tenantId - Which tenant receives the credit (billing context)
    * @param userId - Who is performing the redemption (audit trail)
@@ -22,6 +23,7 @@ export default class CouponService {
     tenantId: number,
     userId: number
   ): Promise<RedeemCouponResult> {
+    // Pre-flight checks (without locking - fast fail for invalid requests)
     const coupon = await Coupon.findByCode(code)
 
     if (!coupon) {
@@ -34,6 +36,7 @@ export default class CouponService {
       }
     }
 
+    // Quick check before expensive transaction (actual check happens inside transaction)
     if (!coupon.isRedeemable()) {
       const reason = !coupon.isActive
         ? 'Coupon is inactive'
@@ -76,14 +79,29 @@ export default class CouponService {
       }
     }
 
-    // Redeem the coupon - tenantId for billing, userId for audit
-    const newBalance = await coupon.redeemForTenant(tenantId, userId)
+    // Redeem the coupon with transaction + row locking (prevents race conditions)
+    // The actual redeemable check is done again inside the transaction with a lock
+    try {
+      const newBalance = await coupon.redeemForTenant(tenantId, userId)
 
-    return {
-      success: true,
-      creditAmount: coupon.creditAmount,
-      currency: coupon.currency,
-      newBalance,
+      return {
+        success: true,
+        creditAmount: coupon.creditAmount,
+        currency: coupon.currency,
+        newBalance,
+      }
+    } catch (error) {
+      // Handle race condition where coupon was redeemed between pre-check and transaction
+      if (error instanceof Error && error.message === 'Coupon is not redeemable') {
+        return {
+          success: false,
+          creditAmount: 0,
+          currency: coupon.currency,
+          newBalance: 0,
+          message: 'Coupon has already been redeemed',
+        }
+      }
+      throw error
     }
   }
 

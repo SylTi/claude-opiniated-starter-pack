@@ -5,6 +5,7 @@ import User from '#models/user'
 import TenantMembership from '#models/tenant_membership'
 import Subscription from '#models/subscription'
 import SubscriptionTier from '#models/subscription_tier'
+import { CurrencyMismatchError } from '#exceptions/billing_errors'
 
 export default class Tenant extends BaseModel {
   static table = 'tenants'
@@ -128,7 +129,7 @@ export default class Tenant extends BaseModel {
    */
   async addCredit(amount: number, currency?: string): Promise<number> {
     if (this.balanceCurrency && currency && currency !== this.balanceCurrency) {
-      throw new Error(`Currency mismatch: expected ${this.balanceCurrency}, got ${currency}`)
+      throw new CurrencyMismatchError(this.balanceCurrency, currency)
     }
     const currentBalance = Number(this.balance) || 0
     const creditAmount = Number(amount) || 0

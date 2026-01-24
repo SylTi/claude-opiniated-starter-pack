@@ -65,7 +65,7 @@ function createMockDiscountCode(overrides: Partial<DiscountCodeDTO> = {}): Disco
     currency: null,
     minAmount: null,
     maxUses: 100,
-    maxUsesPerUser: 1,
+    maxUsesPerTenant: 1,
     timesUsed: 5,
     expiresAt: '2025-12-31T23:59:59.000Z',
     isActive: true,

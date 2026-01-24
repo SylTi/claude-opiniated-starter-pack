@@ -37,10 +37,6 @@ router.get('/', async () => {
 
 router
   .group(() => {
-    // Users
-    router.get('/users', [UsersController, 'index'])
-    router.get('/users/:id', [UsersController, 'show'])
-
     // Auth - Public routes (with rate limiting)
     router
       .group(() => {
@@ -153,6 +149,15 @@ router
         router.get('/stats', [DashboardController, 'getUserStats'])
       })
       .prefix('/dashboard')
+      .use(middleware.auth())
+
+    // Users - Protected routes (any logged-in user)
+    router
+      .group(() => {
+        router.get('/', [UsersController, 'index'])
+        router.get('/:id', [UsersController, 'show'])
+      })
+      .prefix('/users')
       .use(middleware.auth())
 
     // Tenants - Protected routes
