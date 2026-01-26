@@ -1,6 +1,7 @@
 import { authenticator } from 'otplib'
 import * as QRCode from 'qrcode'
 import { randomBytes, createHash } from 'node:crypto'
+import env from '#start/env'
 import User from '#models/user'
 
 interface MfaSetupResult {
@@ -10,7 +11,7 @@ interface MfaSetupResult {
 }
 
 export default class MfaService {
-  private readonly appName = 'SaaS App'
+  private readonly appName = env.get('APP_NAME', 'SaaS App')
 
   /**
    * Hash a backup code using SHA-256

@@ -117,8 +117,10 @@ All tenant routes require authentication. The `X-Tenant-ID` header can be includ
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/users` | List users |
-| GET | `/users/:id` | Get user by ID |
+| GET | `/users/me` | Get authenticated user's own profile |
+| GET | `/users/:id` | Get user by ID (own profile only) |
+
+**Note:** Users can only access their own profile data. Admin user listing is available via `/admin/users`.
 
 ---
 

@@ -49,6 +49,7 @@ export const AUDIT_EVENT_TYPES = {
 
   // Admin
   ADMIN_USER_VERIFY_EMAIL: 'admin.user.verify_email',
+  ADMIN_USER_UNVERIFY_EMAIL: 'admin.user.unverify_email',
   ADMIN_USER_DELETE: 'admin.user.delete',
   ADMIN_TIER_UPDATE: 'admin.tier.update',
 

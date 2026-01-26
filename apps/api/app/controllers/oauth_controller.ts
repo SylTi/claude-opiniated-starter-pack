@@ -1,11 +1,14 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import logger from '@adonisjs/core/services/logger'
+import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import env from '#start/env'
 import User from '#models/user'
 import OAuthAccount from '#models/oauth_account'
+import Tenant from '#models/tenant'
+import TenantMembership from '#models/tenant_membership'
 import AuthService from '#services/auth_service'
-import { USER_ROLES } from '#constants/roles'
+import { USER_ROLES, TENANT_ROLES } from '#constants/roles'
 
 // Supported providers (must match ally config)
 type SupportedProvider = 'google' | 'github'
@@ -303,31 +306,68 @@ export default class OAuthController {
       }
     }
 
-    // Create new user
+    // Create new user with personal tenant (wrapped in transaction for consistency)
     // SECURITY: Only mark email as verified if the OAuth provider verified it
-    const newUser = await User.create({
-      email: email || `${provider}_${oauthUser.id}@oauth.local`,
-      fullName: oauthUser.name,
-      avatarUrl: oauthUser.avatarUrl,
-      role: USER_ROLES.USER,
-      emailVerified: isEmailVerified,
-      password: null, // No password for OAuth-only users
-      mfaEnabled: false,
-    })
+    const newUser = await db.transaction(async (trx) => {
+      const user = await User.create(
+        {
+          email: email || `${provider}_${oauthUser.id}@oauth.local`,
+          fullName: oauthUser.name,
+          avatarUrl: oauthUser.avatarUrl,
+          role: USER_ROLES.USER,
+          emailVerified: isEmailVerified,
+          password: null, // No password for OAuth-only users
+          mfaEnabled: false,
+        },
+        { client: trx }
+      )
 
-    // Create OAuth account link
-    await OAuthAccount.create({
-      userId: newUser.id,
-      provider,
-      providerUserId: oauthUser.id,
-      email: oauthUser.email,
-      name: oauthUser.name,
-      avatarUrl: oauthUser.avatarUrl,
-      accessToken: oauthUser.token.token,
-      refreshToken: oauthUser.token.refreshToken || null,
-      tokenExpiresAt: oauthUser.token.expiresAt
-        ? DateTime.fromJSDate(oauthUser.token.expiresAt)
-        : null,
+      // Create personal tenant for the user (matching registration behavior)
+      const personalTenant = await Tenant.create(
+        {
+          name: oauthUser.name || email?.split('@')[0] || `User ${user.id}`,
+          slug: `personal-${user.id}-${Date.now()}`,
+          type: 'personal',
+          ownerId: user.id,
+          balance: 0,
+          balanceCurrency: 'usd',
+        },
+        { client: trx }
+      )
+
+      // Add user as owner of personal tenant
+      await TenantMembership.create(
+        {
+          userId: user.id,
+          tenantId: personalTenant.id,
+          role: TENANT_ROLES.OWNER,
+        },
+        { client: trx }
+      )
+
+      // Set user's current tenant
+      user.currentTenantId = personalTenant.id
+      await user.useTransaction(trx).save()
+
+      // Create OAuth account link
+      await OAuthAccount.create(
+        {
+          userId: user.id,
+          provider,
+          providerUserId: oauthUser.id,
+          email: oauthUser.email,
+          name: oauthUser.name,
+          avatarUrl: oauthUser.avatarUrl,
+          accessToken: oauthUser.token.token,
+          refreshToken: oauthUser.token.refreshToken || null,
+          tokenExpiresAt: oauthUser.token.expiresAt
+            ? DateTime.fromJSDate(oauthUser.token.expiresAt)
+            : null,
+        },
+        { client: trx }
+      )
+
+      return user
     })
 
     return { user: newUser, isNewUser: true }

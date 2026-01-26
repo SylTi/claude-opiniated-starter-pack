@@ -176,7 +176,9 @@ export default class AdminController {
   /**
    * Manually unverify a user's email (for testing purposes)
    */
-  async unverifyUserEmail({ params, response }: HttpContext): Promise<void> {
+  async unverifyUserEmail(ctx: HttpContext): Promise<void> {
+    const { params, response } = ctx
+    const audit = new AuditContext(ctx)
     const user = await User.findOrFail(params.id)
 
     if (!user.emailVerified) {
@@ -189,6 +191,9 @@ export default class AdminController {
     user.emailVerified = false
     user.emailVerifiedAt = null
     await user.save()
+
+    // Emit audit event for admin email unverification
+    audit.emit(AUDIT_EVENT_TYPES.ADMIN_USER_UNVERIFY_EMAIL, { type: 'user', id: user.id })
 
     response.json({
       data: {

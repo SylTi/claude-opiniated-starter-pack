@@ -20,6 +20,14 @@ export default await Env.create(new URL('../', import.meta.url), {
 
   /*
   |----------------------------------------------------------
+  | Application name and URL
+  |----------------------------------------------------------
+  */
+  APP_NAME: Env.schema.string.optional(),
+  APP_URL: Env.schema.string.optional(),
+
+  /*
+  |----------------------------------------------------------
   | Variables for configuring database connection
   |----------------------------------------------------------
   */

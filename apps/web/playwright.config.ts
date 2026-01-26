@@ -1,4 +1,4 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig, devices } from '@playwright/test'
 
 /**
  * Playwright E2E Test Configuration
@@ -6,10 +6,10 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   // Global setup
-  globalSetup: "./e2e/setup/global-setup.ts",
+  globalSetup: './e2e/setup/global-setup.ts',
 
   // Directory containing test files
-  testDir: "./e2e",
+  testDir: './e2e',
 
   // Run tests in files in parallel
   fullyParallel: true,
@@ -24,21 +24,18 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
 
   // Reporter to use
-  reporter: [
-              ["html", { outputFolder: "playwright-report" }], 
-              ["list", { printSteps: true }]
-            ],
+  reporter: [['html', { outputFolder: 'playwright-report' }], ['list', { printSteps: true }]],
 
   // Shared settings for all the projects
   use: {
     // Base URL to use in actions like `await page.goto('/')`
-    baseURL: "http://localhost:3000",
+    baseURL: 'http://localhost:3000',
 
     // Collect trace when retrying the failed test
-    trace: "on-first-retry",
+    trace: 'on-first-retry',
 
     // Take screenshot on failure
-    screenshot: "only-on-failure",
+    screenshot: 'only-on-failure',
   },
 
   // Configure projects for major browsers
@@ -46,8 +43,8 @@ export default defineConfig({
   // Uncomment firefox/webkit if running on native Linux or CI
   projects: [
     {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
     },
     // {
     //   name: 'firefox',
@@ -60,14 +57,27 @@ export default defineConfig({
   ],
 
   // Output folder for test artifacts
-  outputDir: "test-results",
+  outputDir: 'test-results',
 
-  // Start production server (build happens in e2e script)
-  webServer: {
-    command:
-      "NODE_ENV=test dotenv -e .env.test -- pnpm run build && NODE_ENV=test dotenv -e .env.test -- pnpm run start",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
-    timeout: 300 * 1000, // More time for build + start on slower FS
-  },
-});
+  // Start both API and frontend servers for E2E tests
+  webServer: [
+    {
+      // API server (AdonisJS)
+      command: 'cd ../api && NODE_ENV=test node ace serve',
+      url: 'http://localhost:3333',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120 * 1000,
+      env: {
+        NODE_ENV: 'test',
+      },
+    },
+    {
+      // Frontend server (Next.js)
+      command:
+        'NODE_ENV=test dotenv -e .env.test -- pnpm run build && NODE_ENV=test dotenv -e .env.test -- pnpm run start',
+      url: 'http://localhost:3000',
+      reuseExistingServer: !process.env.CI,
+      timeout: 300 * 1000, // More time for build + start on slower FS
+    },
+  ],
+})

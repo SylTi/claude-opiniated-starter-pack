@@ -104,9 +104,31 @@ test.group('RBAC Service - can()', () => {
 })
 
 test.group('RBAC Service - canWithOwnership()', () => {
-  test('resource owner can perform any action regardless of role', ({ assert }) => {
+  test('resource owner can perform safe actions regardless of role', ({ assert }) => {
     const context = { ownerId: 1, userId: 1 }
-    assert.isTrue(canWithOwnership(context, TENANT_ROLES.MEMBER, ACTIONS.TENANT_DELETE))
+    // Owner can perform safe actions even with member role
+    assert.isTrue(canWithOwnership(context, TENANT_ROLES.MEMBER, ACTIONS.TENANT_READ))
+    assert.isTrue(canWithOwnership(context, TENANT_ROLES.MEMBER, ACTIONS.TENANT_UPDATE))
+    assert.isTrue(canWithOwnership(context, TENANT_ROLES.MEMBER, ACTIONS.MEMBER_LIST))
+    assert.isTrue(canWithOwnership(context, TENANT_ROLES.MEMBER, ACTIONS.BILLING_VIEW))
+  })
+
+  test('resource owner cannot bypass for sensitive actions', ({ assert }) => {
+    const context = { ownerId: 1, userId: 1 }
+    // SECURITY: Ownership does NOT bypass sensitive actions - requires proper role
+    assert.isFalse(canWithOwnership(context, TENANT_ROLES.MEMBER, ACTIONS.TENANT_DELETE))
+    assert.isFalse(canWithOwnership(context, TENANT_ROLES.MEMBER, ACTIONS.MEMBER_REMOVE))
+    assert.isFalse(canWithOwnership(context, TENANT_ROLES.MEMBER, ACTIONS.MEMBER_UPDATE_ROLE))
+    assert.isFalse(canWithOwnership(context, TENANT_ROLES.MEMBER, ACTIONS.SUBSCRIPTION_CANCEL))
+    assert.isFalse(canWithOwnership(context, TENANT_ROLES.MEMBER, ACTIONS.BILLING_MANAGE))
+  })
+
+  test('resource owner with proper role can perform sensitive actions', ({ assert }) => {
+    const context = { ownerId: 1, userId: 1 }
+    // Owner role grants sensitive permissions
+    assert.isTrue(canWithOwnership(context, TENANT_ROLES.OWNER, ACTIONS.TENANT_DELETE))
+    assert.isTrue(canWithOwnership(context, TENANT_ROLES.OWNER, ACTIONS.MEMBER_UPDATE_ROLE))
+    assert.isTrue(canWithOwnership(context, TENANT_ROLES.OWNER, ACTIONS.SUBSCRIPTION_CANCEL))
   })
 
   test('non-owner falls back to role check', ({ assert }) => {

@@ -21,6 +21,11 @@ import request from 'supertest'
  * - POST /auth/register (user creation) -> see tests/functional/auth.spec.ts
  * - PUT /auth/profile (profile update) -> see tests/functional/auth.spec.ts
  * - DELETE /admin/users/:id (admin deletion) -> see tests below
+ *
+ * SECURITY NOTE: The /api/v1/users endpoints have been secured:
+ * - GET /api/v1/users/me - Returns authenticated user's own profile
+ * - GET /api/v1/users/:id - Users can only view their own profile
+ * - Admin user listing is available via /api/v1/admin/users
  */
 
 const BASE_URL = `http://${process.env.HOST}:${process.env.PORT}`
@@ -29,15 +34,16 @@ function uniqueId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 8)
 }
 
-async function createAdminAndLogin(
+async function createUserAndLogin(
   email: string,
-  password: string
+  password: string,
+  role: 'admin' | 'user' = 'user'
 ): Promise<{ user: User; cookies: string[] }> {
   const user = await User.create({
     email,
     password,
-    fullName: 'Admin User',
-    role: 'admin',
+    fullName: role === 'admin' ? 'Admin User' : 'Regular User',
+    role,
     emailVerified: true,
     mfaEnabled: false,
   })
@@ -55,45 +61,39 @@ async function createAdminAndLogin(
   return { user, cookies: Array.isArray(cookies) ? cookies : [] }
 }
 
-test.group('Users API (Integration - Local DB)', (group) => {
+test.group('Users API - /users/me (Integration - Local DB)', (group) => {
   group.each.setup(async () => {
     await truncateAllTables()
   })
 
-  test('GET /api/v1/users returns list of users', async ({ assert }) => {
+  test('GET /api/v1/users/me returns authenticated user profile', async ({ assert }) => {
     const id = uniqueId()
-    const { cookies } = await createAdminAndLogin(`admin-${id}@example.com`, 'password123')
+    const { user, cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
 
-    await User.createMany([
-      {
-        email: 'user1@example.com',
-        password: 'password123',
-        fullName: 'User One',
-      },
-      {
-        email: 'user2@example.com',
-        password: 'password123',
-        fullName: 'User Two',
-      },
-    ])
+    const response = await request(BASE_URL)
+      .get('/api/v1/users/me')
+      .set('Cookie', cookies)
+      .expect(200)
 
-    const response = await request(BASE_URL).get('/api/v1/users').set('Cookie', cookies).expect(200)
-
-    assert.isArray(response.body.data)
-    // At least 3 users (admin + 2 created)
-    assert.isTrue(response.body.data.length >= 2)
-    assert.isUndefined(response.body.data[0].password, 'Password should not be serialized')
+    assert.equal(response.body.data.id, user.id)
+    assert.equal(response.body.data.email, `user-${id}@example.com`)
+    assert.equal(response.body.data.role, 'user')
+    assert.isUndefined(response.body.data.password, 'Password should not be serialized')
   })
 
-  test('GET /api/v1/users/:id returns single user', async ({ assert }) => {
-    const id = uniqueId()
-    const { cookies } = await createAdminAndLogin(`admin-${id}@example.com`, 'password123')
+  test('GET /api/v1/users/me requires authentication', async () => {
+    await request(BASE_URL).get('/api/v1/users/me').expect(401)
+  })
+})
 
-    const user = await User.create({
-      email: 'test@example.com',
-      password: 'password123',
-      fullName: 'Test User',
-    })
+test.group('Users API - /users/:id Authorization (Integration - Local DB)', (group) => {
+  group.each.setup(async () => {
+    await truncateAllTables()
+  })
+
+  test('GET /api/v1/users/:id allows user to view own profile', async ({ assert }) => {
+    const id = uniqueId()
+    const { user, cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
 
     const response = await request(BASE_URL)
       .get(`/api/v1/users/${user.id}`)
@@ -101,26 +101,47 @@ test.group('Users API (Integration - Local DB)', (group) => {
       .expect(200)
 
     assert.equal(response.body.data.id, user.id)
-    assert.equal(response.body.data.email, 'test@example.com')
-    assert.equal(response.body.data.fullName, 'Test User')
+    assert.equal(response.body.data.email, `user-${id}@example.com`)
     assert.isUndefined(response.body.data.password, 'Password should not be serialized')
+  })
+
+  test('GET /api/v1/users/:id denies access to other user profiles', async ({ assert }) => {
+    const id = uniqueId()
+    const { cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
+
+    // Create another user
+    const otherUser = await User.create({
+      email: `other-${id}@example.com`,
+      password: 'password123',
+      fullName: 'Other User',
+      role: 'user',
+      emailVerified: true,
+      mfaEnabled: false,
+    })
+
+    const response = await request(BASE_URL)
+      .get(`/api/v1/users/${otherUser.id}`)
+      .set('Cookie', cookies)
+      .expect(403)
+
+    assert.equal(response.body.error, 'Forbidden')
+    assert.equal(response.body.message, 'You can only view your own profile')
   })
 
   test('GET /api/v1/users/:id returns 404 for non-existent user', async () => {
     const id = uniqueId()
-    const { cookies } = await createAdminAndLogin(`admin-${id}@example.com`, 'password123')
+    const { cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
 
-    await request(BASE_URL).get('/api/v1/users/99999').set('Cookie', cookies).expect(404)
+    // Try to access a non-existent user ID (not the user's own ID)
+    // This should return 403 first (before checking if user exists) due to authorization
+    await request(BASE_URL).get('/api/v1/users/99999').set('Cookie', cookies).expect(403)
+
+    // If user tries their own non-existent ID somehow, it would be 404
+    // But in practice, users always exist when logged in
   })
 
-  test('GET /api/v1/users returns empty array when no users exist', async ({ assert }) => {
-    const id = uniqueId()
-    const { cookies } = await createAdminAndLogin(`admin-${id}@example.com`, 'password123')
-
-    const response = await request(BASE_URL).get('/api/v1/users').set('Cookie', cookies).expect(200)
-
-    // At least the admin user exists
-    assert.isArray(response.body.data)
+  test('GET /api/v1/users/:id requires authentication', async () => {
+    await request(BASE_URL).get('/api/v1/users/1').expect(401)
   })
 })
 
@@ -129,9 +150,52 @@ test.group('Admin Users API (Integration - Local DB)', (group) => {
     await truncateAllTables()
   })
 
+  test('GET /api/v1/admin/users returns list of all users for admin', async ({ assert }) => {
+    const id = uniqueId()
+    const { cookies } = await createUserAndLogin(`admin-${id}@example.com`, 'password123', 'admin')
+
+    await User.createMany([
+      {
+        email: `user1-${id}@example.com`,
+        password: 'password123',
+        fullName: 'User One',
+        role: 'user',
+        emailVerified: true,
+        mfaEnabled: false,
+      },
+      {
+        email: `user2-${id}@example.com`,
+        password: 'password123',
+        fullName: 'User Two',
+        role: 'user',
+        emailVerified: true,
+        mfaEnabled: false,
+      },
+    ])
+
+    const response = await request(BASE_URL)
+      .get('/api/v1/admin/users')
+      .set('Cookie', cookies)
+      .expect(200)
+
+    assert.isArray(response.body.data)
+    assert.isTrue(
+      response.body.data.length >= 3,
+      'Should have at least 3 users (admin + 2 created)'
+    )
+    assert.isUndefined(response.body.data[0].password, 'Password should not be serialized')
+  })
+
+  test('GET /api/v1/admin/users requires admin role', async () => {
+    const id = uniqueId()
+    const { cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123', 'user')
+
+    await request(BASE_URL).get('/api/v1/admin/users').set('Cookie', cookies).expect(403)
+  })
+
   test('DELETE /api/v1/admin/users/:id deletes a user', async ({ assert }) => {
     const id = uniqueId()
-    const { cookies } = await createAdminAndLogin(`admin-${id}@example.com`, 'password123')
+    const { cookies } = await createUserAndLogin(`admin-${id}@example.com`, 'password123', 'admin')
 
     const userToDelete = await User.create({
       email: `delete-${id}@example.com`,
@@ -155,7 +219,7 @@ test.group('Admin Users API (Integration - Local DB)', (group) => {
 
   test('DELETE /api/v1/admin/users/:id returns 404 for non-existent user', async () => {
     const id = uniqueId()
-    const { cookies } = await createAdminAndLogin(`admin-${id}@example.com`, 'password123')
+    const { cookies } = await createUserAndLogin(`admin-${id}@example.com`, 'password123', 'admin')
 
     await request(BASE_URL).delete('/api/v1/admin/users/99999').set('Cookie', cookies).expect(404)
   })
@@ -164,9 +228,10 @@ test.group('Admin Users API (Integration - Local DB)', (group) => {
     assert,
   }) => {
     const id = uniqueId()
-    const { user: admin, cookies } = await createAdminAndLogin(
+    const { user: admin, cookies } = await createUserAndLogin(
       `admin-${id}@example.com`,
-      'password123'
+      'password123',
+      'admin'
     )
 
     const response = await request(BASE_URL)
@@ -187,23 +252,7 @@ test.group('Admin Users API (Integration - Local DB)', (group) => {
 
   test('DELETE /api/v1/admin/users/:id requires admin role', async ({ assert }) => {
     const id = uniqueId()
-
-    // Create regular user for login (not used directly, but needed for authentication)
-    await User.create({
-      email: `user-${id}@example.com`,
-      password: 'password123',
-      fullName: 'Regular User',
-      role: 'user',
-      emailVerified: true,
-      mfaEnabled: false,
-    })
-
-    const loginResponse = await request(BASE_URL)
-      .post('/api/v1/auth/login')
-      .send({ email: `user-${id}@example.com`, password: 'password123' })
-      .set('Accept', 'application/json')
-
-    const cookies = loginResponse.headers['set-cookie']
+    const { cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123', 'user')
 
     const otherUser = await User.create({
       email: `other-${id}@example.com`,

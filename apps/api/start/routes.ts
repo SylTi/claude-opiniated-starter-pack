@@ -152,9 +152,10 @@ router
       .use(middleware.auth())
 
     // Users - Protected routes (any logged-in user)
+    // SECURITY: Users can only access their own data. Admin listing is via /admin/users
     router
       .group(() => {
-        router.get('/', [UsersController, 'index'])
+        router.get('/me', [UsersController, 'me'])
         router.get('/:id', [UsersController, 'show'])
       })
       .prefix('/users')

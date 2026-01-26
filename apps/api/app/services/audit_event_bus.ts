@@ -21,6 +21,7 @@
  */
 
 import { EventEmitter } from 'node:events'
+import logger from '@adonisjs/core/services/logger'
 import type { AuditEvent, AuditEventType } from '@saas/shared'
 
 /**
@@ -158,11 +159,11 @@ class AuditEventBus {
         // Handle async handlers
         if (result instanceof Promise) {
           result.catch((error) => {
-            console.error('[AuditEventBus] Handler error:', error)
+            logger.error({ err: error, eventType: event.type }, '[AuditEventBus] Handler error')
           })
         }
       } catch (error) {
-        console.error('[AuditEventBus] Handler error:', error)
+        logger.error({ err: error, eventType: event.type }, '[AuditEventBus] Handler error')
       }
     }
   }

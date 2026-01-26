@@ -49,6 +49,64 @@ test.group('RBAC Guard - Constructor', () => {
       'RbacGuard requires tenant context. Ensure tenant middleware is active.'
     )
   })
+
+  test('throws error when tenant is null', ({ assert }) => {
+    const ctx = { request: {}, response: {}, tenant: null } as never
+    assert.throws(
+      () => new RbacGuard(ctx),
+      'RbacGuard requires tenant context. Ensure tenant middleware is active.'
+    )
+  })
+
+  test('throws error when tenant is undefined', ({ assert }) => {
+    const ctx = { request: {}, response: {}, tenant: undefined } as never
+    assert.throws(
+      () => new RbacGuard(ctx),
+      'RbacGuard requires tenant context. Ensure tenant middleware is active.'
+    )
+  })
+})
+
+test.group('RBAC Guard - Invalid Role Handling', () => {
+  test('invalid role string denies all actions', ({ assert }) => {
+    const tenant = createMockTenantContext('invalid_role')
+    const guard = new RbacGuard(tenant)
+
+    assert.isFalse(guard.can(ACTIONS.TENANT_READ))
+    assert.isFalse(guard.can(ACTIONS.TENANT_UPDATE))
+    assert.isFalse(guard.can(ACTIONS.MEMBER_LIST))
+  })
+
+  test('empty string role denies all actions', ({ assert }) => {
+    const tenant = createMockTenantContext('')
+    const guard = new RbacGuard(tenant)
+
+    assert.isFalse(guard.can(ACTIONS.TENANT_READ))
+    assert.isFalse(guard.can(ACTIONS.TENANT_UPDATE))
+  })
+
+  test('invalid role throws on authorize', ({ assert }) => {
+    const tenant = createMockTenantContext('unknown_role')
+    const guard = new RbacGuard(tenant)
+
+    assert.throws(() => guard.authorize(ACTIONS.TENANT_READ), RbacDeniedError)
+  })
+
+  test('case-sensitive role matching', ({ assert }) => {
+    // Roles should be case-sensitive: 'OWNER' is not 'owner'
+    const tenant = createMockTenantContext('OWNER') // uppercase
+    const guard = new RbacGuard(tenant)
+
+    // Should deny because 'OWNER' != 'owner' (the actual role constant)
+    assert.isFalse(guard.can(ACTIONS.TENANT_READ))
+  })
+
+  test('role with extra whitespace denies access', ({ assert }) => {
+    const tenant = createMockTenantContext(' owner ') // whitespace padding
+    const guard = new RbacGuard(tenant)
+
+    assert.isFalse(guard.can(ACTIONS.TENANT_READ))
+  })
 })
 
 test.group('RBAC Guard - can()', () => {
@@ -81,11 +139,24 @@ test.group('RBAC Guard - can()', () => {
 })
 
 test.group('RBAC Guard - canOrOwns()', () => {
-  test('resource owner can perform any action', ({ assert }) => {
+  test('resource owner can perform safe actions only', ({ assert }) => {
     const guard = new RbacGuard(createMockTenantContext(TENANT_ROLES.MEMBER, 5))
 
-    // User 5 owns the resource
-    assert.isTrue(guard.canOrOwns(ACTIONS.TENANT_DELETE, { ownerId: 5 }))
+    // User 5 owns the resource - safe actions allowed via ownership
+    assert.isTrue(guard.canOrOwns(ACTIONS.TENANT_READ, { ownerId: 5 }))
+    assert.isTrue(guard.canOrOwns(ACTIONS.TENANT_UPDATE, { ownerId: 5 }))
+    assert.isTrue(guard.canOrOwns(ACTIONS.MEMBER_LIST, { ownerId: 5 }))
+  })
+
+  test('resource owner cannot bypass sensitive actions', ({ assert }) => {
+    const guard = new RbacGuard(createMockTenantContext(TENANT_ROLES.MEMBER, 5))
+
+    // SECURITY: Ownership does NOT bypass sensitive/destructive actions
+    assert.isFalse(guard.canOrOwns(ACTIONS.TENANT_DELETE, { ownerId: 5 }))
+    assert.isFalse(guard.canOrOwns(ACTIONS.MEMBER_REMOVE, { ownerId: 5 }))
+    assert.isFalse(guard.canOrOwns(ACTIONS.MEMBER_UPDATE_ROLE, { ownerId: 5 }))
+    assert.isFalse(guard.canOrOwns(ACTIONS.SUBSCRIPTION_CANCEL, { ownerId: 5 }))
+    assert.isFalse(guard.canOrOwns(ACTIONS.BILLING_MANAGE, { ownerId: 5 }))
   })
 
   test('non-owner falls back to role check', ({ assert }) => {
@@ -131,10 +202,22 @@ test.group('RBAC Guard - authorize()', () => {
 })
 
 test.group('RBAC Guard - authorizeOrOwns()', () => {
-  test('does not throw when user owns resource', ({ assert }) => {
+  test('does not throw when user owns resource for safe actions', ({ assert }) => {
     const guard = new RbacGuard(createMockTenantContext(TENANT_ROLES.MEMBER, 5))
 
-    assert.doesNotThrow(() => guard.authorizeOrOwns(ACTIONS.TENANT_DELETE, { ownerId: 5 }))
+    // Safe actions allowed via ownership
+    assert.doesNotThrow(() => guard.authorizeOrOwns(ACTIONS.TENANT_READ, { ownerId: 5 }))
+    assert.doesNotThrow(() => guard.authorizeOrOwns(ACTIONS.TENANT_UPDATE, { ownerId: 5 }))
+    assert.doesNotThrow(() => guard.authorizeOrOwns(ACTIONS.MEMBER_LIST, { ownerId: 5 }))
+  })
+
+  test('throws when user owns resource but action is sensitive', ({ assert }) => {
+    const guard = new RbacGuard(createMockTenantContext(TENANT_ROLES.MEMBER, 5))
+
+    // SECURITY: Ownership does NOT bypass sensitive actions
+    assert.throws(() => guard.authorizeOrOwns(ACTIONS.TENANT_DELETE, { ownerId: 5 }))
+    assert.throws(() => guard.authorizeOrOwns(ACTIONS.MEMBER_REMOVE, { ownerId: 5 }))
+    assert.throws(() => guard.authorizeOrOwns(ACTIONS.SUBSCRIPTION_CANCEL, { ownerId: 5 }))
   })
 
   test('throws when user does not own and lacks permission', ({ assert }) => {

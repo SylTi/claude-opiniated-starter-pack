@@ -10,8 +10,38 @@
  * - Fully testable without mocking
  */
 
-import { ROLE_PERMISSIONS, SENSITIVE_ACTIONS, type TenantAction } from '#constants/permissions'
+import {
+  ROLE_PERMISSIONS,
+  SENSITIVE_ACTIONS,
+  ACTIONS,
+  type TenantAction,
+} from '#constants/permissions'
 import type { TenantRole } from '#constants/roles'
+
+/**
+ * Actions that resource ownership can bypass.
+ * These are safe, non-destructive actions where the resource owner
+ * should have access regardless of their tenant role.
+ *
+ * SECURITY: Sensitive/destructive actions are intentionally excluded:
+ * - TENANT_DELETE (could delete entire tenant)
+ * - MEMBER_REMOVE (could remove other members)
+ * - MEMBER_UPDATE_ROLE (could escalate privileges)
+ * - SUBSCRIPTION_CANCEL (financial impact)
+ * - BILLING_MANAGE (financial impact)
+ */
+const OWNERSHIP_BYPASS_ACTIONS: readonly TenantAction[] = [
+  ACTIONS.TENANT_READ,
+  ACTIONS.TENANT_UPDATE,
+  ACTIONS.MEMBER_LIST,
+  ACTIONS.MEMBER_ADD,
+  ACTIONS.INVITATION_LIST,
+  ACTIONS.INVITATION_SEND,
+  ACTIONS.INVITATION_CANCEL,
+  ACTIONS.BILLING_VIEW,
+  ACTIONS.SUBSCRIPTION_VIEW,
+  ACTIONS.SUBSCRIPTION_UPGRADE,
+] as const
 
 /**
  * Context for ownership-based permission checks.
@@ -49,17 +79,23 @@ export function can(role: TenantRole | string, action: TenantAction): boolean {
 
 /**
  * Check if a role has permission to perform an action, considering resource ownership.
- * If the user owns the resource, the action is always allowed.
+ * Ownership only grants access to safe, non-destructive actions defined in OWNERSHIP_BYPASS_ACTIONS.
+ *
+ * SECURITY: This function intentionally limits ownership bypass to prevent privilege escalation.
+ * Sensitive actions (delete, remove, role changes, billing management) require proper RBAC roles.
  *
  * @param context - The resource ownership context
  * @param role - The tenant role to check
  * @param action - The action to verify
- * @returns true if allowed (either by role or ownership)
+ * @returns true if allowed (either by role or ownership for safe actions)
  *
  * @example
  * ```typescript
- * // User owns the resource
- * canWithOwnership({ ownerId: 1, userId: 1 }, 'member', ACTIONS.MEMBER_UPDATE_ROLE) // true
+ * // User owns the resource - safe action allowed
+ * canWithOwnership({ ownerId: 1, userId: 1 }, 'member', ACTIONS.TENANT_READ) // true
+ *
+ * // User owns the resource - sensitive action NOT allowed by ownership alone
+ * canWithOwnership({ ownerId: 1, userId: 1 }, 'member', ACTIONS.MEMBER_UPDATE_ROLE) // false
  *
  * // User does not own, check role
  * canWithOwnership({ ownerId: 2, userId: 1 }, 'admin', ACTIONS.MEMBER_REMOVE) // true
@@ -71,8 +107,8 @@ export function canWithOwnership(
   role: TenantRole | string,
   action: TenantAction
 ): boolean {
-  // Owner of the resource always has permission
-  if (context.ownerId === context.userId) {
+  // Owner of the resource has permission ONLY for safe, non-destructive actions
+  if (context.ownerId === context.userId && OWNERSHIP_BYPASS_ACTIONS.includes(action)) {
     return true
   }
 

@@ -54,6 +54,7 @@ const shieldConfig = defineConfig({
   hsts: {
     enabled: true,
     maxAge: '180 days',
+    includeSubDomains: true,
   },
 
   /**
