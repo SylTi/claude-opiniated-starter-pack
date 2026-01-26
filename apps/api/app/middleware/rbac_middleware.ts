@@ -20,6 +20,8 @@ import type { NextFn } from '@adonisjs/core/types/http'
 import { getDeniedActions, isSensitiveAction } from '#services/rbac_service'
 import type { TenantAction } from '#constants/permissions'
 import type { TenantRole } from '#constants/roles'
+import { AuditContext } from '#services/audit_context'
+import { AUDIT_EVENT_TYPES } from '#constants/audit_events'
 
 /**
  * RBAC context attached to the HTTP context after middleware runs.
@@ -62,12 +64,22 @@ export function createRbacMiddleware(...actions: TenantAction[]) {
 
       // If any required action is denied
       if (deniedActions.length > 0) {
-        // Log denial for sensitive actions (prepare for audit-events integration)
+        // Log denial for sensitive actions via audit events
         const sensitiveDenials = deniedActions.filter(isSensitiveAction)
         if (sensitiveDenials.length > 0) {
-          // TODO: Integrate with audit-events (03-audit-events)
-          // For now, this is a placeholder for future audit logging
-          // await auditService.logDenial(ctx, sensitiveDenials)
+          const audit = new AuditContext(ctx)
+          audit.emitForTenant(
+            AUDIT_EVENT_TYPES.RBAC_PERMISSION_DENIED,
+            ctx.tenant.id,
+            { type: 'tenant', id: ctx.tenant.id },
+            {
+              deniedActions: sensitiveDenials,
+              allDeniedActions: deniedActions,
+              path: ctx.request.url(),
+              method: ctx.request.method(),
+              role,
+            }
+          )
         }
 
         return ctx.response.forbidden({

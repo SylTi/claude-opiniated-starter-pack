@@ -1,6 +1,7 @@
 import { test } from '@japa/runner'
 import User from '#models/user'
 import Tenant from '#models/tenant'
+import TenantMembership from '#models/tenant_membership'
 import SubscriptionTier from '#models/subscription_tier'
 import Subscription from '#models/subscription'
 import Product from '#models/product'
@@ -8,6 +9,7 @@ import Price from '#models/price'
 import PaymentCustomer from '#models/payment_customer'
 import { truncateAllTables } from '../bootstrap.js'
 import request from 'supertest'
+import { TENANT_ROLES } from '#constants/roles'
 
 const BASE_URL = `http://${process.env.HOST}:${process.env.PORT}`
 
@@ -19,7 +21,7 @@ async function createUserAndLogin(
   email: string,
   password: string,
   options: { emailVerified?: boolean; role?: 'user' | 'admin' } = {}
-): Promise<{ user: User; cookies: string[] }> {
+): Promise<{ user: User; tenant: Tenant; cookies: string[] }> {
   const user = await User.create({
     email,
     password,
@@ -28,6 +30,23 @@ async function createUserAndLogin(
     emailVerified: options.emailVerified ?? true,
     mfaEnabled: false,
   })
+
+  // Create personal tenant for the user
+  const tenant = await Tenant.create({
+    name: `Personal - ${user.fullName}`,
+    slug: `personal-${uniqueId()}`,
+    type: 'personal',
+    ownerId: user.id,
+  })
+
+  await TenantMembership.create({
+    userId: user.id,
+    tenantId: tenant.id,
+    role: TENANT_ROLES.OWNER,
+  })
+
+  user.currentTenantId = tenant.id
+  await user.save()
 
   const response = await request(BASE_URL)
     .post('/api/v1/auth/login')
@@ -39,7 +58,7 @@ async function createUserAndLogin(
   }
 
   const cookies = response.headers['set-cookie']
-  return { user, cookies: Array.isArray(cookies) ? cookies : [] }
+  return { user, tenant, cookies: Array.isArray(cookies) ? cookies : [] }
 }
 
 test.group('Billing API - Tiers', (group) => {
@@ -123,14 +142,14 @@ test.group('Billing API - Subscription', (group) => {
 
   test('GET /api/v1/billing/subscription returns user subscription', async ({ assert }) => {
     const id = uniqueId()
-    const { user, cookies } = await createUserAndLogin(`billing-${id}@example.com`, 'password123')
+    const { tenant, cookies } = await createUserAndLogin(`billing-${id}@example.com`, 'password123')
 
-    // Create a subscription for the user
+    // Create a subscription for the tenant
     const tier = await SubscriptionTier.findBySlugOrFail('tier1')
-    await Subscription.createForTenant(user.id, tier.id)
+    await Subscription.createForTenant(tenant.id, tier.id)
 
     const response = await request(BASE_URL)
-      .get('/api/v1/billing/subscription')
+      .get(`/api/v1/billing/subscription?tenantId=${tenant.id}`)
       .set('Cookie', cookies)
       .expect(200)
 
@@ -157,6 +176,13 @@ test.group('Billing API - Subscription', (group) => {
       ownerId: user.id,
     })
 
+    // Add membership for user to team
+    await TenantMembership.create({
+      userId: user.id,
+      tenantId: team.id,
+      role: TENANT_ROLES.OWNER,
+    })
+
     // Set user's current team
     user.currentTenantId = team.id
     await user.save()
@@ -167,7 +193,7 @@ test.group('Billing API - Subscription', (group) => {
 
     // Pass team context explicitly via query params
     const response = await request(BASE_URL)
-      .get(`/api/v1/billing/subscription?subscriberType=team&subscriberId=${team.id}`)
+      .get(`/api/v1/billing/subscription?tenantId=${team.id}`)
       .set('Cookie', cookies)
       .expect(200)
 
@@ -213,15 +239,17 @@ test.group('Billing API - Checkout', (group) => {
 
   test('POST /api/v1/billing/checkout rejects invalid price ID', async ({ assert }) => {
     const id = uniqueId()
-    const { cookies } = await createUserAndLogin(`checkout-${id}@example.com`, 'password123')
+    const { tenant, cookies } = await createUserAndLogin(
+      `checkout-${id}@example.com`,
+      'password123'
+    )
 
     const response = await request(BASE_URL)
       .post('/api/v1/billing/checkout')
       .set('Cookie', cookies)
       .send({
         priceId: 999999,
-        successUrl: 'https://example.com/success',
-        cancelUrl: 'https://example.com/cancel',
+        tenantId: tenant.id,
       })
       .expect(400)
 
@@ -243,12 +271,12 @@ test.group('Billing API - Portal', (group) => {
 
   test('POST /api/v1/billing/portal requires existing payment customer', async ({ assert }) => {
     const id = uniqueId()
-    const { cookies } = await createUserAndLogin(`portal-${id}@example.com`, 'password123')
+    const { tenant, cookies } = await createUserAndLogin(`portal-${id}@example.com`, 'password123')
 
     const response = await request(BASE_URL)
       .post('/api/v1/billing/portal')
       .set('Cookie', cookies)
-      .send({ returnUrl: 'https://example.com' })
+      .send({ returnUrl: 'https://example.com', tenantId: tenant.id })
       .expect(400)
 
     assert.exists(response.body.error)
@@ -267,9 +295,12 @@ test.group('Billing API - Cancel', (group) => {
 
   test('POST /api/v1/billing/cancel fails without active subscription', async ({ assert }) => {
     const id = uniqueId()
-    const { cookies } = await createUserAndLogin(`cancel-${id}@example.com`, 'password123')
+    const { tenant, cookies } = await createUserAndLogin(`cancel-${id}@example.com`, 'password123')
 
-    const response = await request(BASE_URL).post('/api/v1/billing/cancel').set('Cookie', cookies)
+    const response = await request(BASE_URL)
+      .post('/api/v1/billing/cancel')
+      .set('Cookie', cookies)
+      .send({ tenantId: tenant.id })
 
     // Can be 400 (no subscription) or 500 (internal error depending on implementation)
     assert.oneOf(response.status, [400, 500])
@@ -282,15 +313,16 @@ test.group('Billing API - Cancel', (group) => {
     assert,
   }) => {
     const id = uniqueId()
-    const { user, cookies } = await createUserAndLogin(`cancel-${id}@example.com`, 'password123')
+    const { tenant, cookies } = await createUserAndLogin(`cancel-${id}@example.com`, 'password123')
 
     // Create subscription without provider (local only)
     const tier = await SubscriptionTier.findBySlugOrFail('tier1')
-    await Subscription.createForTenant(user.id, tier.id)
+    await Subscription.createForTenant(tenant.id, tier.id)
 
     const response = await request(BASE_URL)
       .post('/api/v1/billing/cancel')
       .set('Cookie', cookies)
+      .send({ tenantId: tenant.id })
       .expect(400)
 
     assert.exists(response.body.error)
@@ -361,8 +393,7 @@ test.group('Billing API - Team Owner Authorization', (group) => {
       .set('Cookie', cookies)
       .send({
         priceId: price.id,
-        tenantId: 'team',
-        subscriberId: team.id,
+        tenantId: team.id,
       })
       .expect(403)
 
@@ -377,17 +408,12 @@ test.group('Billing API - Payment Customer', (group) => {
 
   test('portal creates session for user with payment customer', async ({ assert }) => {
     const id = uniqueId()
-    const { user, cookies } = await createUserAndLogin(`customer-${id}@example.com`, 'password123')
+    const { tenant, cookies } = await createUserAndLogin(
+      `customer-${id}@example.com`,
+      'password123'
+    )
 
-    // Create personal tenant for the user
-    const tenant = await Tenant.create({
-      name: `${user.fullName}'s Workspace`,
-      slug: `personal-${id}`,
-      type: 'personal',
-      ownerId: user.id,
-    })
-
-    // Create payment customer for tenant
+    // Create payment customer for the tenant created during login
     await PaymentCustomer.create({
       tenantId: tenant.id,
       provider: 'stripe',
@@ -398,7 +424,7 @@ test.group('Billing API - Payment Customer', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/portal')
       .set('Cookie', cookies)
-      .send({ returnUrl: 'https://example.com' })
+      .send({ returnUrl: 'https://example.com', tenantId: tenant.id })
 
     // Will fail with Stripe error (not BadRequest for missing customer)
     assert.notEqual(response.body.error, 'BadRequest')

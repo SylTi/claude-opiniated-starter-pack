@@ -160,6 +160,7 @@ test.group('Audit Events - Auth', (group) => {
       .send({
         currentPassword: 'password123',
         newPassword: 'newpassword123',
+        newPasswordConfirmation: 'newpassword123',
       })
       .expect(200)
 

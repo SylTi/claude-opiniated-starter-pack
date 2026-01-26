@@ -1,5 +1,7 @@
 import { test } from '@japa/runner'
 import User from '#models/user'
+import Tenant from '#models/tenant'
+import TenantMembership from '#models/tenant_membership'
 import DiscountCode from '#models/discount_code'
 import DiscountCodeUsage from '#models/discount_code_usage'
 import SubscriptionTier from '#models/subscription_tier'
@@ -8,6 +10,7 @@ import Price from '#models/price'
 import { truncateAllTables } from '../bootstrap.js'
 import request from 'supertest'
 import { DateTime } from 'luxon'
+import { TENANT_ROLES } from '#constants/roles'
 
 const BASE_URL = `http://${process.env.HOST}:${process.env.PORT}`
 
@@ -19,7 +22,7 @@ async function createUserAndLogin(
   email: string,
   password: string,
   options: { emailVerified?: boolean; role?: 'user' | 'admin' } = {}
-): Promise<{ user: User; cookies: string[] }> {
+): Promise<{ user: User; tenant: Tenant; cookies: string[] }> {
   const user = await User.create({
     email,
     password,
@@ -28,6 +31,23 @@ async function createUserAndLogin(
     emailVerified: options.emailVerified ?? true,
     mfaEnabled: false,
   })
+
+  // Create personal tenant for the user
+  const tenant = await Tenant.create({
+    name: `Personal - ${user.fullName}`,
+    slug: `personal-${uniqueId()}`,
+    type: 'personal',
+    ownerId: user.id,
+  })
+
+  await TenantMembership.create({
+    userId: user.id,
+    tenantId: tenant.id,
+    role: TENANT_ROLES.OWNER,
+  })
+
+  user.currentTenantId = tenant.id
+  await user.save()
 
   const response = await request(BASE_URL)
     .post('/api/v1/auth/login')
@@ -39,7 +59,7 @@ async function createUserAndLogin(
   }
 
   const cookies = response.headers['set-cookie']
-  return { user, cookies: Array.isArray(cookies) ? cookies : [] }
+  return { user, tenant, cookies: Array.isArray(cookies) ? cookies : [] }
 }
 
 async function createTestPrice(): Promise<{ price: Price; tier: SubscriptionTier }> {
@@ -323,7 +343,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
     assert,
   }) => {
     const id = uniqueId()
-    const { cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
+    const { tenant, cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
     const { price } = await createTestPrice()
 
     const discountCode = `VALID${id}`.toUpperCase()
@@ -337,7 +357,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/validate-discount-code')
       .set('Cookie', cookies)
-      .send({ code: discountCode, priceId: price.id })
+      .send({ code: discountCode, priceId: price.id, tenantId: tenant.id })
       .expect(200)
 
     assert.equal(response.body.data.valid, true)
@@ -350,7 +370,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
     assert,
   }) => {
     const id = uniqueId()
-    const { cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
+    const { tenant, cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
     const { price } = await createTestPrice()
 
     const discountCode = `FIXED${id}`.toUpperCase()
@@ -365,7 +385,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/validate-discount-code')
       .set('Cookie', cookies)
-      .send({ code: discountCode, priceId: price.id })
+      .send({ code: discountCode, priceId: price.id, tenantId: tenant.id })
       .expect(200)
 
     assert.equal(response.body.data.valid, true)
@@ -375,7 +395,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
 
   test('POST /api/v1/billing/validate-discount-code rejects expired code', async ({ assert }) => {
     const id = uniqueId()
-    const { cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
+    const { tenant, cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
     const { price } = await createTestPrice()
 
     const discountCode = `EXPIRED${id}`.toUpperCase()
@@ -390,7 +410,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/validate-discount-code')
       .set('Cookie', cookies)
-      .send({ code: discountCode, priceId: price.id })
+      .send({ code: discountCode, priceId: price.id, tenantId: tenant.id })
       .expect(200)
 
     assert.equal(response.body.data.valid, false)
@@ -399,7 +419,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
 
   test('POST /api/v1/billing/validate-discount-code rejects inactive code', async ({ assert }) => {
     const id = uniqueId()
-    const { cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
+    const { tenant, cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
     const { price } = await createTestPrice()
 
     const discountCode = `INACTIVE${id}`.toUpperCase()
@@ -413,7 +433,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/validate-discount-code')
       .set('Cookie', cookies)
-      .send({ code: discountCode, priceId: price.id })
+      .send({ code: discountCode, priceId: price.id, tenantId: tenant.id })
       .expect(200)
 
     assert.equal(response.body.data.valid, false)
@@ -421,7 +441,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
 
   test('POST /api/v1/billing/validate-discount-code respects max uses', async ({ assert }) => {
     const id = uniqueId()
-    const { cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
+    const { tenant, cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
     const { price } = await createTestPrice()
 
     const code = `MAXUSE${id}`.toUpperCase()
@@ -437,20 +457,23 @@ test.group('Billing API - Validate Discount Code', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/validate-discount-code')
       .set('Cookie', cookies)
-      .send({ code, priceId: price.id })
+      .send({ code, priceId: price.id, tenantId: tenant.id })
       .expect(200)
 
     assert.equal(response.body.data.valid, false)
   })
 
-  test('POST /api/v1/billing/validate-discount-code respects max uses per user', async ({
+  test('POST /api/v1/billing/validate-discount-code respects max uses per tenant', async ({
     assert,
   }) => {
     const id = uniqueId()
-    const { user, cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
+    const { user, tenant, cookies } = await createUserAndLogin(
+      `user-${id}@example.com`,
+      'password123'
+    )
     const { price } = await createTestPrice()
 
-    const code = `USERMAX${id}`.toUpperCase()
+    const code = `TENANTMAX${id}`.toUpperCase()
     const discountCode = await DiscountCode.create({
       code,
       discountType: 'percent',
@@ -459,9 +482,10 @@ test.group('Billing API - Validate Discount Code', (group) => {
       isActive: true,
     })
 
-    // Record a usage for this user
+    // Record a usage for this tenant
     await DiscountCodeUsage.create({
       discountCodeId: discountCode.id,
+      tenantId: tenant.id,
       userId: user.id,
       usedAt: DateTime.now(),
       checkoutSessionId: `session_${uniqueId()}`,
@@ -470,7 +494,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/validate-discount-code')
       .set('Cookie', cookies)
-      .send({ code, priceId: price.id })
+      .send({ code, priceId: price.id, tenantId: tenant.id })
       .expect(200)
 
     assert.equal(response.body.data.valid, false)
@@ -480,13 +504,13 @@ test.group('Billing API - Validate Discount Code', (group) => {
     assert,
   }) => {
     const id = uniqueId()
-    const { cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
+    const { tenant, cookies } = await createUserAndLogin(`user-${id}@example.com`, 'password123')
     const { price } = await createTestPrice()
 
     const response = await request(BASE_URL)
       .post('/api/v1/billing/validate-discount-code')
       .set('Cookie', cookies)
-      .send({ code: 'NONEXISTENT', priceId: price.id })
+      .send({ code: 'NONEXISTENT', priceId: price.id, tenantId: tenant.id })
       .expect(200)
 
     assert.equal(response.body.data.valid, false)

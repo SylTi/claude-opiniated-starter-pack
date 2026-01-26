@@ -11,6 +11,73 @@ import db from '@adonisjs/lucid/services/db'
  */
 
 /**
+ * Seed base subscription tiers required by most tests.
+ */
+async function seedBaseTiers(): Promise<void> {
+  // Check if tiers already exist
+  const existingTiers = await db.from('subscription_tiers').select('slug')
+  const existingSlugs = new Set(existingTiers.map((t) => t.slug))
+
+  const now = new Date().toISOString()
+  const baseTiers = [
+    {
+      slug: 'free',
+      name: 'Free',
+      level: 0,
+      max_team_members: 5,
+      price_monthly: 0,
+      yearly_discount_percent: 0,
+      is_active: true,
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      slug: 'tier1',
+      name: 'Tier 1',
+      level: 1,
+      max_team_members: 20,
+      price_monthly: 999,
+      yearly_discount_percent: 20,
+      is_active: true,
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      slug: 'tier2',
+      name: 'Tier 2',
+      level: 2,
+      max_team_members: null,
+      price_monthly: 2999,
+      yearly_discount_percent: 20,
+      is_active: true,
+      created_at: now,
+      updated_at: now,
+    },
+  ]
+
+  for (const tier of baseTiers) {
+    if (!existingSlugs.has(tier.slug)) {
+      await db.rawQuery(
+        `INSERT INTO "subscription_tiers"
+        ("slug", "name", "level", "max_team_members", "price_monthly", "yearly_discount_percent", "is_active", "created_at", "updated_at")
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          tier.slug,
+          tier.name,
+          tier.level,
+          tier.max_team_members,
+          tier.price_monthly,
+          tier.yearly_discount_percent,
+          tier.is_active,
+          tier.created_at,
+          tier.updated_at,
+        ]
+      )
+    }
+  }
+}
+
+/**
  * Truncate all tables with CASCADE to handle foreign key constraints.
  * This is more reliable than the default truncate for tables with circular references.
  */
@@ -24,13 +91,13 @@ export async function truncateAllTables(): Promise<void> {
     'products',
     'payment_customers',
     'subscriptions',
-    'team_invitations',
-    'team_members',
+    'tenant_invitations',
+    'tenant_memberships',
     'email_verification_tokens',
     'password_reset_tokens',
     'login_history',
     'oauth_accounts',
-    'teams',
+    'tenants',
     'users',
   ]
 
@@ -38,6 +105,9 @@ export async function truncateAllTables(): Promise<void> {
   for (const table of tables) {
     await db.rawQuery(`TRUNCATE TABLE "${table}" RESTART IDENTITY CASCADE`)
   }
+
+  // Re-seed base tiers after truncation
+  await seedBaseTiers()
 }
 
 /**

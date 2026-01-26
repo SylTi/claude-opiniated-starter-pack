@@ -380,7 +380,7 @@ test.group('Teams API - Update, Switch, and Members', (group) => {
 
     const membership = await TenantMembership.query()
       .where('userId', newMember.id)
-      .where('teamId', tenant.id)
+      .where('tenantId', tenant.id)
       .first()
     assert.exists(membership)
   })
@@ -550,7 +550,7 @@ test.group('Teams API - Update, Switch, and Members', (group) => {
 
     const membership = await TenantMembership.query()
       .where('userId', member.id)
-      .where('teamId', tenant.id)
+      .where('tenantId', tenant.id)
       .first()
     assert.isNull(membership)
   })
@@ -704,7 +704,7 @@ test.group('Teams API - Update, Switch, and Members', (group) => {
 
     const membership = await TenantMembership.query()
       .where('userId', member.id)
-      .where('teamId', tenant.id)
+      .where('tenantId', tenant.id)
       .first()
     assert.isNull(membership)
   })
@@ -1095,7 +1095,7 @@ test.group('Team Invitations API', (group) => {
     const response = await request(BASE_URL).get(`/api/v1/invitations/${token}`).expect(200)
 
     assert.equal(response.body.data.email, 'invited@example.com')
-    assert.equal(response.body.data.team.name, 'Test Team')
+    assert.equal(response.body.data.tenant.name, 'Test Team')
   })
 
   test('GET /api/v1/invitations/:token returns 404 for invalid token', async () => {
@@ -1149,13 +1149,13 @@ test.group('Team Invitations API', (group) => {
       .set('Cookie', cookies)
       .expect(200)
 
-    assert.equal(response.body.data.teamId, tenant.id)
-    assert.equal(response.body.data.teamName, 'Test Team')
+    assert.equal(response.body.data.tenantId, tenant.id)
+    assert.equal(response.body.data.tenantName, 'Test Team')
 
-    // Verify user is now a team member
+    // Verify user is now a tenant member
     const membership = await TenantMembership.query()
       .where('userId', invitedUser.id)
-      .where('teamId', tenant.id)
+      .where('tenantId', tenant.id)
       .first()
     assert.exists(membership)
     assert.equal(membership?.role, 'member')
@@ -1971,14 +1971,14 @@ test.group('Registration with Invitation', (group) => {
     assert.exists(response.body.data.id)
     assert.equal(response.body.data.email, 'newuser@example.com')
     assert.equal(response.body.data.currentTenantId, tenant.id)
-    assert.exists(response.body.data.joinedTeam)
-    assert.equal(response.body.data.joinedTeam.name, 'Test Team')
+    assert.exists(response.body.data.joinedTenant)
+    assert.equal(response.body.data.joinedTenant.name, 'Test Team')
 
     // Verify membership was created
     const newUser = await User.findByOrFail('email', 'newuser@example.com')
     const membership = await TenantMembership.query()
       .where('userId', newUser.id)
-      .where('teamId', tenant.id)
+      .where('tenantId', tenant.id)
       .first()
     assert.exists(membership)
   })

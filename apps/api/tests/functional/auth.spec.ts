@@ -227,9 +227,9 @@ test.group('Auth API - Profile', (group) => {
 
     assert.equal(response.body.data.id, user.id)
     assert.equal(response.body.data.currentTenantId, team.id)
-    assert.exists(response.body.data.currentTeam)
-    assert.equal(response.body.data.currentTeam.id, team.id)
-    assert.equal(response.body.data.currentTeam.name, 'Test Team')
+    assert.exists(response.body.data.currentTenant)
+    assert.equal(response.body.data.currentTenant.id, team.id)
+    assert.equal(response.body.data.currentTenant.name, 'Test Team')
   })
 
   test('GET /api/v1/auth/me requires authentication', async () => {

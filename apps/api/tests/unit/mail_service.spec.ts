@@ -210,8 +210,8 @@ test.group('MailService', (group) => {
     )
 
     const callArgs = sendStub.firstCall.args[0]
-    assert.include(callArgs.html, 'http://localhost:3000/team/invite?token=my-invite-token')
-    assert.include(callArgs.text, 'http://localhost:3000/team/invite?token=my-invite-token')
+    assert.include(callArgs.html, 'http://localhost:3000/tenant/invite?token=my-invite-token')
+    assert.include(callArgs.text, 'http://localhost:3000/tenant/invite?token=my-invite-token')
   })
 
   test('sendTenantInvitationEmail includes team name and inviter name', async ({ assert }) => {

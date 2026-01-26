@@ -2,6 +2,7 @@ import { test } from '@japa/runner'
 import { DateTime } from 'luxon'
 import DiscountCode from '#models/discount_code'
 import User from '#models/user'
+import Tenant from '#models/tenant'
 import DiscountCodeUsage from '#models/discount_code_usage'
 import { truncateAllTables } from '../bootstrap.js'
 
@@ -154,8 +155,10 @@ test.group('DiscountCode Model', (group) => {
     assert.isTrue(canUse)
   })
 
-  test('canBeUsedByTenant returns false for user at per-user limit', async ({ assert }) => {
+  test('canBeUsedByTenant returns false for tenant at per-tenant limit', async ({ assert }) => {
     const id = uniqueId()
+
+    // Create owner user
     const user = await User.create({
       email: `user-${id}@example.com`,
       password: 'password123',
@@ -164,23 +167,31 @@ test.group('DiscountCode Model', (group) => {
       mfaEnabled: false,
     })
 
+    // Create tenant
+    const tenant = await Tenant.create({
+      name: `Test Tenant ${id}`,
+      slug: `test-tenant-${id}`,
+      ownerId: user.id,
+    })
+
     const code = await DiscountCode.create({
-      code: `PERUSER${id}`,
+      code: `PERTENANT${id}`,
       discountType: 'percent',
       discountValue: 20,
       isActive: true,
       maxUsesPerTenant: 1,
     })
 
-    // Record one usage
+    // Record one usage for the tenant
     await DiscountCodeUsage.create({
       discountCodeId: code.id,
+      tenantId: tenant.id,
       userId: user.id,
       usedAt: DateTime.now(),
       checkoutSessionId: `session_${uniqueId()}`,
     })
 
-    const canUse = await code.canBeUsedByTenant(user.id)
+    const canUse = await code.canBeUsedByTenant(tenant.id)
     assert.isFalse(canUse)
   })
 

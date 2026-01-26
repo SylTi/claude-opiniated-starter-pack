@@ -54,13 +54,14 @@ const BROWSER_PATTERNS: Array<{ pattern: RegExp; name: string }> = [
 
 /**
  * Known OS patterns for user-agent summarization.
+ * Order matters - more specific patterns (iOS, Android) must come before general ones (macOS, Linux).
  */
 const OS_PATTERNS: Array<{ pattern: RegExp; name: string }> = [
   { pattern: /Windows/i, name: 'Windows' },
+  { pattern: /iOS|iPhone|iPad/i, name: 'iOS' },
+  { pattern: /Android/i, name: 'Android' },
   { pattern: /Mac OS X|macOS/i, name: 'macOS' },
   { pattern: /Linux/i, name: 'Linux' },
-  { pattern: /Android/i, name: 'Android' },
-  { pattern: /iOS|iPhone|iPad/i, name: 'iOS' },
 ]
 
 /**

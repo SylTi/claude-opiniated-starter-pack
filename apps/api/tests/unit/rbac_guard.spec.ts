@@ -29,7 +29,10 @@ test.group('RBAC Guard - Constructor', () => {
   })
 
   test('creates guard from HttpContext-like object', ({ assert }) => {
+    // HttpContext must have 'request' and 'response' to be detected as HttpContext
     const ctx = {
+      request: {},
+      response: {},
       tenant: createMockTenantContext(TENANT_ROLES.ADMIN, 42),
     }
     const guard = new RbacGuard(ctx as never)
@@ -39,7 +42,8 @@ test.group('RBAC Guard - Constructor', () => {
   })
 
   test('throws error when tenant context is missing', ({ assert }) => {
-    const ctx = {} as never
+    // HttpContext without tenant should throw
+    const ctx = { request: {}, response: {} } as never
     assert.throws(
       () => new RbacGuard(ctx),
       'RbacGuard requires tenant context. Ensure tenant middleware is active.'
