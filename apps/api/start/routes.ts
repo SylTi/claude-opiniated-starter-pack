@@ -219,3 +219,7 @@ router
       .prefix('/webhooks')
   })
   .prefix('/api/v1')
+
+// Enterprise features - dynamically loaded (silently skip if not available)
+// @ts-ignore - Enterprise feature: module may not exist on public repo
+import('#start/routes_sso').catch(() => {})

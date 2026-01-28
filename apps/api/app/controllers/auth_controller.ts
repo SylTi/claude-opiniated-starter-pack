@@ -238,6 +238,34 @@ export default class AuthController {
     try {
       const { user, requiresMfa } = await this.authService.login(email, password)
 
+      // Check SSO break-glass: If user's current tenant has SSO-only mode,
+      // check if password login is allowed for this user (enterprise feature)
+      if (user.currentTenantId) {
+        try {
+          // @ts-ignore - Enterprise feature: module may not exist on public repo
+          const ssoModule = await import('#services/sso/index')
+          const isPasswordAllowed = await ssoModule.ssoService.isPasswordLoginAllowed(
+            user,
+            user.currentTenantId
+          )
+          if (!isPasswordAllowed) {
+            // User must use SSO - return SSO redirect info
+            const { default: env } = await import('#start/env')
+            const baseUrl = env.get('APP_URL', 'http://localhost:3333')
+            const ssoStartUrl = `${baseUrl}/api/v1/auth/sso/${user.currentTenantId}/start`
+
+            return response.forbidden({
+              error: 'SsoRequired',
+              message: 'This tenant requires SSO login. Please use SSO to sign in.',
+              ssoUrl: ssoStartUrl,
+              tenantId: user.currentTenantId,
+            })
+          }
+        } catch {
+          // SSO module not available — password login always allowed
+        }
+      }
+
       // If MFA is enabled, verify the code
       if (requiresMfa) {
         if (!mfaCode) {
