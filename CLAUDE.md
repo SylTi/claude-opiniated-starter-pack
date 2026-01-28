@@ -43,6 +43,75 @@ infra/
 - Backend uses Lucid ORM to connect to PostgreSQL (Supabase for prod)
 - Frontend has NO direct database access
 
+## Branch Strategy (Public vs Enterprise)
+
+This repo uses two branches to maintain both a public open-source version and a private enterprise version:
+
+| Branch | Purpose | Contains |
+|--------|---------|----------|
+| `public/main` | Public/open-source repo | All general features |
+| `main` | Private/enterprise repo | All features + enterprise-only (SSO, etc.) |
+
+### Key Principle
+
+**All shared files must be identical on both branches.** Enterprise features use dynamic imports that silently skip when the module is absent.
+
+### Dynamic Import Pattern for Enterprise Features
+
+When a shared file needs to reference enterprise-only code, use this pattern:
+
+**For routes (`start/routes.ts`):**
+```typescript
+// At the end of routes.ts
+// @ts-ignore - Enterprise feature: module may not exist on public repo
+import('#start/routes_sso').catch(() => {})
+```
+
+**For controllers/services:**
+```typescript
+// Dynamic import with try/catch
+try {
+  // @ts-ignore - Enterprise feature: module may not exist on public repo
+  const ssoModule = await import('#services/sso/index')
+  const result = await ssoModule.ssoService.someMethod()
+  // Use result...
+} catch {
+  // Enterprise module not available — use default behavior
+}
+```
+
+**For constants/permissions:**
+```typescript
+// Create separate file for enterprise constants (e.g., permissions_sso.ts)
+// Import dynamically where needed, or use type assertions when mixing
+```
+
+### Enterprise-Only Files (exist only on `main`)
+
+These files/directories are NOT on `public/main`:
+- `start/routes_sso.ts`, `start/limiter_sso.ts`
+- `app/constants/permissions_sso.ts`
+- `app/controllers/sso_*.ts`
+- `app/models/sso_*.ts`, `app/models/tenant_sso_config.ts`
+- `app/services/sso/*`
+- `app/validators/sso.ts`
+- `commands/cleanup_sso_states.ts`
+- SSO-related migrations and tests
+
+### Adding New Enterprise Features
+
+1. Create feature files in dedicated directories (e.g., `app/services/analytics/`)
+2. Create `start/routes_<feature>.ts` for feature routes
+3. Add dynamic import to `start/routes.ts`: `import('#start/routes_<feature>').catch(() => {})`
+4. In shared code, use dynamic imports with try/catch
+5. Enterprise files only exist on `main` branch
+
+### Syncing Changes
+
+- **Public features**: Develop on either branch, cherry-pick freely (shared files are identical)
+- **Enterprise features**: Only on `main`, use dynamic imports in shared code
+- **No merge conflicts** for shared files since they're identical
+
 ## Critical Rules
 
 ### Testing Database Strategy
