@@ -55,6 +55,17 @@ export const AUDIT_EVENT_TYPES = {
 
   // RBAC
   RBAC_PERMISSION_DENIED: 'rbac.permission.denied',
+
+  // SSO
+  SSO_CONFIG_CREATE: 'sso.config.create',
+  SSO_CONFIG_UPDATE: 'sso.config.update',
+  SSO_CONFIG_DELETE: 'sso.config.delete',
+  SSO_CONFIG_VALIDATE: 'sso.config.validate',
+  SSO_ENABLE: 'sso.enable',
+  SSO_DISABLE: 'sso.disable',
+  SSO_LOGIN_SUCCESS: 'sso.login.success',
+  SSO_LOGIN_FAILURE: 'sso.login.failure',
+  SSO_USER_PROVISIONED: 'sso.user.provisioned',
 } as const
 
 /**

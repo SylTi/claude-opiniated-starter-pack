@@ -29,6 +29,7 @@ server.use([
   () => import('#middleware/container_bindings_middleware'),
   () => import('#middleware/force_json_response_middleware'),
   () => import('@adonisjs/cors/cors_middleware'),
+  () => import('#middleware/webhook_raw_body_middleware'),
 ])
 
 /**
@@ -50,8 +51,9 @@ router.use([
 export const middleware = router.named({
   guest: () => import('#middleware/guest_middleware'),
   auth: () => import('#middleware/auth_middleware'),
+  authContext: () => import('#middleware/auth_context_middleware'),
   admin: () => import('#middleware/admin_middleware'),
-  rawBody: () => import('#middleware/raw_body_middleware'),
+  adminContext: () => import('#middleware/admin_context_middleware'),
   tenant: () => import('#middleware/tenant_context_middleware'),
 })
 

@@ -3,6 +3,7 @@ import { DateTime } from 'luxon'
 import LoginHistory from '#models/login_history'
 import OAuthAccount from '#models/oauth_account'
 import Subscription from '#models/subscription'
+import { systemOps } from '#services/system_operation_service'
 
 export default class DashboardController {
   /**
@@ -40,10 +41,13 @@ export default class DashboardController {
       .count('* as total')
 
     // Get subscription info for user's current tenant (tenant is the billing unit)
+    // Uses system context because this endpoint doesn't have tenant RLS context
     let subscriptionTier = 'free'
     let subscriptionExpiresAt: string | null = null
     if (user.currentTenantId) {
-      const subscription = await Subscription.getActiveForTenant(user.currentTenantId)
+      const subscription = await systemOps.withSystemContext(async (trx) => {
+        return Subscription.getActiveForTenant(user.currentTenantId!, trx)
+      })
       subscriptionTier = subscription?.tier?.slug ?? 'free'
       subscriptionExpiresAt = subscription?.expiresAt?.toISO() ?? null
     }

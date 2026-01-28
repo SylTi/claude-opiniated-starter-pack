@@ -22,8 +22,10 @@ export const http = defineConfig({
   /**
    * Enabling async local storage will let you access HTTP context
    * from anywhere inside your application.
+   *
+   * Required for automatic RLS context binding in BaseModel.
    */
-  useAsyncLocalStorage: false,
+  useAsyncLocalStorage: true,
 
   /**
    * Manage cookies configuration. The settings for the session id cookie are

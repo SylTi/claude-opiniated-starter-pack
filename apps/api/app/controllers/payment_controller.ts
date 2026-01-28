@@ -2,7 +2,6 @@ import type { HttpContext } from '@adonisjs/core/http'
 import PaymentService from '#services/payment_service'
 import DiscountCodeService from '#services/discount_code_service'
 import env from '#start/env'
-import TenantMembership from '#models/tenant_membership'
 import DiscountCode from '#models/discount_code'
 import SubscriptionTier from '#models/subscription_tier'
 import Product from '#models/product'
@@ -73,17 +72,20 @@ export default class PaymentController {
    * POST /api/v1/billing/checkout
    * Tenant is the billing unit - no user-level subscriptions
    */
-  async createCheckout({ request, response, auth }: HttpContext): Promise<void> {
+  async createCheckout({ request, response, auth, tenant, tenantDb }: HttpContext): Promise<void> {
     const user = auth.user!
     const { priceId, tenantId, discountCode } = await request.validateUsing(createCheckoutValidator)
 
-    // Verify user can manage billing for this tenant
-    const membership = await TenantMembership.query()
-      .where('tenantId', tenantId)
-      .where('userId', user.id)
-      .first()
+    // Verify request tenantId matches the tenant context (set by middleware)
+    if (!tenant || tenant.id !== tenantId) {
+      return response.badRequest({
+        error: 'TenantMismatch',
+        message: 'Tenant ID in request does not match X-Tenant-ID header',
+      })
+    }
 
-    if (!membership || !membership.isAdmin()) {
+    // Membership already verified by tenant middleware; check admin role
+    if (tenant.membership.role !== 'owner' && tenant.membership.role !== 'admin') {
       return response.forbidden({
         error: 'Forbidden',
         message: 'Only tenant admins can manage billing',
@@ -122,13 +124,15 @@ export default class PaymentController {
       )
 
       // Record discount code usage if one was applied (atomic with race condition protection)
+      // Pass tenantDb transaction for RLS context
       if (validatedDiscountCode) {
         const discountCodeService = new DiscountCodeService()
         await discountCodeService.recordUsage(
           validatedDiscountCode.id,
           tenantId,
           user.id,
-          result.sessionId
+          result.sessionId,
+          tenantDb
         )
       }
 
@@ -157,17 +161,19 @@ export default class PaymentController {
    * Create customer portal session
    * POST /api/v1/billing/portal
    */
-  async createPortal({ request, response, auth }: HttpContext): Promise<void> {
-    const user = auth.user!
+  async createPortal({ request, response, tenant }: HttpContext): Promise<void> {
     const { returnUrl, tenantId } = await request.validateUsing(createPortalValidator)
 
-    // Verify user can manage billing for this tenant
-    const membership = await TenantMembership.query()
-      .where('tenantId', tenantId)
-      .where('userId', user.id)
-      .first()
+    // Verify request tenantId matches the tenant context (set by middleware)
+    if (!tenant || tenant.id !== tenantId) {
+      return response.badRequest({
+        error: 'TenantMismatch',
+        message: 'Tenant ID in request does not match X-Tenant-ID header',
+      })
+    }
 
-    if (!membership || !membership.isAdmin()) {
+    // Membership already verified by tenant middleware; check admin role
+    if (tenant.membership.role !== 'owner' && tenant.membership.role !== 'admin') {
       return response.forbidden({
         error: 'Forbidden',
         message: 'Only tenant admins can manage billing',
@@ -202,26 +208,23 @@ export default class PaymentController {
    * Get current subscription details
    * GET /api/v1/billing/subscription
    */
-  async getSubscription({ request, response, auth }: HttpContext): Promise<void> {
-    const user = auth.user!
+  async getSubscription({ request, response, tenant }: HttpContext): Promise<void> {
     const { tenantId } = await request.validateUsing(getSubscriptionValidator)
 
-    // Verify user is a member of the tenant
-    const membership = await TenantMembership.query()
-      .where('tenantId', tenantId)
-      .where('userId', user.id)
-      .first()
-
-    if (!membership) {
-      return response.forbidden({
-        error: 'Forbidden',
-        message: 'Not a member of this tenant',
+    // Verify request tenantId matches the tenant context (set by middleware)
+    if (!tenant || tenant.id !== tenantId) {
+      return response.badRequest({
+        error: 'TenantMismatch',
+        message: 'Tenant ID in request does not match X-Tenant-ID header',
       })
     }
 
+    // Membership already verified by tenant middleware
+    const isAdmin = tenant.membership.role === 'owner' || tenant.membership.role === 'admin'
+
     const paymentService = new PaymentService()
     const subscription = await paymentService.getCurrentSubscription(tenantId)
-    const canManage = membership.isAdmin() && (await paymentService.canManageBilling(tenantId))
+    const canManage = isAdmin && (await paymentService.canManageBilling(tenantId))
 
     let subscriptionData = null
     if (subscription) {
@@ -263,17 +266,19 @@ export default class PaymentController {
    * Cancel subscription
    * POST /api/v1/billing/cancel
    */
-  async cancelSubscription({ request, response, auth }: HttpContext): Promise<void> {
-    const user = auth.user!
+  async cancelSubscription({ request, response, tenant }: HttpContext): Promise<void> {
     const { tenantId } = await request.validateUsing(cancelSubscriptionValidator)
 
-    // Verify user can manage billing for this tenant
-    const membership = await TenantMembership.query()
-      .where('tenantId', tenantId)
-      .where('userId', user.id)
-      .first()
+    // Verify request tenantId matches the tenant context (set by middleware)
+    if (!tenant || tenant.id !== tenantId) {
+      return response.badRequest({
+        error: 'TenantMismatch',
+        message: 'Tenant ID in request does not match X-Tenant-ID header',
+      })
+    }
 
-    if (!membership || !membership.isAdmin()) {
+    // Membership already verified by tenant middleware; check admin role
+    if (tenant.membership.role !== 'owner' && tenant.membership.role !== 'admin') {
       return response.forbidden({
         error: 'Forbidden',
         message: 'Only tenant admins can cancel subscriptions',

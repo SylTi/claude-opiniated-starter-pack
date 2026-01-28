@@ -21,12 +21,17 @@ const sessionConfig = defineConfig({
   /**
    * Configuration for session cookie and the
    * cookie store
+   *
+   * Note: sameSite 'lax' is required for OAuth flows which use cross-site redirects.
+   * 'strict' would prevent the session cookie from being sent on OAuth callback redirects.
+   * 'lax' still provides CSRF protection for POST/PUT/DELETE requests while allowing
+   * top-level navigation (GET redirects) from external sites.
    */
   cookie: {
     path: '/',
     httpOnly: true,
     secure: app.inProduction,
-    sameSite: 'strict', // Strict for better CSRF protection
+    sameSite: 'lax',
   },
 
   /**

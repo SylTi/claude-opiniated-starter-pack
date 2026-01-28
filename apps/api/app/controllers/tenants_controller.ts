@@ -27,6 +27,7 @@ import { ACTIONS } from '#constants/permissions'
 import type { TenantRole } from '#constants/roles'
 import { AuditContext } from '#services/audit_context'
 import { AUDIT_EVENT_TYPES } from '#constants/audit_events'
+import { systemOps } from '#services/system_operation_service'
 
 export default class TenantsController {
   private mailService = new MailService()
@@ -82,6 +83,11 @@ export default class TenantsController {
 
   /**
    * Create a new tenant
+   *
+   * Uses system RLS context because:
+   * - tenants and tenant_memberships tables have RLS policies
+   * - We're creating a NEW tenant, so no tenant context exists yet
+   * - The user is authenticated but not yet a member of the new tenant
    */
   async store(ctx: HttpContext): Promise<void> {
     const { auth, request, response } = ctx
@@ -89,8 +95,8 @@ export default class TenantsController {
     const user = auth.user!
     const { name } = await request.validateUsing(createTenantValidator)
 
-    // Use transaction to prevent race conditions
-    const tenant = await db.transaction(async (trx) => {
+    // Use system context because tenants/memberships have RLS and we're creating new records
+    const tenant = await systemOps.withSystemContext(async (trx) => {
       // Generate unique slug (lowercase for URL-friendly format)
       const baseSlug = string.slug(name).toLowerCase()
       let slug = baseSlug
@@ -123,7 +129,7 @@ export default class TenantsController {
         { client: trx }
       )
 
-      // Set as current tenant
+      // Set as current tenant (users table has no RLS)
       user.currentTenantId = newTenant.id
       user.useTransaction(trx)
       await user.save()
@@ -347,48 +353,53 @@ export default class TenantsController {
       })
     }
 
-    // Use transaction with row locking to prevent race condition
-    // when multiple requests try to add members simultaneously
+    // Use system context with row locking to prevent race condition
+    // when multiple requests try to add members simultaneously.
+    // System context needed because we're modifying another user's currentTenantId.
     try {
-      await db.transaction(async (trx) => {
-        // Lock the tenant row to prevent concurrent modifications
-        const tenant = await Tenant.query({ client: trx })
-          .where('id', tenantId)
-          .forUpdate()
-          .preload('memberships')
-          .firstOrFail()
+      await systemOps.withTenantContext(
+        Number(tenantId),
+        async (trx) => {
+          // Lock the tenant row to prevent concurrent modifications
+          const tenant = await Tenant.query({ client: trx })
+            .where('id', tenantId)
+            .forUpdate()
+            .preload('memberships')
+            .firstOrFail()
 
-        // Double-check membership inside transaction
-        const existingMembership = await TenantMembership.query({ client: trx })
-          .where('userId', newMember.id)
-          .where('tenantId', tenantId)
-          .first()
+          // Double-check membership inside transaction
+          const existingMembership = await TenantMembership.query({ client: trx })
+            .where('userId', newMember.id)
+            .where('tenantId', tenantId)
+            .first()
 
-        if (existingMembership) {
-          throw new AlreadyMemberError()
-        }
+          if (existingMembership) {
+            throw new AlreadyMemberError()
+          }
 
-        // Check max members limit (inside transaction with lock)
-        if (!(await tenant.canAddMember(tenant.memberships.length))) {
-          const maxMembers = await tenant.getEffectiveMaxMembers()
-          throw new MemberLimitReachedError(maxMembers ?? 0)
-        }
+          // Check max members limit (inside transaction with lock)
+          if (!(await tenant.canAddMember(tenant.memberships.length, trx))) {
+            const maxMembers = await tenant.getEffectiveMaxMembers(trx)
+            throw new MemberLimitReachedError(maxMembers ?? 0)
+          }
 
-        // Create member inside transaction
-        await TenantMembership.create(
-          {
-            userId: newMember.id,
-            tenantId: Number(tenantId),
-            role: role ?? TENANT_ROLES.MEMBER,
-          },
-          { client: trx }
-        )
+          // Create member inside transaction
+          await TenantMembership.create(
+            {
+              userId: newMember.id,
+              tenantId: Number(tenantId),
+              role: role ?? TENANT_ROLES.MEMBER,
+            },
+            { client: trx }
+          )
 
-        // Set as current tenant
-        newMember.currentTenantId = Number(tenantId)
-        newMember.useTransaction(trx)
-        await newMember.save()
-      })
+          // Set as current tenant (users table has no RLS)
+          newMember.currentTenantId = Number(tenantId)
+          newMember.useTransaction(trx)
+          await newMember.save()
+        },
+        user.id
+      )
 
       // Emit audit event for member addition
       audit.emitForTenant(
@@ -426,6 +437,11 @@ export default class TenantsController {
 
   /**
    * Remove member from tenant
+   *
+   * Uses tenant RLS context because:
+   * - tenant_memberships table has RLS policies requiring tenant context
+   * - We need to query and delete membership records within tenant scope
+   * - Also updates removed user's currentTenantId (users table has no RLS)
    */
   async removeMember(ctx: HttpContext): Promise<void> {
     const { auth, params, response } = ctx
@@ -451,33 +467,53 @@ export default class TenantsController {
       })
     }
 
-    const memberToRemove = await TenantMembership.query()
-      .where('userId', memberUserId)
-      .where('tenantId', tenantId)
-      .first()
+    // Use tenant context for RLS-protected operations
+    const removedRole = await systemOps.withTenantContext(
+      Number(tenantId),
+      async (trx) => {
+        const memberToRemove = await TenantMembership.query({ client: trx })
+          .where('userId', memberUserId)
+          .where('tenantId', tenantId)
+          .first()
 
-    if (!memberToRemove) {
+        if (!memberToRemove) {
+          return null
+        }
+
+        // Can't remove owner
+        if (memberToRemove.role === TENANT_ROLES.OWNER) {
+          return 'OWNER'
+        }
+
+        const role = memberToRemove.role
+        await memberToRemove.delete()
+
+        // Clear the user's current tenant if it was this tenant
+        // Note: users table has no RLS, but we're within transaction
+        const removedUser = await User.find(memberUserId, { client: trx })
+        if (removedUser && removedUser.currentTenantId === Number(tenantId)) {
+          removedUser.currentTenantId = null
+          removedUser.useTransaction(trx)
+          await removedUser.save()
+        }
+
+        return role
+      },
+      user.id
+    )
+
+    if (removedRole === null) {
       return response.notFound({
         error: 'NotFound',
         message: 'Member not found',
       })
     }
 
-    // Can't remove owner
-    if (memberToRemove.role === TENANT_ROLES.OWNER) {
+    if (removedRole === 'OWNER') {
       return response.badRequest({
         error: 'ValidationError',
         message: 'Cannot remove the tenant owner',
       })
-    }
-
-    await memberToRemove.delete()
-
-    // Clear the user's current tenant if it was this tenant
-    const removedUser = await User.find(memberUserId)
-    if (removedUser && removedUser.currentTenantId === Number(tenantId)) {
-      removedUser.currentTenantId = null
-      await removedUser.save()
     }
 
     // Emit audit event for member removal
@@ -485,7 +521,7 @@ export default class TenantsController {
       AUDIT_EVENT_TYPES.MEMBER_REMOVE,
       Number(tenantId),
       { type: 'user', id: Number(memberUserId) },
-      { removedRole: memberToRemove.role }
+      { removedRole }
     )
 
     response.json({
@@ -578,8 +614,9 @@ export default class TenantsController {
       })
     }
 
-    // Clear currentTenantId for all members
-    await User.query().where('currentTenantId', tenantId).update({ currentTenantId: null })
+    // Clear currentTenantId for all members using centralized system operation service.
+    // RBAC has already verified the user is the tenant owner with TENANT_DELETE permission.
+    await systemOps.clearMembersCurrentTenant(tenantId, user.id)
 
     // Emit audit event before deletion (tenant will no longer exist after)
     audit.emit(
@@ -597,6 +634,11 @@ export default class TenantsController {
 
   /**
    * Send tenant invitation
+   *
+   * Uses tenant RLS context with row locking because:
+   * - tenant_invitations table has RLS policies requiring tenant context
+   * - Need to prevent race conditions when checking member limits
+   * - Multiple concurrent invitation requests could exceed limits without locking
    */
   async sendInvitation(ctx: HttpContext): Promise<void> {
     const { auth, params, request, response } = ctx
@@ -625,112 +667,154 @@ export default class TenantsController {
     const { email, role = TENANT_ROLES.MEMBER } =
       await request.validateUsing(sendInvitationValidator)
 
-    const tenant = await Tenant.query().where('id', tenantId).preload('memberships').firstOrFail()
-
-    // Check if tenant has paid subscription
-    const tenantTier = await tenant.getSubscriptionTier()
-    if (tenantTier.slug === 'free') {
-      return response.forbidden({
-        error: 'Forbidden',
-        message: 'Tenant must have a paid subscription to send invitations',
-      })
-    }
-
-    // Check max members limit
-    const pendingInvitations = await TenantInvitation.query()
-      .where('tenantId', tenantId)
-      .where('status', 'pending')
-
-    const totalPotentialMembers = tenant.memberships.length + pendingInvitations.length
-    if (!(await tenant.canAddMember(totalPotentialMembers))) {
-      const maxMembers = await tenant.getEffectiveMaxMembers()
-      return response.badRequest({
-        error: 'LimitReached',
-        message: `Tenant would exceed the maximum of ${maxMembers} members with pending invitations. Upgrade your subscription to add more.`,
-      })
-    }
-
-    // Check if already a member
-    const existingUser = await User.findBy('email', email)
-    if (existingUser) {
-      const existingMembership = await TenantMembership.query()
-        .where('userId', existingUser.id)
-        .where('tenantId', tenantId)
-        .first()
-
-      if (existingMembership) {
-        return response.badRequest({
-          error: 'ValidationError',
-          message: 'User is already a member of this tenant',
-        })
-      }
-    }
-
-    // Check for existing pending invitation
-    const existingInvitation = await TenantInvitation.query()
-      .where('email', email)
-      .where('tenantId', tenantId)
-      .where('status', 'pending')
-      .first()
-
-    if (existingInvitation) {
-      return response.badRequest({
-        error: 'ValidationError',
-        message: 'An invitation has already been sent to this email',
-      })
-    }
-
     const inviteRole = role ?? TENANT_ROLES.MEMBER
 
-    const invitation = await TenantInvitation.create({
-      tenantId: Number(tenantId),
-      invitedById: user.id,
-      email,
-      token: TenantInvitation.generateToken(),
-      status: 'pending',
-      role: inviteRole,
-      expiresAt: DateTime.now().plus({ days: 7 }),
-    })
+    // Use tenant context with row locking to prevent race conditions
+    try {
+      const invitationResult = await systemOps.withTenantContext(
+        Number(tenantId),
+        async (trx) => {
+          // Lock the tenant row to prevent concurrent invitation creation
+          const tenant = await Tenant.query({ client: trx })
+            .where('id', tenantId)
+            .forUpdate()
+            .preload('memberships')
+            .firstOrFail()
 
-    // Generate invitation link using FRONTEND_URL
-    const frontendUrl = env.get('FRONTEND_URL', 'http://localhost:3000')
-    const invitationLink = `${frontendUrl}/invitations/${invitation.token}`
+          // Check if tenant has paid subscription
+          const tenantTier = await tenant.getSubscriptionTier(trx)
+          if (tenantTier.slug === 'free') {
+            return { error: 'FREE_TIER' as const }
+          }
 
-    // Send invitation email (non-blocking)
-    this.mailService
-      .sendTenantInvitationEmail(
-        email,
-        tenant.name,
-        user.fullName ?? user.email,
-        invitation.token,
-        inviteRole,
-        invitation.expiresAt.toJSDate()
+          // Check max members limit (with lock held)
+          const pendingInvitations = await TenantInvitation.query({ client: trx })
+            .where('tenantId', tenantId)
+            .where('status', 'pending')
+
+          const totalPotentialMembers = tenant.memberships.length + pendingInvitations.length
+          if (!(await tenant.canAddMember(totalPotentialMembers, trx))) {
+            const maxMembers = await tenant.getEffectiveMaxMembers(trx)
+            return { error: 'LIMIT_REACHED' as const, maxMembers }
+          }
+
+          // Check if already a member
+          const existingUser = await User.findBy('email', email, { client: trx })
+          if (existingUser) {
+            const existingMembership = await TenantMembership.query({ client: trx })
+              .where('userId', existingUser.id)
+              .where('tenantId', tenantId)
+              .first()
+
+            if (existingMembership) {
+              return { error: 'ALREADY_MEMBER' as const }
+            }
+          }
+
+          // Check for existing pending invitation
+          const existingInvitation = await TenantInvitation.query({ client: trx })
+            .where('email', email)
+            .where('tenantId', tenantId)
+            .where('status', 'pending')
+            .first()
+
+          if (existingInvitation) {
+            return { error: 'INVITATION_EXISTS' as const }
+          }
+
+          // Create invitation within locked transaction
+          const invitation = await TenantInvitation.create(
+            {
+              tenantId: Number(tenantId),
+              invitedById: user.id,
+              email,
+              token: TenantInvitation.generateToken(),
+              status: 'pending',
+              role: inviteRole,
+              expiresAt: DateTime.now().plus({ days: 7 }),
+            },
+            { client: trx }
+          )
+
+          return { success: true as const, invitation, tenantName: tenant.name }
+        },
+        user.id
       )
-      .catch((err) => logger.error({ err }, 'Failed to send tenant invitation email'))
 
-    // Emit audit event for invitation sent
-    audit.emitForTenant(
-      AUDIT_EVENT_TYPES.INVITATION_SEND,
-      Number(tenantId),
-      { type: 'invitation', id: invitation.id },
-      { invitedRole: inviteRole }
-    )
+      // Handle errors from transaction
+      if ('error' in invitationResult) {
+        switch (invitationResult.error) {
+          case 'FREE_TIER':
+            return response.forbidden({
+              error: 'Forbidden',
+              message: 'Tenant must have a paid subscription to send invitations',
+            })
+          case 'LIMIT_REACHED':
+            return response.badRequest({
+              error: 'LimitReached',
+              message: `Tenant would exceed the maximum of ${invitationResult.maxMembers} members with pending invitations. Upgrade your subscription to add more.`,
+            })
+          case 'ALREADY_MEMBER':
+            return response.badRequest({
+              error: 'ValidationError',
+              message: 'User is already a member of this tenant',
+            })
+          case 'INVITATION_EXISTS':
+            return response.badRequest({
+              error: 'ValidationError',
+              message: 'An invitation has already been sent to this email',
+            })
+        }
+      }
 
-    response.created({
-      data: {
-        id: invitation.id,
-        email: invitation.email,
-        role: invitation.role,
-        status: invitation.status,
-        expiresAt: invitation.expiresAt.toISO(),
-        invitationLink,
-      },
-      message: 'Invitation sent successfully',
-    })
+      const { invitation, tenantName } = invitationResult
+
+      // Generate invitation link using FRONTEND_URL
+      const frontendUrl = env.get('FRONTEND_URL', 'http://localhost:3000')
+      const invitationLink = `${frontendUrl}/invitations/${invitation.token}`
+
+      // Send invitation email (non-blocking, after transaction commits)
+      this.mailService
+        .sendTenantInvitationEmail(
+          email,
+          tenantName,
+          user.fullName ?? user.email,
+          invitation.token,
+          inviteRole,
+          invitation.expiresAt.toJSDate()
+        )
+        .catch((err) => logger.error({ err }, 'Failed to send tenant invitation email'))
+
+      // Emit audit event for invitation sent
+      audit.emitForTenant(
+        AUDIT_EVENT_TYPES.INVITATION_SEND,
+        Number(tenantId),
+        { type: 'invitation', id: invitation.id },
+        { invitedRole: inviteRole }
+      )
+
+      response.created({
+        data: {
+          id: invitation.id,
+          email: invitation.email,
+          role: invitation.role,
+          status: invitation.status,
+          expiresAt: invitation.expiresAt.toISO(),
+          invitationLink,
+        },
+        message: 'Invitation sent successfully',
+      })
+    } catch (error) {
+      throw error
+    }
   }
 
   /**
    * List pending invitations for a tenant
+   *
+   * Uses tenant RLS context because:
+   * - tenant_invitations table has RLS policies requiring tenant context
+   * - Without tenant context, query would only return invitations to user's own email
    */
   async listInvitations({ auth, params, response }: HttpContext): Promise<void> {
     const user = auth.user!
@@ -754,10 +838,17 @@ export default class TenantsController {
       })
     }
 
-    const invitations = await TenantInvitation.query()
-      .where('tenantId', tenantId)
-      .preload('invitedBy')
-      .orderBy('createdAt', 'desc')
+    // Use tenant context for RLS-protected query
+    const invitations = await systemOps.withTenantContext(
+      Number(tenantId),
+      async (trx) => {
+        return TenantInvitation.query({ client: trx })
+          .where('tenantId', tenantId)
+          .preload('invitedBy')
+          .orderBy('createdAt', 'desc')
+      },
+      user.id
+    )
 
     response.json({
       data: invitations.map((inv) => ({
@@ -779,6 +870,10 @@ export default class TenantsController {
 
   /**
    * Cancel a pending invitation
+   *
+   * Uses tenant RLS context because:
+   * - tenant_invitations table has RLS policies requiring tenant context
+   * - Need tenant context to query and delete invitation records
    */
   async cancelInvitation(ctx: HttpContext): Promise<void> {
     const { auth, params, response } = ctx
@@ -804,13 +899,27 @@ export default class TenantsController {
       })
     }
 
-    const invitation = await TenantInvitation.query()
-      .where('id', invitationId)
-      .where('tenantId', tenantId)
-      .where('status', 'pending')
-      .first()
+    // Use tenant context for RLS-protected operations
+    const deleted = await systemOps.withTenantContext(
+      Number(tenantId),
+      async (trx) => {
+        const invitation = await TenantInvitation.query({ client: trx })
+          .where('id', invitationId)
+          .where('tenantId', tenantId)
+          .where('status', 'pending')
+          .first()
 
-    if (!invitation) {
+        if (!invitation) {
+          return false
+        }
+
+        await invitation.delete()
+        return true
+      },
+      user.id
+    )
+
+    if (!deleted) {
       return response.notFound({
         error: 'NotFound',
         message: 'Invitation not found or already processed',
@@ -823,8 +932,6 @@ export default class TenantsController {
       id: Number(invitationId),
     })
 
-    await invitation.delete()
-
     response.json({
       message: 'Invitation cancelled successfully',
     })
@@ -832,15 +939,30 @@ export default class TenantsController {
 
   /**
    * Get invitation details by token (public route)
+   *
+   * Uses SECURITY DEFINER function to bypass RLS (unauthenticated access)
    */
   async getInvitationByToken({ params, response }: HttpContext): Promise<void> {
     const { token } = params
 
-    const invitation = await TenantInvitation.query()
-      .where('token', token)
-      .preload('tenant')
-      .preload('invitedBy')
-      .first()
+    // Use SECURITY DEFINER function to bypass RLS for public access
+    const result = await db.rawQuery<{
+      rows: Array<{
+        id: number
+        tenant_id: number
+        email: string
+        role: string
+        status: string
+        expires_at: Date
+        invited_by_id: number
+        tenant_name: string
+        tenant_slug: string
+        inviter_full_name: string | null
+        inviter_email: string
+      }>
+    }>('SELECT * FROM app_get_invitation_by_token(?)', [token])
+
+    const invitation = result.rows[0]
 
     if (!invitation) {
       return response.notFound({
@@ -856,9 +978,11 @@ export default class TenantsController {
       })
     }
 
-    if (invitation.isExpired()) {
-      invitation.status = 'expired'
-      await invitation.save()
+    // Check if expired
+    const expiresAt = DateTime.fromJSDate(invitation.expires_at)
+    if (expiresAt < DateTime.now()) {
+      // Update status using SECURITY DEFINER function
+      await db.rawQuery('SELECT app_update_invitation_status(?, ?)', [token, 'expired'])
       return response.badRequest({
         error: 'InvitationExpired',
         message: 'This invitation has expired',
@@ -871,16 +995,16 @@ export default class TenantsController {
         email: invitation.email,
         role: invitation.role,
         tenant: {
-          id: invitation.tenant.id,
-          name: invitation.tenant.name,
-          slug: invitation.tenant.slug,
+          id: invitation.tenant_id,
+          name: invitation.tenant_name,
+          slug: invitation.tenant_slug,
         },
         invitedBy: {
-          id: invitation.invitedBy.id,
-          email: invitation.invitedBy.email,
-          fullName: invitation.invitedBy.fullName,
+          id: invitation.invited_by_id,
+          email: invitation.inviter_email,
+          fullName: invitation.inviter_full_name,
         },
-        expiresAt: invitation.expiresAt.toISO(),
+        expiresAt: expiresAt.toISO(),
       },
     })
   }
@@ -926,54 +1050,59 @@ export default class TenantsController {
       })
     }
 
-    // Use transaction with row locking to prevent race condition
+    // Use tenant context with row locking to prevent race condition.
+    // We use tenant context because this is a user joining a specific tenant.
     try {
-      await db.transaction(async (trx) => {
-        // Lock the tenant row to prevent concurrent modifications
-        const tenant = await Tenant.query({ client: trx })
-          .where('id', invitation.tenantId)
-          .forUpdate()
-          .preload('memberships')
-          .firstOrFail()
+      await systemOps.withTenantContext(
+        invitation.tenantId,
+        async (trx) => {
+          // Lock the tenant row to prevent concurrent modifications
+          const tenant = await Tenant.query({ client: trx })
+            .where('id', invitation.tenantId)
+            .forUpdate()
+            .preload('memberships')
+            .firstOrFail()
 
-        // Double-check membership inside transaction
-        const existingMembership = await TenantMembership.query({ client: trx })
-          .where('userId', user.id)
-          .where('tenantId', invitation.tenantId)
-          .first()
+          // Double-check membership inside transaction
+          const existingMembership = await TenantMembership.query({ client: trx })
+            .where('userId', user.id)
+            .where('tenantId', invitation.tenantId)
+            .first()
 
-        if (existingMembership) {
+          if (existingMembership) {
+            invitation.status = 'accepted'
+            invitation.useTransaction(trx)
+            await invitation.save()
+            throw new Error('ALREADY_MEMBER')
+          }
+
+          // Check tenant member limit (inside transaction with lock)
+          if (!(await tenant.canAddMember(tenant.memberships.length, trx))) {
+            throw new Error('LIMIT_REACHED')
+          }
+
+          // Add user to tenant
+          await TenantMembership.create(
+            {
+              userId: user.id,
+              tenantId: invitation.tenantId,
+              role: invitation.role,
+            },
+            { client: trx }
+          )
+
+          // Update user (users table has no RLS)
+          user.currentTenantId = invitation.tenantId
+          user.useTransaction(trx)
+          await user.save()
+
+          // Mark invitation as accepted
           invitation.status = 'accepted'
           invitation.useTransaction(trx)
           await invitation.save()
-          throw new Error('ALREADY_MEMBER')
-        }
-
-        // Check tenant member limit (inside transaction with lock)
-        if (!(await tenant.canAddMember(tenant.memberships.length))) {
-          throw new Error('LIMIT_REACHED')
-        }
-
-        // Add user to tenant
-        await TenantMembership.create(
-          {
-            userId: user.id,
-            tenantId: invitation.tenantId,
-            role: invitation.role,
-          },
-          { client: trx }
-        )
-
-        // Update user
-        user.currentTenantId = invitation.tenantId
-        user.useTransaction(trx)
-        await user.save()
-
-        // Mark invitation as accepted
-        invitation.status = 'accepted'
-        invitation.useTransaction(trx)
-        await invitation.save()
-      })
+        },
+        user.id
+      )
 
       // Emit audit event for invitation acceptance
       audit.emitForTenant(

@@ -3,7 +3,6 @@ import { DateTime } from 'luxon'
 import DiscountCode from '#models/discount_code'
 import DiscountCodeUsage from '#models/discount_code_usage'
 import DiscountCodeService from '#services/discount_code_service'
-import TenantMembership from '#models/tenant_membership'
 import db from '@adonisjs/lucid/services/db'
 import {
   createDiscountCodeValidator,
@@ -222,8 +221,7 @@ export default class DiscountCodesController {
    * Validate a discount code for a tenant (tenant is the billing unit)
    * POST /api/v1/billing/validate-discount-code
    */
-  async validate({ request, response, auth }: HttpContext): Promise<void> {
-    const user = auth.user!
+  async validate({ request, response, tenant }: HttpContext): Promise<void> {
     const { code, priceId, tenantId } = await request.validateUsing(validateDiscountCodeValidator)
 
     // Tenant is required for validation (tenant is the billing unit)
@@ -234,19 +232,15 @@ export default class DiscountCodesController {
       })
     }
 
-    // Verify user is a member of this tenant
-    const membership = await TenantMembership.query()
-      .where('tenantId', tenantId)
-      .where('userId', user.id)
-      .first()
-
-    if (!membership) {
-      return response.forbidden({
-        error: 'Forbidden',
-        message: 'You are not a member of this tenant',
+    // Verify request tenantId matches the tenant context (set by middleware)
+    if (!tenant || tenant.id !== tenantId) {
+      return response.badRequest({
+        error: 'TenantMismatch',
+        message: 'Tenant ID in request does not match X-Tenant-ID header',
       })
     }
 
+    // Membership already verified by tenant middleware
     const service = new DiscountCodeService()
     const result = await service.validateCode(code, priceId, tenantId)
 

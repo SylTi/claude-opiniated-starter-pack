@@ -14,12 +14,19 @@ export const registerValidator = vine.compile(
 
 /**
  * Validator for user login
+ * mfaCode accepts both:
+ * - 6-digit TOTP codes
+ * - 10-character backup codes (alphanumeric, format: XXXXX-XXXXX)
  */
 export const loginValidator = vine.compile(
   vine.object({
     email: vine.string().email().normalizeEmail(),
     password: vine.string(),
-    mfaCode: vine.string().fixedLength(6).optional(),
+    mfaCode: vine
+      .string()
+      .minLength(6)
+      .maxLength(11) // 10 chars + 1 hyphen for backup codes
+      .optional(),
   })
 )
 
@@ -45,10 +52,13 @@ export const resetPasswordValidator = vine.compile(
 
 /**
  * Validator for MFA verification
+ * Accepts both:
+ * - 6-digit TOTP codes
+ * - 10-character backup codes (alphanumeric, format: XXXXX-XXXXX)
  */
 export const verifyMfaValidator = vine.compile(
   vine.object({
-    code: vine.string().fixedLength(6),
+    code: vine.string().minLength(6).maxLength(11),
   })
 )
 

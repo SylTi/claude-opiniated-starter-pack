@@ -1,11 +1,11 @@
 import { DateTime } from 'luxon'
-import { randomBytes } from 'node:crypto'
 import hash from '@adonisjs/core/services/hash'
 import User from '#models/user'
 import PasswordResetToken from '#models/password_reset_token'
 import EmailVerificationToken from '#models/email_verification_token'
 import LoginHistory from '#models/login_history'
 import type { LoginMethod } from '#models/login_history'
+import { systemOps } from '#services/system_operation_service'
 
 interface RegisterData {
   email: string
@@ -57,6 +57,9 @@ export default class AuthService {
 
   /**
    * Record a login attempt in history
+   *
+   * Uses system RLS context because login history is recorded during
+   * public authentication flows before user context is established.
    */
   async recordLoginAttempt(
     userId: number,
@@ -64,45 +67,51 @@ export default class AuthService {
     success: boolean,
     ipAddress?: string,
     userAgent?: string,
-    failureReason?: string
+    failureReason?: string,
+    tenantId?: number | null
   ): Promise<void> {
-    await LoginHistory.create({
-      userId,
-      loginMethod: method,
-      success,
-      ipAddress: ipAddress || null,
-      userAgent: userAgent || null,
-      failureReason: failureReason || null,
+    await systemOps.withSystemContext(async (trx) => {
+      await LoginHistory.create(
+        {
+          userId,
+          tenantId: tenantId ?? null,
+          loginMethod: method,
+          success,
+          ipAddress: ipAddress || null,
+          userAgent: userAgent || null,
+          failureReason: failureReason || null,
+        },
+        { client: trx }
+      )
     })
   }
 
   /**
    * Create a password reset token
+   * Returns the plaintext token to send via email (hash is stored in DB)
    */
   async createPasswordResetToken(user: User): Promise<string> {
     // Delete any existing tokens for this user
     await PasswordResetToken.query().where('user_id', user.id).delete()
 
-    const token = randomBytes(32).toString('hex')
+    const { plainToken, hashedToken } = PasswordResetToken.generateToken()
     const expiresAt = DateTime.now().plus({ hours: 1 })
 
     await PasswordResetToken.create({
       userId: user.id,
-      token,
+      token: hashedToken,
       expiresAt,
     })
 
-    return token
+    return plainToken
   }
 
   /**
    * Verify and use a password reset token
+   * Accepts the plaintext token, hashes it internally for lookup
    */
   async verifyPasswordResetToken(token: string): Promise<User | null> {
-    const resetToken = await PasswordResetToken.query()
-      .where('token', token)
-      .preload('user')
-      .first()
+    const resetToken = await PasswordResetToken.findByPlainToken(token)
 
     if (!resetToken || resetToken.isExpired()) {
       return null
@@ -124,39 +133,38 @@ export default class AuthService {
     user.password = newPassword
     await user.save()
 
-    // Delete the used token
-    await PasswordResetToken.query().where('token', token).delete()
+    // Delete the used token (hash it for lookup)
+    await PasswordResetToken.deleteByPlainToken(token)
 
     return true
   }
 
   /**
    * Create an email verification token
+   * Returns the plaintext token to send via email (hash is stored in DB)
    */
   async createEmailVerificationToken(user: User): Promise<string> {
     // Delete any existing tokens for this user
     await EmailVerificationToken.query().where('user_id', user.id).delete()
 
-    const token = randomBytes(32).toString('hex')
+    const { plainToken, hashedToken } = EmailVerificationToken.generateToken()
     const expiresAt = DateTime.now().plus({ hours: 24 })
 
     await EmailVerificationToken.create({
       userId: user.id,
-      token,
+      token: hashedToken,
       expiresAt,
     })
 
-    return token
+    return plainToken
   }
 
   /**
    * Verify email using token
+   * Accepts the plaintext token, hashes it internally for lookup
    */
   async verifyEmail(token: string): Promise<boolean> {
-    const verificationToken = await EmailVerificationToken.query()
-      .where('token', token)
-      .preload('user')
-      .first()
+    const verificationToken = await EmailVerificationToken.findByPlainToken(token)
 
     if (!verificationToken || verificationToken.isExpired()) {
       return false
@@ -167,8 +175,8 @@ export default class AuthService {
     user.emailVerifiedAt = DateTime.now()
     await user.save()
 
-    // Delete the used token
-    await EmailVerificationToken.query().where('token', token).delete()
+    // Delete the used token (hash it for lookup)
+    await EmailVerificationToken.deleteByPlainToken(token)
 
     return true
   }
@@ -199,9 +207,26 @@ export default class AuthService {
   }
 
   /**
-   * Get user login history
+   * Get user login history (uses default connection, no RLS)
    */
   async getLoginHistory(userId: number, limit: number = 10): Promise<LoginHistory[]> {
     return LoginHistory.query().where('user_id', userId).orderBy('created_at', 'desc').limit(limit)
+  }
+
+  /**
+   * Get user login history with RLS context
+   *
+   * Uses the provided transaction client which has app.user_id set.
+   * The RLS policy allows users to see their own login history (user_id = app_current_user_id()).
+   */
+  async getLoginHistoryWithClient(
+    userId: number,
+    client: Awaited<ReturnType<typeof import('@adonisjs/lucid/services/db').default.transaction>>,
+    limit: number = 10
+  ): Promise<LoginHistory[]> {
+    return LoginHistory.query({ client })
+      .where('user_id', userId)
+      .orderBy('created_at', 'desc')
+      .limit(limit)
   }
 }

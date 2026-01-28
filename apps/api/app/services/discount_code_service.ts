@@ -1,6 +1,7 @@
 import DiscountCode from '#models/discount_code'
 import DiscountCodeUsage from '#models/discount_code_usage'
 import Price from '#models/price'
+import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 export interface ValidateDiscountCodeResult {
   valid: boolean
@@ -129,14 +130,16 @@ export default class DiscountCodeService {
    * @param tenantId - Which tenant used the discount (billing context)
    * @param userId - Who performed the action (audit trail)
    * @param checkoutSessionId - Optional checkout session reference
+   * @param trx - Optional transaction with RLS context (strongly recommended)
    */
   async recordUsage(
     discountCodeId: number,
     tenantId: number,
     userId: number,
-    checkoutSessionId?: string
+    checkoutSessionId?: string,
+    trx?: TransactionClientContract
   ): Promise<DiscountCodeUsage> {
-    return DiscountCodeUsage.recordUsage(discountCodeId, tenantId, userId, checkoutSessionId)
+    return DiscountCodeUsage.recordUsage(discountCodeId, tenantId, userId, checkoutSessionId, trx)
   }
 
   /**

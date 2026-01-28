@@ -17,9 +17,11 @@ import TenantMembership from '#models/tenant_membership'
 import Tenant from '#models/tenant'
 import Subscription from '#models/subscription'
 import SubscriptionTier from '#models/subscription_tier'
-import { TENANT_ROLES } from '#constants/roles'
+import User from '#models/user'
+import { TENANT_ROLES, type TenantRole } from '#constants/roles'
 import { AuditContext } from '#services/audit_context'
 import { AUDIT_EVENT_TYPES } from '#constants/audit_events'
+import { systemOps } from '#services/system_operation_service'
 
 export default class AuthController {
   private authService = new AuthService()
@@ -43,16 +45,27 @@ export default class AuthController {
 
   /**
    * Get effective tier for a tenant (tenant is the billing unit)
+   *
+   * Uses system RLS context because:
+   * - This is called during login/me where no tenant context is set
+   * - Tier data is not security-sensitive (just determines features)
+   * - The subscription policy requires either system bypass or tenant_id match
    */
   private async getEffectiveTier(tenantId: number | null) {
     if (tenantId) {
-      const tenantSubscription = await Subscription.getActiveForTenant(tenantId)
+      // Use system context to bypass RLS for subscription lookup
+      const tenantSubscription = await systemOps.withSystemContext(async (trx) => {
+        return Subscription.getActiveForTenant(tenantId, trx)
+      })
       if (tenantSubscription?.tier) {
         return tenantSubscription.tier
       }
     }
 
-    return SubscriptionTier.getFreeTier()
+    // Free tier lookup also needs system context for consistency
+    return systemOps.withSystemContext(async (trx) => {
+      return SubscriptionTier.getFreeTier(trx)
+    })
   }
 
   /**
@@ -62,6 +75,9 @@ export default class AuthController {
    * Creates a personal tenant for every new user.
    * Security: Returns generic response to prevent user enumeration.
    * Adds random timing delay to prevent timing-based attacks.
+   *
+   * Uses system RLS context for invitation lookup and tenant/membership creation
+   * since this is a public endpoint without authenticated user context.
    */
   async register(ctx: HttpContext): Promise<void> {
     const { request, response } = ctx
@@ -73,6 +89,7 @@ export default class AuthController {
     await new Promise((resolve) => setTimeout(resolve, delay))
 
     // Check if email already exists - but don't reveal this to the user
+    // User table doesn't have RLS, so no system context needed
     const existingUser = await this.authService.findByEmail(data.email)
     if (existingUser) {
       // Return same generic response as successful registration
@@ -84,16 +101,46 @@ export default class AuthController {
     }
 
     // Check for valid invitation if token is provided
-    let invitation: TenantInvitation | null = null
-    if (data.invitationToken) {
-      invitation = await TenantInvitation.query()
-        .where('token', data.invitationToken)
-        .preload('tenant', (query) => {
-          query.preload('memberships')
-        })
-        .first()
+    // Uses system context because tenant_invitations has RLS
+    let invitationData: {
+      id: number
+      tenantId: number
+      email: string
+      role: TenantRole
+      status: string
+      expiresAt: Date | null
+      tenantName: string
+      tenantSlug: string
+      memberCount: number
+    } | null = null
 
-      if (!invitation) {
+    if (data.invitationToken) {
+      invitationData = await systemOps.withSystemContext(async (trx) => {
+        const invitation = await TenantInvitation.query({ client: trx })
+          .where('token', data.invitationToken!)
+          .preload('tenant', (query) => {
+            query.preload('memberships')
+          })
+          .first()
+
+        if (!invitation) {
+          return null
+        }
+
+        return {
+          id: invitation.id,
+          tenantId: invitation.tenantId,
+          email: invitation.email,
+          role: invitation.role as TenantRole,
+          status: invitation.status,
+          expiresAt: invitation.expiresAt?.toJSDate() ?? null,
+          tenantName: invitation.tenant.name,
+          tenantSlug: invitation.tenant.slug,
+          memberCount: invitation.tenant.memberships.length,
+        }
+      })
+
+      if (!invitationData) {
         response.badRequest({
           error: 'InvalidInvitation',
           message: 'Invalid invitation token',
@@ -101,18 +148,25 @@ export default class AuthController {
         return
       }
 
-      if (!invitation.isValid()) {
+      // Check if invitation is valid
+      const isExpired = invitationData.expiresAt && new Date() > invitationData.expiresAt
+      if (invitationData.status !== 'pending') {
         response.badRequest({
           error: 'InvalidInvitation',
-          message: invitation.isExpired()
-            ? 'This invitation has expired'
-            : `This invitation has been ${invitation.status}`,
+          message: `This invitation has been ${invitationData.status}`,
+        })
+        return
+      }
+      if (isExpired) {
+        response.badRequest({
+          error: 'InvalidInvitation',
+          message: 'This invitation has expired',
         })
         return
       }
 
       // Verify email matches invitation
-      if (invitation.email.toLowerCase() !== data.email.toLowerCase()) {
+      if (invitationData.email.toLowerCase() !== data.email.toLowerCase()) {
         response.badRequest({
           error: 'EmailMismatch',
           message: 'Your email does not match the invitation email',
@@ -120,8 +174,16 @@ export default class AuthController {
         return
       }
 
-      // Check tenant member limit
-      if (!(await invitation.tenant.canAddMember(invitation.tenant.memberships.length))) {
+      // Check tenant member limit (need to load tier to check)
+      const canAddMember = await systemOps.withSystemContext(async (trx) => {
+        const tenant = await Tenant.query({ client: trx })
+          .where('id', invitationData!.tenantId)
+          .first()
+        if (!tenant) return false
+        return tenant.canAddMember(invitationData!.memberCount, trx)
+      })
+
+      if (!canAddMember) {
         response.badRequest({
           error: 'LimitReached',
           message: 'This tenant has reached its member limit',
@@ -130,55 +192,76 @@ export default class AuthController {
       }
     }
 
+    // Register user (User table doesn't have RLS)
     const { user, verificationToken } = await this.authService.register(data)
 
-    // Create personal tenant for every user (tenant is the billing unit)
-    const personalTenantSlug = `personal-${string.slug(user.email.split('@')[0]).toLowerCase()}-${string.random(4).toLowerCase()}`
-    const personalTenant = await Tenant.create({
-      name: user.fullName || user.email.split('@')[0],
-      slug: personalTenantSlug,
-      type: 'personal',
-      ownerId: user.id,
-      balance: 0,
-      balanceCurrency: 'usd',
-    })
+    // Create personal tenant and memberships using system context
+    // because tenants and tenant_memberships have RLS
+    const { personalTenant, joinedTenant } = await systemOps.withSystemContext(async (trx) => {
+      // Create personal tenant for every user (tenant is the billing unit)
+      const personalTenantSlug = `personal-${string.slug(user.email.split('@')[0]).toLowerCase()}-${string.random(4).toLowerCase()}`
+      const newPersonalTenant = await Tenant.create(
+        {
+          name: user.fullName || user.email.split('@')[0],
+          slug: personalTenantSlug,
+          type: 'personal',
+          ownerId: user.id,
+          balance: 0,
+          balanceCurrency: 'usd',
+        },
+        { client: trx }
+      )
 
-    // Add user as owner of their personal tenant
-    await TenantMembership.create({
-      userId: user.id,
-      tenantId: personalTenant.id,
-      role: TENANT_ROLES.OWNER,
-    })
+      // Add user as owner of their personal tenant
+      await TenantMembership.create(
+        {
+          userId: user.id,
+          tenantId: newPersonalTenant.id,
+          role: TENANT_ROLES.OWNER,
+        },
+        { client: trx }
+      )
 
-    // Set personal tenant as current tenant
-    user.currentTenantId = personalTenant.id
+      // Set personal tenant as current tenant
+      let currentTenantId = newPersonalTenant.id
+      let joined: { id: number; name: string; slug: string; role: string } | null = null
 
-    // Auto-join tenant if there's a valid invitation
-    let joinedTenant = null
-    if (invitation) {
-      // Add user to invited tenant
-      await TenantMembership.create({
-        userId: user.id,
-        tenantId: invitation.tenantId,
-        role: invitation.role,
-      })
+      // Auto-join tenant if there's a valid invitation
+      if (invitationData) {
+        // Add user to invited tenant
+        await TenantMembership.create(
+          {
+            userId: user.id,
+            tenantId: invitationData.tenantId,
+            role: invitationData.role,
+          },
+          { client: trx }
+        )
 
-      // Update user's current tenant to the invited one
-      user.currentTenantId = invitation.tenantId
+        // Update user's current tenant to the invited one
+        currentTenantId = invitationData.tenantId
 
-      // Mark invitation as accepted
-      invitation.status = 'accepted'
-      await invitation.save()
+        // Mark invitation as accepted
+        await TenantInvitation.query({ client: trx })
+          .where('id', invitationData.id)
+          .update({ status: 'accepted' })
 
-      joinedTenant = {
-        id: invitation.tenant.id,
-        name: invitation.tenant.name,
-        slug: invitation.tenant.slug,
-        role: invitation.role,
+        joined = {
+          id: invitationData.tenantId,
+          name: invitationData.tenantName,
+          slug: invitationData.tenantSlug,
+          role: invitationData.role,
+        }
       }
-    }
 
-    await user.save()
+      // Update user's current tenant (User table doesn't have RLS but we're in transaction)
+      await User.query({ client: trx }).where('id', user.id).update({
+        current_tenant_id: currentTenantId,
+      })
+      user.currentTenantId = currentTenantId
+
+      return { personalTenant: newPersonalTenant, joinedTenant: joined }
+    })
 
     // Send verification email (non-blocking, don't fail registration if email fails)
     this.mailService
@@ -318,7 +401,7 @@ export default class AuthController {
       response.cookie('user-info', signedUserInfo, {
         httpOnly: false, // Must be readable by Next.js middleware (server-side)
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        sameSite: 'lax', // Match session cookie setting for OAuth compatibility
         maxAge: 2 * 60 * 60, // 2 hours, matches session age
         path: '/',
       })
@@ -552,12 +635,10 @@ export default class AuthController {
     const { token } = params
 
     // Get token details before verification for audit logging
+    // Use findByPlainToken which hashes the token before lookup
     const emailVerificationTokenModule = await import('#models/email_verification_token')
     const EmailVerificationToken = emailVerificationTokenModule.default
-    const verificationToken = await EmailVerificationToken.query()
-      .where('token', token)
-      .preload('user')
-      .first()
+    const verificationToken = await EmailVerificationToken.findByPlainToken(token)
 
     const success = await this.authService.verifyEmail(token)
 
@@ -671,10 +752,18 @@ export default class AuthController {
   /**
    * Get login history
    * GET /api/v1/auth/login-history
+   *
+   * Uses ctx.authDb to query with RLS context (app.user_id is set).
+   * The RLS policy allows users to see their own login history across all tenants.
    */
-  async loginHistory({ response, auth }: HttpContext): Promise<void> {
+  async loginHistory({ response, auth, authDb }: HttpContext): Promise<void> {
     const user = auth.user!
-    const history = await this.authService.getLoginHistory(user.id)
+
+    // Use authDb for RLS-aware query (user_id = app_current_user_id())
+    // If authDb is not available (shouldn't happen with authContext middleware), fall back to service
+    const history = authDb
+      ? await this.authService.getLoginHistoryWithClient(user.id, authDb)
+      : await this.authService.getLoginHistory(user.id)
 
     response.ok({
       data: history.map((entry) => ({

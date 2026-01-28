@@ -1,5 +1,7 @@
 import { DateTime } from 'luxon'
-import { BaseModel, column, belongsTo, scope } from '@adonisjs/lucid/orm'
+import { column, belongsTo, scope } from '@adonisjs/lucid/orm'
+import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
+import BaseModel from '#models/base_model'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import SubscriptionTier from '#models/subscription_tier'
 import Tenant from '#models/tenant'
@@ -81,9 +83,16 @@ export default class Subscription extends BaseModel {
 
   /**
    * Get active subscription for a tenant
+   *
+   * @param tenantId - The tenant to get subscription for
+   * @param trx - Optional transaction client with RLS context set
    */
-  static async getActiveForTenant(tenantId: number): Promise<Subscription | null> {
-    return this.query()
+  static async getActiveForTenant(
+    tenantId: number,
+    trx?: TransactionClientContract
+  ): Promise<Subscription | null> {
+    const queryOptions = trx ? { client: trx } : {}
+    return this.query(queryOptions)
       .withScopes((scopes) => scopes.forTenant(tenantId))
       .withScopes((scopes) => scopes.active())
       .preload('tier')
@@ -93,9 +102,16 @@ export default class Subscription extends BaseModel {
 
   /**
    * Get all subscriptions for a tenant (including history)
+   *
+   * @param tenantId - The tenant to get subscriptions for
+   * @param trx - Optional transaction client with RLS context set
    */
-  static async getAllForTenant(tenantId: number): Promise<Subscription[]> {
-    return this.query()
+  static async getAllForTenant(
+    tenantId: number,
+    trx?: TransactionClientContract
+  ): Promise<Subscription[]> {
+    const queryOptions = trx ? { client: trx } : {}
+    return this.query(queryOptions)
       .withScopes((scopes) => scopes.forTenant(tenantId))
       .preload('tier')
       .orderBy('createdAt', 'desc')
@@ -103,48 +119,91 @@ export default class Subscription extends BaseModel {
 
   /**
    * Create a new subscription for a tenant
+   *
+   * @param tenantId - The tenant ID
+   * @param tierId - The subscription tier ID
+   * @param expiresAt - Optional expiration date
+   * @param trx - Optional transaction client with RLS context set
    */
   static async createForTenant(
     tenantId: number,
     tierId: number,
-    expiresAt: DateTime | null = null
+    expiresAt: DateTime | null = null,
+    trx?: TransactionClientContract
   ): Promise<Subscription> {
-    const subscription = await this.create({
-      tenantId,
-      tierId,
-      status: 'active',
-      startsAt: DateTime.now(),
-      expiresAt,
-    })
+    const createOptions = trx ? { client: trx } : {}
+    const subscription = await this.create(
+      {
+        tenantId,
+        tierId,
+        status: 'active',
+        startsAt: DateTime.now(),
+        expiresAt,
+      },
+      createOptions
+    )
+    if (trx) {
+      subscription.useTransaction(trx)
+    }
     await subscription.load('tier')
     return subscription
   }
 
   /**
    * Cancel all active subscriptions for a tenant and create a new free one
+   *
+   * @param tenantId - The tenant to downgrade
+   * @param trx - Optional transaction client with RLS context already set
+   *
+   * When called from webhook handlers, pass the transaction that already has
+   * RLS context set via setRlsContext(). This ensures all operations use the
+   * same RLS context and transaction.
    */
-  static async downgradeTenantToFree(tenantId: number): Promise<Subscription> {
-    // Cancel active subscriptions
-    await this.query()
+  static async downgradeTenantToFree(
+    tenantId: number,
+    trx?: TransactionClientContract
+  ): Promise<Subscription> {
+    // Find and cancel active subscriptions
+    const queryOptions = trx ? { client: trx } : {}
+    const activeSubscriptions = await this.query(queryOptions)
       .withScopes((scopes) => scopes.forTenant(tenantId))
       .withScopes((scopes) => scopes.active())
-      .update({ status: 'cancelled' })
+
+    for (const sub of activeSubscriptions) {
+      sub.status = 'cancelled'
+      if (trx) sub.useTransaction(trx)
+      await sub.save()
+    }
 
     // Get free tier
-    const freeTier = await SubscriptionTier.getFreeTier()
+    const freeTier = await SubscriptionTier.getFreeTier(trx)
 
     // Create new free subscription
-    return this.createForTenant(tenantId, freeTier.id)
+    const subscription = new Subscription()
+    subscription.tenantId = tenantId
+    subscription.tierId = freeTier.id
+    subscription.status = 'active'
+    subscription.startsAt = DateTime.now()
+    if (trx) subscription.useTransaction(trx)
+    await subscription.save()
+    await subscription.load('tier')
+    return subscription
   }
 
   /**
    * Find subscription by provider subscription ID
+   *
+   * @param providerName - The payment provider name
+   * @param providerSubscriptionId - The provider's subscription ID
+   * @param trx - Optional transaction client with RLS context set
    */
   static async findByProviderSubscriptionId(
     providerName: string,
-    providerSubscriptionId: string
+    providerSubscriptionId: string,
+    trx?: TransactionClientContract
   ): Promise<Subscription | null> {
-    return this.query()
+    const queryOptions = trx ? { client: trx } : {}
+    return this.query(queryOptions)
       .where('providerName', providerName)
       .where('providerSubscriptionId', providerSubscriptionId)
       .preload('tier')
@@ -153,23 +212,38 @@ export default class Subscription extends BaseModel {
 
   /**
    * Create subscription with provider info
+   *
+   * @param tenantId - The tenant ID
+   * @param tierId - The subscription tier ID
+   * @param providerName - The payment provider name
+   * @param providerSubscriptionId - The provider's subscription ID
+   * @param expiresAt - Optional expiration date
+   * @param trx - Optional transaction client with RLS context set
    */
   static async createWithProvider(
     tenantId: number,
     tierId: number,
     providerName: string,
     providerSubscriptionId: string,
-    expiresAt: DateTime | null = null
+    expiresAt: DateTime | null = null,
+    trx?: TransactionClientContract
   ): Promise<Subscription> {
-    const subscription = await this.create({
-      tenantId,
-      tierId,
-      status: 'active',
-      startsAt: DateTime.now(),
-      expiresAt,
-      providerName,
-      providerSubscriptionId,
-    })
+    const createOptions = trx ? { client: trx } : {}
+    const subscription = await this.create(
+      {
+        tenantId,
+        tierId,
+        status: 'active',
+        startsAt: DateTime.now(),
+        expiresAt,
+        providerName,
+        providerSubscriptionId,
+      },
+      createOptions
+    )
+    if (trx) {
+      subscription.useTransaction(trx)
+    }
     await subscription.load('tier')
     return subscription
   }

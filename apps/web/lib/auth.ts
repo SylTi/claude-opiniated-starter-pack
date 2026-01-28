@@ -182,12 +182,18 @@ export const mfaApi = {
   },
 };
 
+/**
+ * Supported OAuth providers
+ * Must match backend oauth_controller.ts SupportedProvider type
+ */
+export type OAuthProvider = "google" | "github";
+
 // OAuth API endpoints
 export const oauthApi = {
   /**
    * Get OAuth redirect URL
    */
-  getRedirectUrl(provider: "google" | "github" | "microsoft"): string {
+  getRedirectUrl(provider: OAuthProvider): string {
     return `${API_BASE_URL}/api/v1/auth/oauth/${provider}/redirect`;
   },
 
@@ -204,14 +210,14 @@ export const oauthApi = {
   /**
    * Unlink OAuth account
    */
-  async unlink(provider: "google" | "github" | "microsoft"): Promise<void> {
+  async unlink(provider: OAuthProvider): Promise<void> {
     await api.delete(`/api/v1/auth/oauth/${provider}/unlink`);
   },
 
   /**
    * Get link URL
    */
-  getLinkUrl(provider: "google" | "github" | "microsoft"): string {
+  getLinkUrl(provider: OAuthProvider): string {
     return `${API_BASE_URL}/api/v1/auth/oauth/${provider}/link`;
   },
 };

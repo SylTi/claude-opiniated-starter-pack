@@ -32,11 +32,13 @@ export default class WebhookController {
       const paymentService = new PaymentService()
       const result = await paymentService.processWebhook(rawBody, signature)
 
-      // Return 200 to acknowledge receipt
+      // Return 200 to acknowledge receipt (standard API response format)
       response.json({
-        received: true,
-        processed: result.processed,
-        eventType: result.eventType,
+        data: {
+          received: true,
+          processed: result.processed,
+          eventType: result.eventType,
+        },
         message: result.message,
       })
     } catch (error) {

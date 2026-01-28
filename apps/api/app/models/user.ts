@@ -1,7 +1,8 @@
 import { DateTime } from 'luxon'
 import hash from '@adonisjs/core/services/hash'
 import { compose } from '@adonisjs/core/helpers'
-import { BaseModel, column, hasMany, belongsTo } from '@adonisjs/lucid/orm'
+import { column, hasMany, belongsTo, beforeSave, afterFind, afterFetch } from '@adonisjs/lucid/orm'
+import BaseModel from '#models/base_model'
 import type { HasMany, BelongsTo } from '@adonisjs/lucid/types/relations'
 import { withAuthFinder } from '@adonisjs/auth/mixins/lucid'
 import OAuthAccount from '#models/oauth_account'
@@ -9,6 +10,7 @@ import LoginHistory from '#models/login_history'
 import Tenant from '#models/tenant'
 import TenantMembership from '#models/tenant_membership'
 import { CurrencyMismatchError } from '#exceptions/billing_errors'
+import { encryptionService } from '#services/encryption_service'
 
 const AuthFinder = withAuthFinder(() => hash.use('scrypt'), {
   uids: ['email'],
@@ -18,6 +20,8 @@ const AuthFinder = withAuthFinder(() => hash.use('scrypt'), {
 export type UserRole = 'admin' | 'user' | 'guest'
 
 export default class User extends compose(BaseModel, AuthFinder) {
+  static table = 'users'
+
   @column({ isPrimary: true })
   declare id: number
 
@@ -144,6 +148,40 @@ export default class User extends compose(BaseModel, AuthFinder) {
     return {
       balance: this.balance || 0,
       currency: this.balanceCurrency || 'usd',
+    }
+  }
+
+  /**
+   * Encrypt MFA secret before saving
+   * Note: mfaBackupCodes are already SHA-256 hashed by MfaService, so no encryption needed
+   */
+  @beforeSave()
+  static async encryptMfaSecret(user: User): Promise<void> {
+    if (user.$dirty.mfaSecret && user.mfaSecret) {
+      if (!encryptionService.isEncrypted(user.mfaSecret)) {
+        user.mfaSecret = encryptionService.encrypt(user.mfaSecret)
+      }
+    }
+  }
+
+  /**
+   * Decrypt MFA secret after fetching from DB
+   */
+  @afterFind()
+  static decryptMfaSecretAfterFind(user: User): void {
+    User.decryptMfaSecret(user)
+  }
+
+  @afterFetch()
+  static decryptMfaSecretAfterFetch(users: User[]): void {
+    for (const user of users) {
+      User.decryptMfaSecret(user)
+    }
+  }
+
+  private static decryptMfaSecret(user: User): void {
+    if (user.mfaSecret) {
+      user.mfaSecret = encryptionService.decrypt(user.mfaSecret)
     }
   }
 }

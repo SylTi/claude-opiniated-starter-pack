@@ -1,6 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import logger from '@adonisjs/core/services/logger'
-import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import env from '#start/env'
 import User from '#models/user'
@@ -8,13 +7,16 @@ import OAuthAccount from '#models/oauth_account'
 import Tenant from '#models/tenant'
 import TenantMembership from '#models/tenant_membership'
 import AuthService from '#services/auth_service'
+import CookieSigningService from '#services/cookie_signing_service'
 import { USER_ROLES, TENANT_ROLES } from '#constants/roles'
+import { systemOps } from '#services/system_operation_service'
 
 // Supported providers (must match ally config)
 type SupportedProvider = 'google' | 'github'
 
 export default class OAuthController {
   private authService = new AuthService()
+  private cookieSigning = new CookieSigningService()
   private frontendUrl = env.get('FRONTEND_URL')
 
   /**
@@ -77,6 +79,18 @@ export default class OAuthController {
 
       // Login the user
       await auth.use('web').login(user)
+
+      // Set signed user info cookie for frontend middleware optimization
+      // This avoids API calls on every admin route request
+      // Uses JWT (jose) - only contains role, no PII
+      const signedUserInfo = await this.cookieSigning.sign({ role: user.role })
+      response.cookie('user-info', signedUserInfo, {
+        httpOnly: false, // Must be readable by Next.js middleware (server-side)
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax', // Match session cookie setting for OAuth compatibility
+        maxAge: 2 * 60 * 60, // 2 hours, matches session age
+        path: '/',
+      })
 
       // Redirect to frontend with success
       const redirectUrl = new URL('/auth/callback', this.frontendUrl)
@@ -211,7 +225,15 @@ export default class OAuthController {
       return
     }
 
-    await OAuthAccount.query().where('user_id', user.id).where('provider', provider).delete()
+    // Find and delete via instance method to ensure RLS hooks apply
+    const accountToUnlink = await OAuthAccount.query()
+      .where('user_id', user.id)
+      .where('provider', provider)
+      .first()
+
+    if (accountToUnlink) {
+      await accountToUnlink.delete()
+    }
 
     response.ok({
       message: `${provider} account has been unlinked`,
@@ -240,6 +262,9 @@ export default class OAuthController {
   /**
    * Find or create user from OAuth data
    * Security: Only links accounts when email is verified by the OAuth provider
+   *
+   * Uses system RLS context for tenant/membership creation since this is a
+   * public OAuth callback without authenticated user context.
    */
   private async findOrCreateUser(
     oauthUser: {
@@ -252,7 +277,7 @@ export default class OAuthController {
     },
     provider: SupportedProvider
   ): Promise<{ user: User; isNewUser: boolean }> {
-    // First, check if we have an existing OAuth account
+    // First, check if we have an existing OAuth account (oauth_accounts has no RLS)
     const existingOAuth = await OAuthAccount.query()
       .where('provider', provider)
       .where('provider_user_id', oauthUser.id)
@@ -271,7 +296,7 @@ export default class OAuthController {
       return { user: existingOAuth.user, isNewUser: false }
     }
 
-    // Check if a user exists with this email
+    // Check if a user exists with this email (users table has no RLS)
     // SECURITY: Only link to existing accounts if the OAuth provider verified the email
     // This prevents account takeover via unverified OAuth emails (e.g., GitHub allows unverified emails)
     const email = oauthUser.email
@@ -282,6 +307,7 @@ export default class OAuthController {
 
       if (existingUser) {
         // Link OAuth account to existing user (safe: email is verified by provider)
+        // oauth_accounts has no RLS
         await OAuthAccount.create({
           userId: existingUser.id,
           provider,
@@ -306,9 +332,11 @@ export default class OAuthController {
       }
     }
 
-    // Create new user with personal tenant (wrapped in transaction for consistency)
+    // Create new user with personal tenant using system context
     // SECURITY: Only mark email as verified if the OAuth provider verified it
-    const newUser = await db.transaction(async (trx) => {
+    // Uses system context because tenants and tenant_memberships have RLS
+    const newUser = await systemOps.withSystemContext(async (trx) => {
+      // Create user (users table has no RLS)
       const user = await User.create(
         {
           email: email || `${provider}_${oauthUser.id}@oauth.local`,
@@ -322,7 +350,7 @@ export default class OAuthController {
         { client: trx }
       )
 
-      // Create personal tenant for the user (matching registration behavior)
+      // Create personal tenant for the user (tenants has RLS - system context allows this)
       const personalTenant = await Tenant.create(
         {
           name: oauthUser.name || email?.split('@')[0] || `User ${user.id}`,
@@ -335,7 +363,7 @@ export default class OAuthController {
         { client: trx }
       )
 
-      // Add user as owner of personal tenant
+      // Add user as owner of personal tenant (tenant_memberships has RLS)
       await TenantMembership.create(
         {
           userId: user.id,
@@ -349,7 +377,7 @@ export default class OAuthController {
       user.currentTenantId = personalTenant.id
       await user.useTransaction(trx).save()
 
-      // Create OAuth account link
+      // Create OAuth account link (oauth_accounts has no RLS)
       await OAuthAccount.create(
         {
           userId: user.id,

@@ -1,0 +1,114 @@
+'use client'
+
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import { Loader2, CheckCircle, XCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { authApi } from '@/lib/auth'
+import { ApiError } from '@/lib/api'
+
+type VerificationState = 'loading' | 'success' | 'error' | 'no-token'
+
+function VerifyEmailContent(): React.ReactElement {
+  const searchParams = useSearchParams()
+  const token = searchParams.get('token')
+  const [state, setState] = useState<VerificationState>(() => (token ? 'loading' : 'no-token'))
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!token) {
+      return
+    }
+
+    const verifyEmail = async (): Promise<void> => {
+      try {
+        await authApi.verifyEmail(token)
+        setState('success')
+      } catch (err) {
+        setState('error')
+        if (err instanceof ApiError) {
+          setError(err.message)
+        } else {
+          setError('An unexpected error occurred while verifying your email.')
+        }
+      }
+    }
+
+    verifyEmail()
+  }, [token])
+
+  if (state === 'loading') {
+    return (
+      <div className="text-center">
+        <Loader2 className="mx-auto h-12 w-12 animate-spin text-blue-600" />
+        <h2 className="mt-4 text-2xl font-bold tracking-tight text-gray-900">
+          Verifying your email...
+        </h2>
+        <p className="mt-2 text-gray-600">Please wait while we verify your email address.</p>
+      </div>
+    )
+  }
+
+  if (state === 'no-token') {
+    return (
+      <div className="text-center">
+        <XCircle className="mx-auto h-12 w-12 text-red-500" />
+        <h2 className="mt-4 text-2xl font-bold tracking-tight text-gray-900">Invalid link</h2>
+        <p className="mt-2 text-gray-600">
+          This verification link is invalid. Please check your email for the correct link.
+        </p>
+        <Link href="/login">
+          <Button className="mt-6">Go to Login</Button>
+        </Link>
+      </div>
+    )
+  }
+
+  if (state === 'error') {
+    return (
+      <div className="text-center">
+        <XCircle className="mx-auto h-12 w-12 text-red-500" />
+        <h2 className="mt-4 text-2xl font-bold tracking-tight text-gray-900">
+          Verification failed
+        </h2>
+        <p className="mt-2 text-gray-600">
+          {error || 'This verification link may have expired or already been used.'}
+        </p>
+        <div className="mt-6 space-x-4">
+          <Link href="/login">
+            <Button variant="outline">Go to Login</Button>
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="text-center">
+      <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
+      <h2 className="mt-4 text-2xl font-bold tracking-tight text-gray-900">Email verified!</h2>
+      <p className="mt-2 text-gray-600">
+        Your email address has been successfully verified. You can now access all features.
+      </p>
+      <Link href="/login">
+        <Button className="mt-6">Continue to Login</Button>
+      </Link>
+    </div>
+  )
+}
+
+export default function VerifyEmailPage(): React.ReactElement {
+  return (
+    <Suspense
+      fallback={
+        <div className="text-center">
+          <Loader2 className="mx-auto h-12 w-12 animate-spin text-blue-600" />
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      }
+    >
+      <VerifyEmailContent />
+    </Suspense>
+  )
+}

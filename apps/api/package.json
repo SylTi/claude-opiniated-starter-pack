@@ -13,6 +13,7 @@
     "test:coverage:unit": "c8 node ace test unit",
     "test:coverage:functional": "c8 node ace test functional",
     "lint": "eslint .",
+    "lint:test-rules": "node eslint-rules/no-unsafe-query-builder-writes.test.js",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "db:migration": "node ace migration:run",
@@ -36,7 +37,8 @@
     "#database/*": "./database/*.js",
     "#start/*": "./start/*.js",
     "#tests/*": "./tests/*.js",
-    "#config/*": "./config/*.js"
+    "#config/*": "./config/*.js",
+    "#utils/*": "./app/utils/*.js"
   },
   "devDependencies": {
     "@adonisjs/assembler": "^7.8.2",
@@ -73,15 +75,18 @@
     "@adonisjs/lucid": "^21.6.1",
     "@adonisjs/session": "^7.6.0",
     "@adonisjs/shield": "^8.2.0",
+    "@authenio/samlify-xsd-schema-validator": "^1.0.5",
     "@saas/shared": "workspace:*",
     "@vinejs/vine": "^3.0.1",
     "jose": "^6.1.3",
     "luxon": "^3.7.2",
+    "openid-client": "^6.8.1",
     "otplib": "^12.0.1",
     "pg": "^8.16.3",
     "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
     "resend": "^6.6.0",
+    "samlify": "^2.10.2",
     "stripe": "^20.1.0"
   },
   "hotHook": {

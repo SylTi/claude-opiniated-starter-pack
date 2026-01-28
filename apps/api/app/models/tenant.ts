@@ -1,5 +1,7 @@
 import { DateTime } from 'luxon'
-import { BaseModel, column, hasMany, belongsTo } from '@adonisjs/lucid/orm'
+import { column, hasMany, belongsTo } from '@adonisjs/lucid/orm'
+import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
+import BaseModel from '#models/base_model'
 import type { HasMany, BelongsTo } from '@adonisjs/lucid/types/relations'
 import User from '#models/user'
 import TenantMembership from '#models/tenant_membership'
@@ -48,23 +50,30 @@ export default class Tenant extends BaseModel {
 
   /**
    * Get active subscription for this tenant
+   *
+   * @param trx - Optional transaction client with RLS context set
    */
-  async getActiveSubscription(): Promise<Subscription | null> {
-    return Subscription.getActiveForTenant(this.id)
+  async getActiveSubscription(trx?: TransactionClientContract): Promise<Subscription | null> {
+    return Subscription.getActiveForTenant(this.id, trx)
   }
 
   /**
    * Get all subscriptions for this tenant (including history)
+   *
+   * @param trx - Optional transaction client with RLS context set
    */
-  async getSubscriptions(): Promise<Subscription[]> {
-    return Subscription.getAllForTenant(this.id)
+  async getSubscriptions(trx?: TransactionClientContract): Promise<Subscription[]> {
+    return Subscription.getAllForTenant(this.id, trx)
   }
 
   /**
    * Get the active subscription tier for this tenant
+   *
+   * @param trx - Optional transaction client with RLS context set
    */
-  async getSubscriptionTier(): Promise<SubscriptionTier> {
-    const subscription = await Subscription.query()
+  async getSubscriptionTier(trx?: TransactionClientContract): Promise<SubscriptionTier> {
+    const queryOptions = trx ? { client: trx } : {}
+    const subscription = await Subscription.query(queryOptions)
       .where('tenantId', this.id)
       .where('status', 'active')
       .preload('tier')
@@ -74,25 +83,30 @@ export default class Tenant extends BaseModel {
     if (subscription && subscription.tier) {
       return subscription.tier
     }
-    return SubscriptionTier.getFreeTier()
+    return SubscriptionTier.getFreeTier(trx)
   }
 
   /**
    * Check if tenant's subscription is expired
+   *
+   * @param trx - Optional transaction client with RLS context set
    */
-  async isSubscriptionExpired(): Promise<boolean> {
-    const subscription = await this.getActiveSubscription()
+  async isSubscriptionExpired(trx?: TransactionClientContract): Promise<boolean> {
+    const subscription = await this.getActiveSubscription(trx)
     if (!subscription) return false
     return subscription.isExpired()
   }
 
   /**
    * Check if tenant has access to a specific tier
+   *
+   * @param tier - The tier to check access for
+   * @param trx - Optional transaction client with RLS context set
    */
-  async hasAccessToTier(tier: SubscriptionTier): Promise<boolean> {
-    const currentTier = await this.getSubscriptionTier()
-    if (await this.isSubscriptionExpired()) {
-      const freeTier = await SubscriptionTier.getFreeTier()
+  async hasAccessToTier(tier: SubscriptionTier, trx?: TransactionClientContract): Promise<boolean> {
+    const currentTier = await this.getSubscriptionTier(trx)
+    if (await this.isSubscriptionExpired(trx)) {
+      const freeTier = await SubscriptionTier.getFreeTier(trx)
       return freeTier.hasAccessToTier(tier)
     }
     return currentTier.hasAccessToTier(tier)
@@ -100,26 +114,37 @@ export default class Tenant extends BaseModel {
 
   /**
    * Check if tenant has access to a tier by slug
+   *
+   * @param tierSlug - The tier slug to check access for
+   * @param trx - Optional transaction client with RLS context set
    */
-  async hasAccessToTierBySlug(tierSlug: string): Promise<boolean> {
-    const tier = await SubscriptionTier.findBySlugOrFail(tierSlug)
-    return this.hasAccessToTier(tier)
+  async hasAccessToTierBySlug(tierSlug: string, trx?: TransactionClientContract): Promise<boolean> {
+    const tier = await SubscriptionTier.findBySlugOrFail(tierSlug, trx)
+    return this.hasAccessToTier(tier, trx)
   }
 
   /**
    * Get effective max members based on subscription tier
+   *
+   * @param trx - Optional transaction client with RLS context set
    */
-  async getEffectiveMaxMembers(): Promise<number | null> {
+  async getEffectiveMaxMembers(trx?: TransactionClientContract): Promise<number | null> {
     if (this.maxMembers !== null) return this.maxMembers
-    const tier = await this.getSubscriptionTier()
+    const tier = await this.getSubscriptionTier(trx)
     return tier.maxTeamMembers
   }
 
   /**
    * Check if tenant can add more members
+   *
+   * @param currentMemberCount - Current number of members
+   * @param trx - Optional transaction client with RLS context set
    */
-  async canAddMember(currentMemberCount: number): Promise<boolean> {
-    const max = await this.getEffectiveMaxMembers()
+  async canAddMember(
+    currentMemberCount: number,
+    trx?: TransactionClientContract
+  ): Promise<boolean> {
+    const max = await this.getEffectiveMaxMembers(trx)
     if (max === null) return true // unlimited
     return currentMemberCount < max
   }

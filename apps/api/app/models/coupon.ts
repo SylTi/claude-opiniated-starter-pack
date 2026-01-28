@@ -1,6 +1,8 @@
 import { DateTime } from 'luxon'
-import { BaseModel, column, belongsTo, beforeSave } from '@adonisjs/lucid/orm'
+import { column, belongsTo, beforeSave } from '@adonisjs/lucid/orm'
+import BaseModel from '#models/base_model'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import db from '@adonisjs/lucid/services/db'
 import User from '#models/user'
 import Tenant from '#models/tenant'
@@ -93,15 +95,26 @@ export default class Coupon extends BaseModel {
   /**
    * Redeem coupon for a tenant (tenant is the billing unit)
    * Uses transaction with row locking to prevent race conditions (double-spending)
+   *
+   * IMPORTANT: The caller must provide a transaction with RLS context set,
+   * OR the coupons and tenants tables must allow the operation under the current RLS policy.
+   *
    * @param tenantId - Which tenant receives the credit
    * @param userId - Who is performing the redemption (audit)
+   * @param existingTrx - Optional existing transaction with RLS context (recommended)
    * @returns New tenant balance
    */
-  async redeemForTenant(tenantId: number, userId: number): Promise<number> {
-    return await db.transaction(async (trx) => {
+  async redeemForTenant(
+    tenantId: number,
+    userId: number,
+    existingTrx?: TransactionClientContract
+  ): Promise<number> {
+    const couponId = this.id
+
+    const executeWithTransaction = async (trx: TransactionClientContract) => {
       // Re-fetch coupon with row lock to prevent race conditions
       const lockedCoupon = await Coupon.query({ client: trx })
-        .where('id', this.id)
+        .where('id', couponId)
         .forUpdate()
         .firstOrFail()
 
@@ -133,7 +146,14 @@ export default class Coupon extends BaseModel {
       await tenant.save()
 
       return tenant.balance
-    })
+    }
+
+    // Use existing transaction if provided, otherwise create a new one
+    // WARNING: New transaction won't have RLS context - caller should provide transaction
+    if (existingTrx) {
+      return executeWithTransaction(existingTrx)
+    }
+    return db.transaction(executeWithTransaction)
   }
 
   static async findByCode(code: string): Promise<Coupon | null> {

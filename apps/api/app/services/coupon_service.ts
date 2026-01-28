@@ -1,6 +1,6 @@
 import Coupon from '#models/coupon'
 import Tenant from '#models/tenant'
-import TenantMembership from '#models/tenant_membership'
+import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 export interface RedeemCouponResult {
   success: boolean
@@ -14,17 +14,25 @@ export default class CouponService {
   /**
    * Redeem a coupon for a tenant (tenant is the billing unit)
    * Uses transaction with row locking to prevent double-spending race conditions.
+   *
+   * NOTE: Caller is responsible for verifying user has permission (admin role).
+   * This is enforced by tenant middleware at controller level.
+   *
    * @param code - Coupon code
    * @param tenantId - Which tenant receives the credit (billing context)
    * @param userId - Who is performing the redemption (audit trail)
+   * @param trx - Optional transaction with RLS context (strongly recommended)
    */
   async redeemCouponForTenant(
     code: string,
     tenantId: number,
-    userId: number
+    userId: number,
+    trx?: TransactionClientContract
   ): Promise<RedeemCouponResult> {
     // Pre-flight checks (without locking - fast fail for invalid requests)
-    const coupon = await Coupon.findByCode(code)
+    const coupon = trx
+      ? await Coupon.query({ client: trx }).where('code', code.toUpperCase()).first()
+      : await Coupon.findByCode(code)
 
     if (!coupon) {
       return {
@@ -52,7 +60,9 @@ export default class CouponService {
       }
     }
 
-    const tenant = await Tenant.find(tenantId)
+    const tenant = trx
+      ? await Tenant.query({ client: trx }).where('id', tenantId).first()
+      : await Tenant.find(tenantId)
     if (!tenant) {
       return {
         success: false,
@@ -63,26 +73,11 @@ export default class CouponService {
       }
     }
 
-    // Check if user has permission to redeem for this tenant (owner or admin)
-    const membership = await TenantMembership.query()
-      .where('tenantId', tenantId)
-      .where('userId', userId)
-      .first()
-
-    if (!membership || !membership.isAdmin()) {
-      return {
-        success: false,
-        creditAmount: 0,
-        currency: coupon.currency,
-        newBalance: 0,
-        message: 'Only tenant owners or admins can redeem coupons',
-      }
-    }
-
     // Redeem the coupon with transaction + row locking (prevents race conditions)
     // The actual redeemable check is done again inside the transaction with a lock
+    // Pass the existing transaction if provided (for RLS context)
     try {
-      const newBalance = await coupon.redeemForTenant(tenantId, userId)
+      const newBalance = await coupon.redeemForTenant(tenantId, userId, trx)
 
       return {
         success: true,

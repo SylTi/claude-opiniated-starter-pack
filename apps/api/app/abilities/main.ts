@@ -12,6 +12,7 @@ import Tenant from '#models/tenant'
 import TenantMembership from '#models/tenant_membership'
 import SubscriptionTier from '#models/subscription_tier'
 import { Bouncer } from '@adonisjs/bouncer'
+import { systemOps } from '#services/system_operation_service'
 
 /**
  * Check if user is an admin
@@ -64,17 +65,24 @@ export const manageBilling = Bouncer.ability(async (user: User, tenantId: number
 
 /**
  * Check if user has access to a feature based on their current tenant's tier
+ *
+ * Uses system RLS context because:
+ * - Bouncer abilities run outside tenant context (no ctx.tenantDb available)
+ * - Subscription/tier data is not security-sensitive
+ * - The subscription policy requires either system bypass or tenant_id match
  */
 export const accessFeature = Bouncer.ability(async (user: User, requiredTierSlug: string) => {
   if (!user.currentTenantId) return false
 
-  const tenant = await Tenant.find(user.currentTenantId)
-  if (!tenant) return false
+  return systemOps.withSystemContext(async (trx) => {
+    const tenant = await Tenant.find(user.currentTenantId, { client: trx })
+    if (!tenant) return false
 
-  const effectiveTier = await tenant.getSubscriptionTier()
-  const requiredTier = await SubscriptionTier.findBySlug(requiredTierSlug)
-  if (!requiredTier) return false
-  return effectiveTier.hasAccessToTier(requiredTier)
+    const effectiveTier = await tenant.getSubscriptionTier(trx)
+    const requiredTier = await SubscriptionTier.findBySlug(requiredTierSlug, trx)
+    if (!requiredTier) return false
+    return effectiveTier.hasAccessToTier(requiredTier)
+  })
 })
 
 /**

@@ -48,6 +48,28 @@ Base URL: `/api/v1`
 | GET | `/auth/oauth/:provider/link/callback` | Link callback | Yes |
 | DELETE | `/auth/oauth/:provider/unlink` | Unlink OAuth account | Yes |
 
+### Enterprise SSO Routes (Public)
+
+| Method | Endpoint | Description | Rate Limit |
+|--------|----------|-------------|------------|
+| GET | `/auth/sso/:tenantId/start` | Start SSO flow (redirects to IdP) | Yes |
+| GET | `/auth/sso/:tenantId/callback` | OIDC callback (code exchange) | Yes |
+| POST | `/auth/sso/:tenantId/callback` | SAML ACS callback (POST binding) | Yes |
+| GET | `/auth/sso/:tenantId/metadata` | Get SAML SP metadata XML | No |
+| GET | `/auth/sso/:tenantId/check` | Check if SSO is enabled for tenant | No |
+
+**SSO Check Response:**
+```json
+{
+  "data": {
+    "ssoEnabled": true,
+    "providerType": "oidc",
+    "displayName": "Okta",
+    "passwordLoginAllowed": false
+  }
+}
+```
+
 ---
 
 ## Tenants
@@ -80,6 +102,18 @@ All tenant routes require authentication. The `X-Tenant-ID` header can be includ
 | POST | `/tenants/:id/invitations` | Send invitation email |
 | GET | `/tenants/:id/invitations` | List pending invitations |
 | DELETE | `/tenants/:id/invitations/:invitationId` | Cancel invitation |
+
+### Tenant SSO Configuration (requires auth)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/tenants/:id/sso/config` | Get SSO configuration |
+| POST | `/tenants/:id/sso/config` | Create SSO configuration |
+| PUT | `/tenants/:id/sso/config` | Update SSO configuration |
+| DELETE | `/tenants/:id/sso/config` | Delete SSO configuration |
+| POST | `/tenants/:id/sso/validate` | Validate SSO configuration |
+| POST | `/tenants/:id/sso/enable` | Enable SSO |
+| POST | `/tenants/:id/sso/disable` | Disable SSO |
 
 ### Invitation Public Routes
 
@@ -294,6 +328,8 @@ The application uses a code-based RBAC system for tenant-scoped authorization.
 | `subscription:view` | View subscription status |
 | `subscription:upgrade` | Upgrade subscription |
 | `subscription:cancel` | Cancel subscription |
+| `sso:view` | View SSO configuration |
+| `sso:manage` | Manage SSO configuration |
 
 ### Role Permissions Matrix
 
@@ -314,6 +350,8 @@ The application uses a code-based RBAC system for tenant-scoped authorization.
 | `subscription:view` | ✓ | ✓ | ✓ |
 | `subscription:upgrade` | ✓ | ✓ | ✗ |
 | `subscription:cancel` | ✓ | ✗ | ✗ |
+| `sso:view` | ✓ | ✓ | ✗ |
+| `sso:manage` | ✓ | ✓ | ✗ |
 
 ### RBAC Denied Response
 

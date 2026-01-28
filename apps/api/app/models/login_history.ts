@@ -1,10 +1,18 @@
 import { DateTime } from 'luxon'
-import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
+import { column, belongsTo } from '@adonisjs/lucid/orm'
+import BaseModel from '#models/base_model'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import User from '#models/user'
 import Tenant from '#models/tenant'
 
-export type LoginMethod = 'password' | 'google' | 'github' | 'microsoft' | 'mfa'
+export type LoginMethod =
+  | 'password'
+  | 'google'
+  | 'github'
+  | 'microsoft'
+  | 'mfa'
+  | 'sso_oidc'
+  | 'sso_saml'
 
 export default class LoginHistory extends BaseModel {
   static table = 'login_history'

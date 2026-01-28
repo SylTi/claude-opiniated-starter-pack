@@ -31,11 +31,12 @@ export default class TenantContextMiddleware {
     }
 
     // ALWAYS verify membership on backend - never trust the hint alone
-    const membership = await db
-      .from('tenant_memberships')
-      .where('tenant_id', tenantIdHint)
-      .where('user_id', user.id)
-      .first()
+    // Use SECURITY DEFINER function to bypass RLS (context not set yet)
+    const membershipResult = await db.rawQuery<{
+      rows: Array<{ id: number; tenant_id: number; user_id: number; role: string }>
+    }>('SELECT * FROM app_check_user_membership(?, ?)', [tenantIdHint, user.id])
+
+    const membership = membershipResult.rows[0]
 
     if (!membership) {
       return ctx.response.forbidden({

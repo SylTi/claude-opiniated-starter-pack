@@ -491,11 +491,6 @@ describe("oauthApi", () => {
       expect(result).toBe("http://localhost:3333/api/v1/auth/oauth/github/redirect");
     });
 
-    it("returns Microsoft redirect URL", () => {
-      const result = oauthApi.getRedirectUrl("microsoft");
-
-      expect(result).toBe("http://localhost:3333/api/v1/auth/oauth/microsoft/redirect");
-    });
   });
 
   describe("getAccounts", () => {
@@ -550,10 +545,5 @@ describe("oauthApi", () => {
       expect(result).toBe("http://localhost:3333/api/v1/auth/oauth/github/link");
     });
 
-    it("returns Microsoft link URL", () => {
-      const result = oauthApi.getLinkUrl("microsoft");
-
-      expect(result).toBe("http://localhost:3333/api/v1/auth/oauth/microsoft/link");
-    });
   });
 });

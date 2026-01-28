@@ -19,6 +19,7 @@ import Subscription from '#models/subscription'
 import ProcessedWebhookEvent from '#models/processed_webhook_event'
 import { auditEventEmitter } from '#services/audit_event_emitter'
 import { AUDIT_EVENT_TYPES } from '#constants/audit_events'
+import { setRlsContext, setSystemRlsContext } from '#utils/rls_context'
 
 export default class StripeProvider implements PaymentProvider {
   readonly name = 'stripe'
@@ -268,17 +269,29 @@ export default class StripeProvider implements PaymentProvider {
       throw new Error(`Price not found for Stripe price ID: ${stripePriceId}`)
     }
 
+    // Set RLS context for this tenant operation
+    // Webhooks run outside HttpContext, so we must set context explicitly
+    await setRlsContext(trx, tenantId)
+
     // Create or update payment customer for the tenant
     await PaymentCustomer.upsertByTenant(tenantId, this.name, session.customer as string)
 
-    // Cancel existing active subscriptions
-    await Subscription.query({ client: trx })
+    // Cancel existing active subscriptions via instance methods (RLS-aware)
+    const activeSubscriptions = await Subscription.query({ client: trx })
       .where('tenantId', tenantId)
       .where('status', 'active')
-      .update({ status: 'cancelled' })
+
+    for (const sub of activeSubscriptions) {
+      sub.status = 'cancelled'
+      sub.useTransaction(trx)
+      await sub.save()
+    }
 
     // Calculate expiration from Stripe subscription
-    const currentPeriodEnd = stripeSubscription.items.data[0]?.current_period_end
+    // Note: current_period_end is on the Subscription object per Stripe API docs,
+    // but Stripe SDK v20 types are incomplete. Using type assertion.
+    const subWithPeriod = stripeSubscription as unknown as { current_period_end?: number }
+    const currentPeriodEnd = subWithPeriod.current_period_end
     const expiresAt = currentPeriodEnd ? DateTime.fromSeconds(currentPeriodEnd) : null
 
     // Create new subscription
@@ -312,16 +325,24 @@ export default class StripeProvider implements PaymentProvider {
     stripeSubscription: Stripe.Subscription,
     trx: TransactionClientContract
   ): Promise<void> {
+    // Set system RLS context for initial lookup (we don't know tenant yet)
+    // RLS policies must allow reads when user_id=0
+    await setSystemRlsContext(trx)
+
     // Find our local subscription
-    const subscription = await Subscription.findByProviderSubscriptionId(
-      this.name,
-      stripeSubscription.id
-    )
+    const subscription = await Subscription.query({ client: trx })
+      .where('providerName', this.name)
+      .where('providerSubscriptionId', stripeSubscription.id)
+      .preload('tier')
+      .first()
 
     if (!subscription) {
       // Subscription not found - might be created outside our system
       return
     }
+
+    // Switch to tenant-scoped RLS context for updates
+    await setRlsContext(trx, subscription.tenantId)
 
     // Map Stripe status to our status
     let status: 'active' | 'expired' | 'cancelled' = 'active'
@@ -335,7 +356,10 @@ export default class StripeProvider implements PaymentProvider {
     }
 
     // Update expiration
-    const currentPeriodEnd = stripeSubscription.items.data[0]?.current_period_end
+    // Note: current_period_end is on the Subscription object per Stripe API docs,
+    // but Stripe SDK v20 types are incomplete. Using type assertion.
+    const subWithPeriod = stripeSubscription as unknown as { current_period_end?: number }
+    const currentPeriodEnd = subWithPeriod.current_period_end
     const expiresAt = currentPeriodEnd ? DateTime.fromSeconds(currentPeriodEnd) : null
 
     // Check if plan changed
@@ -369,15 +393,22 @@ export default class StripeProvider implements PaymentProvider {
     stripeSubscription: Stripe.Subscription,
     trx: TransactionClientContract
   ): Promise<void> {
+    // Set system RLS context for initial lookup (we don't know tenant yet)
+    await setSystemRlsContext(trx)
+
     // Find our local subscription
-    const subscription = await Subscription.findByProviderSubscriptionId(
-      this.name,
-      stripeSubscription.id
-    )
+    const subscription = await Subscription.query({ client: trx })
+      .where('providerName', this.name)
+      .where('providerSubscriptionId', stripeSubscription.id)
+      .preload('tier')
+      .first()
 
     if (!subscription) {
       return
     }
+
+    // Switch to tenant-scoped RLS context for updates
+    await setRlsContext(trx, subscription.tenantId)
 
     // Mark as cancelled
     subscription.status = 'cancelled'
@@ -393,8 +424,8 @@ export default class StripeProvider implements PaymentProvider {
       meta: { stripeSubscriptionId: stripeSubscription.id },
     })
 
-    // Downgrade tenant to free tier
-    await Subscription.downgradeTenantToFree(subscription.tenantId)
+    // Downgrade tenant to free tier (pass transaction with RLS context)
+    await Subscription.downgradeTenantToFree(subscription.tenantId, trx)
   }
 
   /**
@@ -402,8 +433,11 @@ export default class StripeProvider implements PaymentProvider {
    */
   private async handlePaymentFailed(
     invoice: Stripe.Invoice,
-    _trx: TransactionClientContract
+    trx: TransactionClientContract
   ): Promise<void> {
+    // Set system RLS context for initial lookup
+    await setSystemRlsContext(trx)
+
     // Get subscription ID from invoice
     const invoiceData = invoice as unknown as { subscription?: string | { id: string } | null }
     const subscriptionId =
@@ -414,10 +448,10 @@ export default class StripeProvider implements PaymentProvider {
     let tenantId: number | null = null
 
     if (subscriptionId) {
-      const subscription = await Subscription.findByProviderSubscriptionId(
-        this.name,
-        subscriptionId
-      )
+      const subscription = await Subscription.query({ client: trx })
+        .where('providerName', this.name)
+        .where('providerSubscriptionId', subscriptionId)
+        .first()
       tenantId = subscription?.tenantId ?? null
     }
 
@@ -438,6 +472,9 @@ export default class StripeProvider implements PaymentProvider {
     invoice: Stripe.Invoice,
     trx: TransactionClientContract
   ): Promise<void> {
+    // Set system RLS context for initial lookup
+    await setSystemRlsContext(trx)
+
     // Get subscription ID from invoice metadata or parent subscription
     // In Stripe v20+, subscription might be accessed differently
     const invoiceData = invoice as unknown as { subscription?: string | { id: string } | null }
@@ -450,11 +487,18 @@ export default class StripeProvider implements PaymentProvider {
       return
     }
 
-    const subscription = await Subscription.findByProviderSubscriptionId(this.name, subscriptionId)
+    const subscription = await Subscription.query({ client: trx })
+      .where('providerName', this.name)
+      .where('providerSubscriptionId', subscriptionId)
+      .preload('tier')
+      .first()
 
     if (!subscription) {
       return
     }
+
+    // Switch to tenant-scoped RLS context for updates
+    await setRlsContext(trx, subscription.tenantId)
 
     // Update expiration based on invoice period
     const periodEnd = invoice.lines.data[0]?.period?.end

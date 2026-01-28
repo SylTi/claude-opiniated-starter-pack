@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon'
-import { BaseModel, column, hasMany, beforeSave } from '@adonisjs/lucid/orm'
+import { column, hasMany, beforeSave } from '@adonisjs/lucid/orm'
+import BaseModel from '#models/base_model'
 import type { HasMany } from '@adonisjs/lucid/types/relations'
 import DiscountCodeUsage from '#models/discount_code_usage'
 

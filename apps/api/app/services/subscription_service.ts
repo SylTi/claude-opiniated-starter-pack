@@ -1,7 +1,9 @@
 import { DateTime } from 'luxon'
+import db from '@adonisjs/lucid/services/db'
 import Subscription from '#models/subscription'
 import SubscriptionTier from '#models/subscription_tier'
 import env from '#start/env'
+import { setSystemRlsContext, setRlsContext } from '#utils/rls_context'
 
 interface ExpiredSubscription {
   tenantId: number
@@ -21,68 +23,105 @@ export default class SubscriptionService {
   /**
    * Find and expire all subscriptions that have passed their expiration date
    * All subscriptions are tenant-based (tenant is the billing unit)
+   *
+   * Uses system RLS context (user_id=0) since this runs from scheduled command
+   * outside of any HttpContext.
    */
   async processExpiredSubscriptions(): Promise<ExpiredSubscription[]> {
     const now = DateTime.now()
     const expiredTenants: ExpiredSubscription[] = []
 
-    // Get free tier for comparison
-    const freeTier = await SubscriptionTier.getFreeTier()
+    // Wrap in transaction with system RLS context
+    await db.transaction(async (trx) => {
+      // Set system RLS context for cross-tenant operations
+      await setSystemRlsContext(trx)
 
-    // Find expired active subscriptions
-    const subscriptionsToExpire = await Subscription.query()
-      .where('status', 'active')
-      .whereNot('tierId', freeTier.id)
-      .whereNotNull('expiresAt')
-      .where('expiresAt', '<=', now.toSQL())
-      .preload('tier')
-      .preload('tenant', (query) => {
-        query.preload('owner')
-      })
+      // Get free tier for comparison
+      const freeTier = await SubscriptionTier.query({ client: trx })
+        .where('slug', 'free')
+        .firstOrFail()
 
-    for (const subscription of subscriptionsToExpire) {
-      const tenant = subscription.tenant
-      if (!tenant) continue
-
-      const ownerEmail = tenant.owner?.email
-
-      if (ownerEmail) {
-        expiredTenants.push({
-          tenantId: tenant.id,
-          tenantName: tenant.name,
-          ownerEmail,
-          previousTier: subscription.tier.slug,
-          expiresAt: subscription.expiresAt?.toISO() ?? '',
+      // Find expired active subscriptions with system RLS bypass
+      const subscriptionsToExpire = await Subscription.query({ client: trx })
+        .where('status', 'active')
+        .whereNot('tierId', freeTier.id)
+        .whereNotNull('expiresAt')
+        .where('expiresAt', '<=', now.toSQL())
+        .preload('tier')
+        .preload('tenant', (query) => {
+          query.preload('owner')
         })
-      }
 
-      // Expire the current subscription and create a free one
-      subscription.status = 'expired'
-      await subscription.save()
-      await Subscription.createForTenant(tenant.id, freeTier.id)
-    }
+      for (const subscription of subscriptionsToExpire) {
+        const tenant = subscription.tenant
+        if (!tenant) continue
+
+        const ownerEmail = tenant.owner?.email
+
+        if (ownerEmail) {
+          expiredTenants.push({
+            tenantId: tenant.id,
+            tenantName: tenant.name,
+            ownerEmail,
+            previousTier: subscription.tier.slug,
+            expiresAt: subscription.expiresAt?.toISO() ?? '',
+          })
+        }
+
+        // Switch to tenant-scoped RLS context for the update
+        await setRlsContext(trx, tenant.id)
+
+        // Expire the current subscription
+        subscription.status = 'expired'
+        subscription.useTransaction(trx)
+        await subscription.save()
+
+        // Create new free subscription
+        const newSubscription = new Subscription()
+        newSubscription.tenantId = tenant.id
+        newSubscription.tierId = freeTier.id
+        newSubscription.status = 'active'
+        newSubscription.startsAt = DateTime.now()
+        newSubscription.useTransaction(trx)
+        await newSubscription.save()
+      }
+    })
 
     return expiredTenants
   }
 
   /**
    * Update tenant subscription tier
+   *
+   * Uses system RLS context because:
+   * - This is called from admin operations that don't have tenant context
+   * - Admin operations need to modify subscriptions across any tenant
    */
   async updateTenantSubscription(
     tenantId: number,
     tierSlug: string,
     expiresAt: DateTime | null = null
   ): Promise<Subscription> {
-    const tier = await SubscriptionTier.findBySlugOrFail(tierSlug)
+    return db.transaction(async (trx) => {
+      // Set system RLS context for cross-tenant admin operations
+      await setSystemRlsContext(trx)
 
-    // Cancel current active subscription
-    await Subscription.query()
-      .where('tenantId', tenantId)
-      .where('status', 'active')
-      .update({ status: 'cancelled' })
+      const tier = await SubscriptionTier.findBySlugOrFail(tierSlug, trx)
 
-    // Create new subscription
-    return Subscription.createForTenant(tenantId, tier.id, expiresAt)
+      // Cancel current active subscription
+      const activeSubscriptions = await Subscription.query({ client: trx })
+        .where('tenantId', tenantId)
+        .where('status', 'active')
+
+      for (const sub of activeSubscriptions) {
+        sub.status = 'cancelled'
+        sub.useTransaction(trx)
+        await sub.save()
+      }
+
+      // Create new subscription
+      return Subscription.createForTenant(tenantId, tier.id, expiresAt, trx)
+    })
   }
 
   /**

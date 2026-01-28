@@ -2,8 +2,6 @@ import type { HttpContext } from '@adonisjs/core/http'
 import { DateTime } from 'luxon'
 import Coupon from '#models/coupon'
 import CouponService from '#services/coupon_service'
-import Tenant from '#models/tenant'
-import TenantMembership from '#models/tenant_membership'
 import db from '@adonisjs/lucid/services/db'
 import {
   createCouponValidator,
@@ -207,7 +205,13 @@ export default class CouponsController {
    * Redeem a coupon for a tenant (tenant is the billing unit)
    * POST /api/v1/billing/redeem-coupon
    */
-  async redeem({ request, response, auth }: HttpContext): Promise<void> {
+  async redeem({
+    request,
+    response,
+    auth,
+    tenant: tenantCtx,
+    tenantDb,
+  }: HttpContext): Promise<void> {
     const user = auth.user!
     const { code, tenantId } = await request.validateUsing(redeemCouponValidator)
 
@@ -219,22 +223,16 @@ export default class CouponsController {
       })
     }
 
-    // Verify tenant exists and user has permission
-    const tenant = await Tenant.find(tenantId)
-    if (!tenant) {
-      return response.notFound({
-        error: 'NotFound',
-        message: 'Tenant not found',
+    // Verify request tenantId matches the tenant context (set by middleware)
+    if (!tenantCtx || tenantCtx.id !== tenantId) {
+      return response.badRequest({
+        error: 'TenantMismatch',
+        message: 'Tenant ID in request does not match X-Tenant-ID header',
       })
     }
 
-    // Check user is an admin of the tenant (owner or admin)
-    const membership = await TenantMembership.query()
-      .where('tenantId', tenantId)
-      .where('userId', user.id)
-      .first()
-
-    if (!membership || !membership.isAdmin()) {
+    // Membership already verified by tenant middleware; check admin role
+    if (tenantCtx.membership.role !== 'owner' && tenantCtx.membership.role !== 'admin') {
       return response.forbidden({
         error: 'Forbidden',
         message: 'Only tenant owners or admins can redeem coupons',
@@ -246,7 +244,8 @@ export default class CouponsController {
     let result
     try {
       // Redeem for tenant - tenantId for billing, user.id for audit
-      result = await service.redeemCouponForTenant(code, tenantId, user.id)
+      // Pass tenantDb transaction for RLS context
+      result = await service.redeemCouponForTenant(code, tenantId, user.id, tenantDb)
     } catch (error) {
       if (this.isRowNotFound(error)) {
         return response.notFound({
@@ -286,8 +285,7 @@ export default class CouponsController {
    * Get tenant's balance
    * GET /api/v1/billing/balance
    */
-  async getBalance({ request, response, auth }: HttpContext): Promise<void> {
-    const user = auth.user!
+  async getBalance({ request, response, tenant: tenantCtx }: HttpContext): Promise<void> {
     const { tenantId } = await request.validateUsing(getBalanceValidator)
 
     // Tenant is required (tenant is the billing unit)
@@ -298,23 +296,19 @@ export default class CouponsController {
       })
     }
 
+    // Verify request tenantId matches the tenant context (set by middleware)
+    if (!tenantCtx || tenantCtx.id !== tenantId) {
+      return response.badRequest({
+        error: 'TenantMismatch',
+        message: 'Tenant ID in request does not match X-Tenant-ID header',
+      })
+    }
+
+    // Membership already verified by tenant middleware
     const service = new CouponService()
 
     let balance
     try {
-      // Verify user is a member of this tenant
-      const membership = await TenantMembership.query()
-        .where('tenantId', tenantId)
-        .where('userId', user.id)
-        .first()
-
-      if (!membership) {
-        return response.forbidden({
-          error: 'Forbidden',
-          message: 'You are not a member of this tenant',
-        })
-      }
-
       balance = await service.getTenantBalance(tenantId)
     } catch (error) {
       if (this.isRowNotFound(error)) {

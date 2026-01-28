@@ -83,6 +83,9 @@ async function seedBaseTiers(): Promise<void> {
  */
 export async function truncateAllTables(): Promise<void> {
   const tables = [
+    'sso_states',
+    'sso_user_identities',
+    'tenant_sso_configs',
     'discount_code_usages',
     'discount_codes',
     'coupons',

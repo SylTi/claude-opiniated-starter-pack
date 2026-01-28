@@ -1,6 +1,8 @@
 import { DateTime } from 'luxon'
-import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
+import { column, belongsTo } from '@adonisjs/lucid/orm'
+import BaseModel from '#models/base_model'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import db from '@adonisjs/lucid/services/db'
 import DiscountCode from '#models/discount_code'
 import User from '#models/user'
@@ -45,19 +47,25 @@ export default class DiscountCodeUsage extends BaseModel {
    * Record discount code usage atomically with row locking to prevent race conditions.
    * Re-validates limits inside the transaction to ensure strict enforcement.
    *
+   * IMPORTANT: The caller must provide a transaction with RLS context set,
+   * OR the discount_code_usages and discount_codes tables must allow the operation
+   * under the current RLS policy.
+   *
    * @param discountCodeId - The discount code that was used
    * @param tenantId - Which tenant used the discount (billing context)
    * @param userId - Who performed the action (audit trail)
    * @param checkoutSessionId - Optional checkout session reference
+   * @param existingTrx - Optional existing transaction with RLS context (recommended)
    * @throws {DiscountCodeLimitReachedError} If the discount code has reached its usage limit
    */
   static async recordUsage(
     discountCodeId: number,
     tenantId: number,
     userId: number,
-    checkoutSessionId?: string | null
+    checkoutSessionId?: string | null,
+    existingTrx?: TransactionClientContract
   ): Promise<DiscountCodeUsage> {
-    return await db.transaction(async (trx) => {
+    const executeWithTransaction = async (trx: TransactionClientContract) => {
       // Lock the discount code row to prevent race conditions
       const discountCode = await DiscountCode.query({ client: trx })
         .where('id', discountCodeId)
@@ -99,7 +107,14 @@ export default class DiscountCodeUsage extends BaseModel {
       await discountCode.useTransaction(trx).save()
 
       return usage
-    })
+    }
+
+    // Use existing transaction if provided, otherwise create a new one
+    // WARNING: New transaction won't have RLS context - caller should provide transaction
+    if (existingTrx) {
+      return executeWithTransaction(existingTrx)
+    }
+    return db.transaction(executeWithTransaction)
   }
 
   /**

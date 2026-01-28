@@ -14,6 +14,7 @@ import {
   registerThrottle,
   forgotPasswordThrottle,
   adminThrottle,
+  apiThrottle,
 } from '#start/limiter'
 
 const UsersController = () => import('#controllers/users_controller')
@@ -31,7 +32,10 @@ const CouponsController = () => import('#controllers/coupons_controller')
 
 router.get('/', async () => {
   return {
-    hello: 'world',
+    data: {
+      status: 'ok',
+      version: 'v1',
+    },
   }
 })
 
@@ -63,7 +67,7 @@ router
         router.get('/login-history', [AuthController, 'loginHistory'])
       })
       .prefix('/auth')
-      .use(middleware.auth())
+      .use([middleware.auth(), middleware.authContext(), apiThrottle])
 
     // MFA - Protected routes
     router
@@ -75,7 +79,7 @@ router
         router.post('/regenerate-backup-codes', [MfaController, 'regenerateBackupCodes'])
       })
       .prefix('/auth/mfa')
-      .use(middleware.auth())
+      .use([middleware.auth(), middleware.authContext(), apiThrottle])
 
     // OAuth - Public routes (redirects)
     router
@@ -94,7 +98,7 @@ router
         router.delete('/:provider/unlink', [OAuthController, 'unlink'])
       })
       .prefix('/auth/oauth')
-      .use(middleware.auth())
+      .use([middleware.auth(), middleware.authContext(), apiThrottle])
 
     // Admin - Protected routes (admin only)
     router
@@ -141,7 +145,14 @@ router
         router.delete('/coupons/:id', [CouponsController, 'destroy'])
       })
       .prefix('/admin')
-      .use([middleware.auth(), middleware.admin(), adminThrottle])
+      .use([
+        middleware.auth(),
+        middleware.authContext(),
+        middleware.admin(),
+        middleware.adminContext(),
+        adminThrottle,
+        apiThrottle,
+      ])
 
     // Dashboard - Protected routes (any logged-in user)
     router
@@ -149,7 +160,7 @@ router
         router.get('/stats', [DashboardController, 'getUserStats'])
       })
       .prefix('/dashboard')
-      .use(middleware.auth())
+      .use([middleware.auth(), middleware.authContext(), apiThrottle])
 
     // Users - Protected routes (any logged-in user)
     // SECURITY: Users can only access their own data. Admin listing is via /admin/users
@@ -159,9 +170,10 @@ router
         router.get('/:id', [UsersController, 'show'])
       })
       .prefix('/users')
-      .use(middleware.auth())
+      .use([middleware.auth(), middleware.authContext(), apiThrottle])
 
     // Tenants - Protected routes
+    // Note: authContext sets user_id for RLS policies on tenants table
     router
       .group(() => {
         router.get('/', [TenantsController, 'index'])
@@ -179,7 +191,7 @@ router
         router.delete('/:id/invitations/:invitationId', [TenantsController, 'cancelInvitation'])
       })
       .prefix('/tenants')
-      .use(middleware.auth())
+      .use([middleware.auth(), middleware.authContext(), apiThrottle])
 
     // Invitations - Public route (get invitation details by token)
     router.get('/invitations/:token', [TenantsController, 'getInvitationByToken'])
@@ -191,12 +203,15 @@ router
         router.post('/:token/decline', [TenantsController, 'declineInvitation'])
       })
       .prefix('/invitations')
-      .use(middleware.auth())
+      .use([middleware.auth(), middleware.authContext(), apiThrottle])
 
     // Billing - Public routes (pricing page)
     router.get('/billing/tiers', [PaymentController, 'getTiers'])
 
     // Billing - Protected routes
+    // Note: Billing is tenant-specific. tenant() middleware verifies membership,
+    // sets both app.user_id and app.tenant_id for RLS policies,
+    // and requires X-Tenant-ID header (or tenant_id cookie).
     router
       .group(() => {
         router.post('/checkout', [PaymentController, 'createCheckout'])
@@ -209,12 +224,13 @@ router
         router.get('/balance', [CouponsController, 'getBalance'])
       })
       .prefix('/billing')
-      .use(middleware.auth())
+      .use([middleware.auth(), middleware.tenant(), apiThrottle])
 
     // Webhooks - No auth (uses signature verification)
+    // Raw body is captured by server-level WebhookRawBodyMiddleware before bodyparser runs
     router
       .group(() => {
-        router.post('/stripe', [WebhookController, 'handleStripe']).use(middleware.rawBody())
+        router.post('/stripe', [WebhookController, 'handleStripe'])
       })
       .prefix('/webhooks')
   })

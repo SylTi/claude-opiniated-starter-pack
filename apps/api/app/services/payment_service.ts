@@ -11,6 +11,7 @@ import Price from '#models/price'
 import Product from '#models/product'
 import PaymentCustomer from '#models/payment_customer'
 import Subscription from '#models/subscription'
+import { systemOps } from '#services/system_operation_service'
 
 export default class PaymentService {
   private provider: PaymentProvider
@@ -122,9 +123,14 @@ export default class PaymentService {
 
   /**
    * Get current subscription for a tenant
+   *
+   * Uses system RLS context because this service may be called from
+   * contexts without tenant RLS setup (webhooks, background jobs).
    */
   async getCurrentSubscription(tenantId: number): Promise<Subscription | null> {
-    return Subscription.getActiveForTenant(tenantId)
+    return systemOps.withSystemContext(async (trx) => {
+      return Subscription.getActiveForTenant(tenantId, trx)
+    })
   }
 
   /**
