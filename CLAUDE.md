@@ -108,9 +108,11 @@ These files/directories are NOT on `public/main`:
 
 ### Syncing Changes
 
-- **Public features**: Develop on either branch, cherry-pick freely (shared files are identical)
-- **Enterprise features**: Only on `main`, use dynamic imports in shared code
-- **No merge conflicts** for shared files since they're identical
+**All development happens on `main` (private branch).** Then cherry-pick to `public/main`:
+
+- **Public features**: Develop on `main`, then cherry-pick commits to `public/main`
+- **Enterprise features**: Develop on `main` only (do NOT cherry-pick to `public/main`)
+- **Shared files are identical** so cherry-picks apply cleanly (no merge conflicts)
 
 ## Critical Rules
 
