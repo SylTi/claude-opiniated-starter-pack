@@ -342,6 +342,7 @@ test.group('Billing API - Redeem Coupon', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/redeem-coupon')
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(tenant.id))
       .send({ code: couponCode, tenantId: tenant.id })
       .expect(200)
 
@@ -390,6 +391,7 @@ test.group('Billing API - Redeem Coupon', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/redeem-coupon')
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(team.id))
       .send({ code: couponCode, tenantId: team.id })
       .expect(200)
 
@@ -426,6 +428,7 @@ test.group('Billing API - Redeem Coupon', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/redeem-coupon')
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(tenant.id))
       .send({ code: couponCode, tenantId: tenant.id })
       .expect(200)
 
@@ -566,6 +569,7 @@ test.group('Billing API - Redeem Coupon', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/redeem-coupon')
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(team.id))
       .send({ code: couponCode, tenantId: team.id })
       .expect(403)
 
@@ -593,6 +597,7 @@ test.group('Billing API - Get Balance', (group) => {
     const response = await request(BASE_URL)
       .get(`/api/v1/billing/balance?tenantId=${tenant.id}`)
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(tenant.id))
       .expect(200)
 
     assert.equal(response.body.data.balance, 5000)
@@ -621,6 +626,7 @@ test.group('Billing API - Get Balance', (group) => {
     const response = await request(BASE_URL)
       .get(`/api/v1/billing/balance?tenantId=${team.id}`)
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(team.id))
       .expect(200)
 
     assert.equal(response.body.data.balance, 10000)
@@ -634,6 +640,7 @@ test.group('Billing API - Get Balance', (group) => {
     const response = await request(BASE_URL)
       .get(`/api/v1/billing/balance?tenantId=${tenant.id}`)
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(tenant.id))
       .expect(200)
 
     assert.equal(response.body.data.balance, 0)

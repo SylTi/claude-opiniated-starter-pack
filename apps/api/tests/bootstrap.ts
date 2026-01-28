@@ -11,11 +11,21 @@ import db from '@adonisjs/lucid/services/db'
  */
 
 /**
+ * Get admin database connection (superuser) for operations that need to bypass RLS.
+ * Used for truncate, seed, and other admin operations in tests.
+ */
+function getAdminDb() {
+  return db.connection('postgres')
+}
+
+/**
  * Seed base subscription tiers required by most tests.
+ * Uses admin connection to bypass RLS.
  */
 async function seedBaseTiers(): Promise<void> {
+  const adminDb = getAdminDb()
   // Check if tiers already exist
-  const existingTiers = await db.from('subscription_tiers').select('slug')
+  const existingTiers = await adminDb.from('subscription_tiers').select('slug')
   const existingSlugs = new Set(existingTiers.map((t) => t.slug))
 
   const now = new Date().toISOString()
@@ -57,22 +67,18 @@ async function seedBaseTiers(): Promise<void> {
 
   for (const tier of baseTiers) {
     if (!existingSlugs.has(tier.slug)) {
-      await db.rawQuery(
-        `INSERT INTO "subscription_tiers"
-        ("slug", "name", "level", "max_team_members", "price_monthly", "yearly_discount_percent", "is_active", "created_at", "updated_at")
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [
-          tier.slug,
-          tier.name,
-          tier.level,
-          tier.max_team_members,
-          tier.price_monthly,
-          tier.yearly_discount_percent,
-          tier.is_active,
-          tier.created_at,
-          tier.updated_at,
-        ]
-      )
+      // Use table insert instead of rawQuery to handle null values properly
+      await adminDb.table('subscription_tiers').insert({
+        slug: tier.slug,
+        name: tier.name,
+        level: tier.level,
+        max_team_members: tier.max_team_members,
+        price_monthly: tier.price_monthly,
+        yearly_discount_percent: tier.yearly_discount_percent,
+        is_active: tier.is_active,
+        created_at: tier.created_at,
+        updated_at: tier.updated_at,
+      })
     }
   }
 }
@@ -80,8 +86,11 @@ async function seedBaseTiers(): Promise<void> {
 /**
  * Truncate all tables with CASCADE to handle foreign key constraints.
  * This is more reliable than the default truncate for tables with circular references.
+ * Uses admin connection to bypass RLS.
  */
 export async function truncateAllTables(): Promise<void> {
+  const adminDb = getAdminDb()
+
   // Enterprise-only tables (may not exist on public repo)
   const enterpriseTables = ['sso_states', 'sso_user_identities', 'tenant_sso_configs']
 
@@ -108,7 +117,7 @@ export async function truncateAllTables(): Promise<void> {
   // Truncate enterprise tables (silently skip if not exist)
   for (const table of enterpriseTables) {
     try {
-      await db.rawQuery(`TRUNCATE TABLE "${table}" RESTART IDENTITY CASCADE`)
+      await adminDb.rawQuery(`TRUNCATE TABLE "${table}" RESTART IDENTITY CASCADE`)
     } catch {
       // Table doesn't exist on public repo - skip silently
     }
@@ -116,7 +125,7 @@ export async function truncateAllTables(): Promise<void> {
 
   // Truncate core tables
   for (const table of coreTables) {
-    await db.rawQuery(`TRUNCATE TABLE "${table}" RESTART IDENTITY CASCADE`)
+    await adminDb.rawQuery(`TRUNCATE TABLE "${table}" RESTART IDENTITY CASCADE`)
   }
 
   // Re-seed base tiers after truncation

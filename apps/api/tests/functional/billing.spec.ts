@@ -151,6 +151,7 @@ test.group('Billing API - Subscription', (group) => {
     const response = await request(BASE_URL)
       .get(`/api/v1/billing/subscription?tenantId=${tenant.id}`)
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(tenant.id))
       .expect(200)
 
     assert.exists(response.body.data)
@@ -191,10 +192,11 @@ test.group('Billing API - Subscription', (group) => {
     const tier = await SubscriptionTier.findBySlugOrFail('tier2')
     await Subscription.createForTenant(team.id, tier.id)
 
-    // Pass team context explicitly via query params
+    // Pass team context explicitly via X-Tenant-ID header and query param
     const response = await request(BASE_URL)
       .get(`/api/v1/billing/subscription?tenantId=${team.id}`)
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(team.id))
       .expect(200)
 
     assert.exists(response.body.data)
@@ -226,11 +228,15 @@ test.group('Billing API - Checkout', (group) => {
 
   test('POST /api/v1/billing/checkout validates required fields', async ({ assert }) => {
     const id = uniqueId()
-    const { cookies } = await createUserAndLogin(`checkout-${id}@example.com`, 'password123')
+    const { tenant, cookies } = await createUserAndLogin(
+      `checkout-${id}@example.com`,
+      'password123'
+    )
 
     const response = await request(BASE_URL)
       .post('/api/v1/billing/checkout')
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(tenant.id))
       .send({})
       .expect(422)
 
@@ -247,6 +253,7 @@ test.group('Billing API - Checkout', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/checkout')
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(tenant.id))
       .send({
         priceId: 999999,
         tenantId: tenant.id,
@@ -391,6 +398,7 @@ test.group('Billing API - Team Owner Authorization', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/checkout')
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(team.id))
       .send({
         priceId: price.id,
         tenantId: team.id,

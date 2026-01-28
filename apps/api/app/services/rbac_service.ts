@@ -19,6 +19,21 @@ import {
 import type { TenantRole } from '#constants/roles'
 
 /**
+ * SSO permissions (enterprise feature - optional)
+ * Loaded dynamically to support public repo without SSO
+ */
+let ssoRolePermissions: Record<string, readonly string[]> | null = null
+let ssoSensitiveActions: readonly string[] = []
+
+try {
+  const ssoModule = await import('#constants/permissions_sso')
+  ssoRolePermissions = ssoModule.SSO_ROLE_PERMISSIONS
+  ssoSensitiveActions = ssoModule.SSO_SENSITIVE_ACTIONS ?? []
+} catch {
+  // SSO module not available (public repo) - SSO actions will be denied by default
+}
+
+/**
  * Actions that resource ownership can bypass.
  * These are safe, non-destructive actions where the resource owner
  * should have access regardless of their tenant role.
@@ -55,6 +70,7 @@ export interface ResourceContext {
 
 /**
  * Check if a role has permission to perform an action.
+ * Supports both core tenant actions and SSO actions (enterprise feature).
  *
  * @param role - The tenant role to check
  * @param action - The action to verify
@@ -65,16 +81,26 @@ export interface ResourceContext {
  * can('owner', ACTIONS.TENANT_DELETE) // true
  * can('member', ACTIONS.TENANT_DELETE) // false
  * can('unknown', ACTIONS.TENANT_READ) // false (deny by default)
+ * can('owner', 'sso:manage') // true (if SSO module loaded)
  * ```
  */
-export function can(role: TenantRole | string, action: TenantAction): boolean {
+export function can(role: TenantRole | string, action: TenantAction | string): boolean {
+  // Check SSO permissions for sso: prefixed actions (enterprise feature)
+  if (typeof action === 'string' && action.startsWith('sso:')) {
+    if (!ssoRolePermissions) {
+      return false // SSO module not available - deny by default
+    }
+    const ssoPermissions = ssoRolePermissions[role]
+    return ssoPermissions?.includes(action) ?? false
+  }
+
   // Deny by default for unknown roles
   const permissions = ROLE_PERMISSIONS[role as TenantRole]
   if (!permissions) {
     return false
   }
 
-  return permissions.includes(action)
+  return permissions.includes(action as TenantAction)
 }
 
 /**
@@ -118,12 +144,18 @@ export function canWithOwnership(
 
 /**
  * Check if an action is considered sensitive and should be logged.
+ * Supports both core tenant actions and SSO actions (enterprise feature).
  *
  * @param action - The action to check
  * @returns true if the action is sensitive
  */
-export function isSensitiveAction(action: TenantAction): boolean {
-  return SENSITIVE_ACTIONS.includes(action)
+export function isSensitiveAction(action: TenantAction | string): boolean {
+  // Check SSO sensitive actions for sso: prefixed actions
+  if (typeof action === 'string' && action.startsWith('sso:')) {
+    return ssoSensitiveActions.includes(action)
+  }
+
+  return SENSITIVE_ACTIONS.includes(action as TenantAction)
 }
 
 /**

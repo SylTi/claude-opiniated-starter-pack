@@ -357,6 +357,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/validate-discount-code')
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(tenant.id))
       .send({ code: discountCode, priceId: price.id, tenantId: tenant.id })
       .expect(200)
 
@@ -385,6 +386,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/validate-discount-code')
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(tenant.id))
       .send({ code: discountCode, priceId: price.id, tenantId: tenant.id })
       .expect(200)
 
@@ -410,6 +412,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/validate-discount-code')
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(tenant.id))
       .send({ code: discountCode, priceId: price.id, tenantId: tenant.id })
       .expect(200)
 
@@ -433,6 +436,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/validate-discount-code')
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(tenant.id))
       .send({ code: discountCode, priceId: price.id, tenantId: tenant.id })
       .expect(200)
 
@@ -457,6 +461,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/validate-discount-code')
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(tenant.id))
       .send({ code, priceId: price.id, tenantId: tenant.id })
       .expect(200)
 
@@ -494,6 +499,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/validate-discount-code')
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(tenant.id))
       .send({ code, priceId: price.id, tenantId: tenant.id })
       .expect(200)
 
@@ -510,6 +516,7 @@ test.group('Billing API - Validate Discount Code', (group) => {
     const response = await request(BASE_URL)
       .post('/api/v1/billing/validate-discount-code')
       .set('Cookie', cookies)
+      .set('X-Tenant-ID', String(tenant.id))
       .send({ code: 'NONEXISTENT', priceId: price.id, tenantId: tenant.id })
       .expect(200)
 

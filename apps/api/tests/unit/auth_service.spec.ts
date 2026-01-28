@@ -32,8 +32,8 @@ test.group('AuthService', (group) => {
     assert.isFalse(result.user.emailVerified)
     assert.equal(result.user.role, 'user')
 
-    // Verify token was created in database
-    const token = await EmailVerificationToken.findBy('token', result.verificationToken)
+    // Verify token was created in database (tokens are stored hashed, use findByPlainToken)
+    const token = await EmailVerificationToken.findByPlainToken(result.verificationToken)
     assert.exists(token)
     assert.equal(token!.userId, result.user.id)
   })
@@ -146,12 +146,12 @@ test.group('AuthService', (group) => {
     const token2 = await authService.createPasswordResetToken(user)
     assert.notEqual(token1, token2)
 
-    // Verify old token is deleted
-    const oldToken = await PasswordResetToken.findBy('token', token1)
+    // Verify old token is deleted (tokens are stored hashed, use findByPlainToken)
+    const oldToken = await PasswordResetToken.findByPlainToken(token1)
     assert.isNull(oldToken)
 
     // Verify new token exists
-    const newToken = await PasswordResetToken.findBy('token', token2)
+    const newToken = await PasswordResetToken.findByPlainToken(token2)
     assert.exists(newToken)
   })
 
@@ -232,7 +232,8 @@ test.group('AuthService', (group) => {
     assert.isString(token)
     assert.equal(token.length, 64)
 
-    const dbToken = await EmailVerificationToken.findBy('token', token)
+    // Token is stored hashed, so use findByPlainToken to lookup
+    const dbToken = await EmailVerificationToken.findByPlainToken(token)
     assert.exists(dbToken)
     assert.equal(dbToken!.userId, user.id)
   })

@@ -36,6 +36,9 @@ export default await Env.create(new URL('../', import.meta.url), {
   DB_USER: Env.schema.string(),
   DB_PASSWORD: Env.schema.string.optional(),
   DB_DATABASE: Env.schema.string(),
+  // Optional app user credentials (non-superuser for RLS enforcement in tests)
+  DB_APP_USER: Env.schema.string.optional(),
+  DB_APP_PASSWORD: Env.schema.string.optional(),
 
   /*
   |----------------------------------------------------------

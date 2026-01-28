@@ -1,6 +1,7 @@
 import { BaseSeeder } from '@adonisjs/lucid/seeders'
 import { DateTime } from 'luxon'
 import app from '@adonisjs/core/services/app'
+import db from '@adonisjs/lucid/services/db'
 import User from '#models/user'
 import Tenant from '#models/tenant'
 import TenantMembership from '#models/tenant_membership'
@@ -18,6 +19,12 @@ export default class extends BaseSeeder {
       console.log('Skipping test data seeder in production')
       return
     }
+
+    // Set system RLS context to bypass RLS (user_id=0 is the system bypass)
+    // This is necessary because seeders are admin operations that need to create
+    // data across multiple tenants without RLS restrictions
+    await db.rawQuery("SELECT set_config('app.user_id', '0', false)")
+    await db.rawQuery("SELECT set_config('app.tenant_id', '0', false)")
 
     console.log('Seeding test data...')
 
