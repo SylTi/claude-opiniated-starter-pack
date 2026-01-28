@@ -82,10 +82,11 @@ async function seedBaseTiers(): Promise<void> {
  * This is more reliable than the default truncate for tables with circular references.
  */
 export async function truncateAllTables(): Promise<void> {
-  const tables = [
-    'sso_states',
-    'sso_user_identities',
-    'tenant_sso_configs',
+  // Enterprise-only tables (may not exist on public repo)
+  const enterpriseTables = ['sso_states', 'sso_user_identities', 'tenant_sso_configs']
+
+  // Core tables (always exist)
+  const coreTables = [
     'discount_code_usages',
     'discount_codes',
     'coupons',
@@ -104,8 +105,17 @@ export async function truncateAllTables(): Promise<void> {
     'users',
   ]
 
-  // Use TRUNCATE with CASCADE to handle foreign key constraints
-  for (const table of tables) {
+  // Truncate enterprise tables (silently skip if not exist)
+  for (const table of enterpriseTables) {
+    try {
+      await db.rawQuery(`TRUNCATE TABLE "${table}" RESTART IDENTITY CASCADE`)
+    } catch {
+      // Table doesn't exist on public repo - skip silently
+    }
+  }
+
+  // Truncate core tables
+  for (const table of coreTables) {
     await db.rawQuery(`TRUNCATE TABLE "${table}" RESTART IDENTITY CASCADE`)
   }
 
