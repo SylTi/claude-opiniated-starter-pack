@@ -40,13 +40,9 @@ test.group('Webhooks API - Stripe', (group) => {
       .send({ type: 'checkout.session.completed' })
       .set('Content-Type', 'application/json')
 
-    // In test environment, may return 400 (expected) or 500 (raw body stream timing issue)
-    // The key is that it doesn't return 200 OK
-    assert.oneOf(response.status, [400, 500])
-    if (response.status === 400) {
-      assert.exists(response.body.error)
-      assert.exists(response.body.message)
-    }
+    assert.equal(response.status, 400)
+    assert.exists(response.body.error)
+    assert.exists(response.body.message)
   })
 
   test('POST /api/v1/webhooks/stripe rejects invalid signature', async ({ assert }) => {
@@ -61,11 +57,8 @@ test.group('Webhooks API - Stripe', (group) => {
       .set('Content-Type', 'application/json')
       .set('stripe-signature', 'invalid_signature')
 
-    // In test environment, may return 400 (expected) or 500 (raw body stream timing issue)
-    assert.oneOf(response.status, [400, 500])
-    if (response.status === 400) {
-      assert.exists(response.body.error)
-    }
+    assert.equal(response.status, 400)
+    assert.exists(response.body.error)
   })
 
   test('POST /api/v1/webhooks/stripe accepts well-formed webhook structure', async ({ assert }) => {
@@ -97,9 +90,7 @@ test.group('Webhooks API - Stripe', (group) => {
       .set('stripe-signature', signature)
 
     // Will return 400 due to signature mismatch in test environment
-    // May also return 500 due to raw body stream timing issues in test env
-    // but we verify the endpoint is reachable and processes the request
-    assert.oneOf(response.status, [200, 400, 500])
+    assert.equal(response.status, 400)
   })
 })
 

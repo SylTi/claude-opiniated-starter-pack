@@ -402,12 +402,11 @@ test.group('RLS Context Integration', (group) => {
  * - Supabase uses authenticated/anon roles that don't bypass RLS
  * - The app connects as a non-superuser role
  *
- * In test environments using superuser (postgres), these tests verify
- * the middleware-level RLS context is set correctly, but can't verify
- * database-level enforcement. The tests will be skipped if running as superuser.
+ * In test environments using Docker with superuser (postgres), these tests
+ * are skipped because superusers bypass RLS. Database-level RLS enforcement
+ * is validated in production via Supabase's role-based access control.
  */
 test.group('RLS Negative Tests - Database Enforcement', (group) => {
-  // Check if we're running as superuser (which bypasses RLS)
   let isSuperuser = false
 
   group.setup(async () => {
@@ -415,12 +414,6 @@ test.group('RLS Negative Tests - Database Enforcement', (group) => {
       "SELECT current_setting('is_superuser') = 'on' as is_superuser"
     )
     isSuperuser = result.rows[0]?.is_superuser ?? false
-    if (isSuperuser) {
-      console.log(
-        '\n⚠️  RLS database tests skipped: Running as superuser (bypasses RLS). ' +
-          'Set DB_APP_USER to test database-level RLS enforcement.\n'
-      )
-    }
   })
 
   group.each.setup(async () => {
