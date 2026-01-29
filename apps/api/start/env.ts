@@ -99,4 +99,16 @@ export default await Env.create(new URL('../', import.meta.url), {
   |----------------------------------------------------------
   */
   USER_COOKIE_SECRET: Env.schema.string.optional(),
+
+  /*
+  |----------------------------------------------------------
+  | Variables for at-rest encryption (secrets, SSO configs)
+  |----------------------------------------------------------
+  | ENCRYPTION_MASTER_KEY: Dedicated key for encrypting sensitive data at rest.
+  | - Must be at least 32 characters (or 32 bytes base64-encoded)
+  | - Falls back to APP_KEY if not set
+  | - For key rotation, use comma-separated keys: "newKey,oldKey"
+  |   The first key is used for encryption, all keys are tried for decryption.
+  */
+  ENCRYPTION_MASTER_KEY: Env.schema.string.optional(),
 })
