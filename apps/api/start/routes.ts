@@ -236,6 +236,5 @@ router
   })
   .prefix('/api/v1')
 
-// Enterprise features - dynamically loaded (silently skip if not available)
-// @ts-ignore - Enterprise feature: module may not exist on public repo
-await import('#start/routes_sso').catch(() => {})
+// Enterprise features - consolidated in separate file (silently skipped if not available)
+await import('#start/routes_enterprise_all').catch(() => {})

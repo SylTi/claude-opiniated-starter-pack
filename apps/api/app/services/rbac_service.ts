@@ -26,6 +26,7 @@ let ssoRolePermissions: Record<string, readonly string[]> | null = null
 let ssoSensitiveActions: readonly string[] = []
 
 try {
+  // @ts-ignore - Enterprise feature: module may not exist on public repo
   const ssoModule = await import('#constants/permissions_sso')
   ssoRolePermissions = ssoModule.SSO_ROLE_PERMISSIONS
   ssoSensitiveActions = ssoModule.SSO_SENSITIVE_ACTIONS ?? []
