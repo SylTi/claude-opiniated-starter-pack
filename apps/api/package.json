@@ -76,6 +76,8 @@
     "@adonisjs/session": "^7.6.0",
     "@adonisjs/shield": "^8.2.0",
     "@authenio/samlify-xsd-schema-validator": "^1.0.5",
+    "@saas/config": "workspace:*",
+    "@saas/plugins-core": "workspace:*",
     "@saas/shared": "workspace:*",
     "@vinejs/vine": "^3.0.1",
     "jose": "^6.1.3",

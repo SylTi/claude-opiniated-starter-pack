@@ -55,6 +55,7 @@ export const middleware = router.named({
   admin: () => import('#middleware/admin_middleware'),
   adminContext: () => import('#middleware/admin_context_middleware'),
   tenant: () => import('#middleware/tenant_context_middleware'),
+  pluginEnforcement: () => import('#middleware/plugin_enforcement_middleware'),
 })
 
 /**

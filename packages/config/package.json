@@ -4,6 +4,31 @@
   "type": "module",
   "exports": {
     "./tsconfig": "./tsconfig.base.json",
-    "./eslint": "./eslint.base.js"
+    "./eslint": "./eslint.base.js",
+    "./plugins/server": {
+      "types": "./plugins.server.d.ts",
+      "default": "./plugins.server.js"
+    },
+    "./plugins/client": {
+      "types": "./plugins.client.d.ts",
+      "default": "./plugins.client.js"
+    },
+    "./plugins/migrations": {
+      "types": "./plugins.migrations.d.ts",
+      "default": "./plugins.migrations.js"
+    },
+    "./plugins/types": "./plugins.types.d.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@plugins/nav-links": "workspace:*",
+    "@plugins/notes": "workspace:*",
+    "@saas/plugins-core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
   }
 }

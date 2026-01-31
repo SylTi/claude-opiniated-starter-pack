@@ -1120,3 +1120,208 @@ GET /api/v1/admin/stats
   }
 }
 ```
+
+---
+
+## Plugins
+
+Plugin management endpoints for enabling/disabling plugins per tenant.
+
+### List Available Plugins
+
+```
+GET /api/v1/plugins
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "pluginId": "notes",
+      "displayName": "Notes",
+      "description": "A note-taking plugin",
+      "version": "1.0.0",
+      "tier": "B",
+      "status": "active"
+    }
+  ]
+}
+```
+
+### Get Plugin Status
+
+```
+GET /api/v1/plugins/:pluginId/status
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+**Response:**
+```json
+{
+  "data": {
+    "pluginId": "notes",
+    "enabled": true,
+    "version": "1.0.0",
+    "installedAt": "2024-01-15T10:30:00Z",
+    "config": {}
+  }
+}
+```
+
+### Enable Plugin
+
+```
+POST /api/v1/plugins/:pluginId/enable
+```
+
+**Authentication:** Required (owner or admin role)
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+**Response:**
+```json
+{
+  "data": {
+    "pluginId": "notes",
+    "enabled": true,
+    "message": "Plugin \"notes\" enabled successfully"
+  }
+}
+```
+
+### Disable Plugin
+
+```
+POST /api/v1/plugins/:pluginId/disable
+```
+
+**Authentication:** Required (owner or admin role)
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+**Response:**
+```json
+{
+  "data": {
+    "pluginId": "notes",
+    "enabled": false,
+    "message": "Plugin \"notes\" disabled successfully"
+  }
+}
+```
+
+### Update Plugin Config
+
+```
+PUT /api/v1/plugins/:pluginId/config
+```
+
+**Authentication:** Required (owner or admin role)
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+**Request Body:**
+```json
+{
+  "setting1": "value1",
+  "setting2": true
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "pluginId": "notes",
+    "config": {
+      "setting1": "value1",
+      "setting2": true
+    },
+    "message": "Plugin config updated successfully"
+  }
+}
+```
+
+---
+
+## Plugin: Notes (Example)
+
+The Notes plugin demonstrates a Tier B plugin with CRUD operations.
+
+**Base URL:** `/api/v1/apps/notes`
+
+**Note:** This plugin requires the tenant to have it enabled first via `POST /api/v1/plugins/notes/enable`.
+
+### List Notes
+
+```
+GET /api/v1/apps/notes/notes
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+### Get Note
+
+```
+GET /api/v1/apps/notes/notes/:id
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+### Create Note
+
+```
+POST /api/v1/apps/notes/notes
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+**Request Body:**
+```json
+{
+  "title": "My Note",
+  "content": "Note content here"
+}
+```
+
+### Update Note
+
+```
+PUT /api/v1/apps/notes/notes/:id
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+**Request Body:**
+```json
+{
+  "title": "Updated Title",
+  "content": "Updated content"
+}
+```
+
+### Delete Note
+
+```
+DELETE /api/v1/apps/notes/notes/:id
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID

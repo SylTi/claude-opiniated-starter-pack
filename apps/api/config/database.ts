@@ -1,5 +1,18 @@
 import env from '#start/env'
 import { defineConfig } from '@adonisjs/lucid'
+import { getPluginMigrationPaths } from '@saas/config/plugins/migrations'
+
+/**
+ * Database configuration.
+ *
+ * Plugin migrations are discovered via the @saas/config resolver.
+ * This uses static loader maps and plugin.meta.json (no fs scanning).
+ *
+ * SPEC COMPLIANCE:
+ * - No runtime fs scanning (uses @pkg/config loader maps)
+ * - Resolver lives in @pkg/config (package that owns plugin deps)
+ * - Migration discovery is metadata-driven (plugin.meta.json)
+ */
 
 const dbConfig = defineConfig({
   connection: 'postgres',
@@ -15,7 +28,11 @@ const dbConfig = defineConfig({
       },
       migrations: {
         naturalSort: true,
-        paths: ['database/migrations'],
+        paths: [
+          'database/migrations',
+          // Plugin migrations - resolved from @pkg/config using plugin.meta.json
+          ...getPluginMigrationPaths(),
+        ],
       },
     },
   },

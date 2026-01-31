@@ -1,0 +1,32 @@
+{
+  "name": "@saas/plugins-core",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "default": "./dist/types/index.js"
+    },
+    "./registry": {
+      "types": "./dist/registry/index.d.ts",
+      "default": "./dist/registry/index.js"
+    },
+    "./enforcement": {
+      "types": "./dist/enforcement/index.d.ts",
+      "default": "./dist/enforcement/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

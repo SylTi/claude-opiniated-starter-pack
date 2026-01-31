@@ -121,9 +121,12 @@ Design intent: a plugin must not be able to **accidentally** (or casually) bypas
 
 ## 4) Routing & UI boundaries
 
+> **Implementation Note:** Our API uses versioned routes: `/api/v1/apps/<pluginId>/...`
+> See `implementation-deviations.md` for rationale.
+
 ### 4.1 Namespaced routing only (Tier B)
 - Server routes registered by plugins **MUST** be under:
-  - `/apps/<pluginId>/...`
+  - `/api/v1/apps/<pluginId>/...` *(adapted to include API versioning)*
 - Plugins **MUST NOT** register/override core routes.
 - Route registration **MUST** use a core `RoutesRegistrar` facade that enforces namespace + middleware defaults.
 
@@ -133,9 +136,9 @@ Design intent: a plugin must not be able to **accidentally** (or casually) bypas
   - `/apps/[pluginId]/[[...path]]`
 
 ### 4.3 Client request interception is NOT global
-- Plugins **MUST NOT** register global “intercept all fetch requests” hooks.
+- Plugins **MUST NOT** register global "intercept all fetch requests" hooks.
 - Any request transformation **MUST** be explicitly scoped:
-  - only plugin namespace (`/apps/<pluginId>`) OR
+  - only plugin namespace (`/api/v1/apps/<pluginId>`) OR
   - explicit core-owned security flow with consent + capability.
 
 ---
@@ -177,10 +180,13 @@ If any are missing: **security defect**.
 
 ## 7) Mandatory invariants for any tenant-scoped plugin table
 
+> **Implementation Note:** Our schema uses `integer` IDs instead of `uuid`.
+> See `implementation-deviations.md` for rationale. Replace `::uuid` with `::integer` in all examples below.
+
 For a table named `T`:
 
 ### 7.1 Required columns and constraints
-- `tenant_id uuid NOT NULL`
+- `tenant_id integer NOT NULL` *(adapted from uuid to match existing schema)*
 - Foreign key:
   - `FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE RESTRICT` (or CASCADE if your domain requires it)
 - Index:

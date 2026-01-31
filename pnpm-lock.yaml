@@ -59,6 +59,12 @@ importers:
       '@authenio/samlify-xsd-schema-validator':
         specifier: ^1.0.5
         version: 1.0.5(samlify@2.10.2)
+      '@saas/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@saas/plugins-core':
+        specifier: workspace:*
+        version: link:../../packages/plugins-core
       '@saas/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -305,13 +311,52 @@ importers:
         specifier: ^4.0.16
         version: 4.0.16(@types/node@20.19.27)(happy-dom@20.0.11)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.30.2)(yaml@2.8.2)
 
-  packages/config: {}
+  packages/config:
+    dependencies:
+      '@plugins/nav-links':
+        specifier: workspace:*
+        version: link:../../plugins/nav-links
+      '@plugins/notes':
+        specifier: workspace:*
+        version: link:../../plugins/notes
+      '@saas/plugins-core':
+        specifier: workspace:*
+        version: link:../plugins-core
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
+  packages/plugins-core:
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
 
   packages/shared:
     devDependencies:
       typescript:
         specifier: ^5.6.3
         version: 5.8.3
+
+  plugins/nav-links:
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
+  plugins/notes:
+    dependencies:
+      '@saas/plugins-core':
+        specifier: workspace:*
+        version: link:../../packages/plugins-core
+      '@saas/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
 
 packages:
 

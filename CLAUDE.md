@@ -457,8 +457,8 @@ pnpm run web:e2e:ui
 cd ./apps/web/ && pnpm exec playwright show-report
 
 - toujours utiliser pnpm a la place de npm
-- toujours ajouter a API.md quand on modifie ou ajoute une route.
-- toujours verifier API.md quand on doit ajouter une nouvelle fonctionnalité qui depend de l'existant pour eviter de faire des lectures inutiles dans les fichiers.
+- toujours ajouter a docs/API.md quand on modifie ou ajoute une route.
+- toujours verifier docs/API.md quand on doit ajouter une nouvelle fonctionnalité qui depend de l'existant pour eviter de faire des lectures inutiles dans les fichiers.
 - ne jamais lancer les tests quand on fini une nouvelle fonctionnalité, mais toujours demander a l'utilisateur de le faire en lui affichants les commandes. Pareil pour le coverage.
 - chaque fonctionnalité et element UX doit avoir son test unitaire/fonctionnel/E2E/etc qui valide son fonctionnement. 
 - Toujours creer un mock pour les tests necessitant un call a un service exterieur a l'application. Exemple: Mail, Paiements etc. Ne pas mock la DB pour les E2E ou test d'integration, utilise la db de test.

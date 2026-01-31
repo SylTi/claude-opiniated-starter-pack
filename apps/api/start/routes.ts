@@ -238,3 +238,6 @@ router
 
 // Enterprise features - consolidated in separate file (silently skipped if not available)
 await import('#start/routes_enterprise_all').catch(() => {})
+
+// Plugin system routes
+await import('#start/routes_plugins').catch(() => {})

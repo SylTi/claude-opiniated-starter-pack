@@ -57,6 +57,8 @@ export default defineConfig({
     () => import('@adonisjs/bouncer/bouncer_provider'),
     () => import('@adonisjs/limiter/limiter_provider'),
     () => import('@adonisjs/shield/shield_provider'),
+    // Plugin system boot - loads plugins, validates capabilities, mounts routes
+    () => import('#providers/plugin_boot_provider'),
   ],
 
   /*

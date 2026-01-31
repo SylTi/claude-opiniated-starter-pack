@@ -66,6 +66,26 @@ export const AUDIT_EVENT_TYPES = {
   SSO_LOGIN_SUCCESS: 'sso.login.success',
   SSO_LOGIN_FAILURE: 'sso.login.failure',
   SSO_USER_PROVISIONED: 'sso.user.provisioned',
+
+  // Authorization
+  AUTHZ_DENIED: 'authz.denied',
+  AUTHZ_GRANTED: 'authz.granted',
+
+  // Plugin Lifecycle
+  PLUGIN_ENABLE: 'plugin.enable',
+  PLUGIN_DISABLE: 'plugin.disable',
+  PLUGIN_BOOT: 'plugin.boot',
+  PLUGIN_QUARANTINE: 'plugin.quarantine',
+  PLUGIN_CONFIG_UPDATE: 'plugin.config.update',
+
+  // Plugin RBAC
+  PLUGIN_RBAC_ROLE_CREATED: 'plugin.rbac.role.created',
+  PLUGIN_RBAC_ROLE_UPDATED: 'plugin.rbac.role.updated',
+  PLUGIN_RBAC_ROLE_DELETED: 'plugin.rbac.role.deleted',
+  PLUGIN_RBAC_MEMBER_ADDED: 'plugin.rbac.member.added',
+  PLUGIN_RBAC_MEMBER_REMOVED: 'plugin.rbac.member.removed',
+  PLUGIN_RBAC_GRANT_ADDED: 'plugin.rbac.grant.added',
+  PLUGIN_RBAC_GRANT_REMOVED: 'plugin.rbac.grant.removed',
 } as const
 
 /**

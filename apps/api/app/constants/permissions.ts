@@ -41,6 +41,9 @@ export const ACTIONS = {
   SUBSCRIPTION_VIEW: 'subscription:view',
   SUBSCRIPTION_UPGRADE: 'subscription:upgrade',
   SUBSCRIPTION_CANCEL: 'subscription:cancel',
+
+  // Plugin management
+  PLUGIN_MANAGE: 'plugin:manage',
 } as const
 
 export type TenantAction = (typeof ACTIONS)[keyof typeof ACTIONS]
@@ -76,6 +79,8 @@ export const ROLE_PERMISSIONS: Record<TenantRole, readonly TenantAction[]> = {
     ACTIONS.SUBSCRIPTION_VIEW,
     ACTIONS.SUBSCRIPTION_UPGRADE,
     ACTIONS.SUBSCRIPTION_CANCEL,
+    // Plugin management - full access
+    ACTIONS.PLUGIN_MANAGE,
   ],
   admin: [
     // Tenant management - read and update, but NOT delete
@@ -94,6 +99,8 @@ export const ROLE_PERMISSIONS: Record<TenantRole, readonly TenantAction[]> = {
     // Subscription - view and upgrade, but NOT cancel
     ACTIONS.SUBSCRIPTION_VIEW,
     ACTIONS.SUBSCRIPTION_UPGRADE,
+    // Plugin management - full access
+    ACTIONS.PLUGIN_MANAGE,
   ],
   member: [
     // Read-only access

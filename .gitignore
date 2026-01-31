@@ -47,3 +47,10 @@ coverage/
 # Misc
 *.tsbuildinfo
 .turbo/
+
+# packages/config TypeScript build outputs (source files are .ts, not compiled .js)
+packages/config/plugins.*.js
+packages/config/plugins.*.d.ts.map
+packages/config/plugins.client.d.ts
+packages/config/plugins.server.d.ts
+packages/config/plugins.migrations.d.ts

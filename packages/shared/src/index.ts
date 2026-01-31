@@ -8,6 +8,8 @@ export * from "./types/payment.js";
 export * from "./types/discount.js";
 export * from "./types/rbac.js";
 export * from "./types/audit.js";
+export * from "./types/authz.js";
+export * from "./types/plugin.js";
 
 // Enterprise types - re-exported from separate file
 // On public repo, index.enterprise.ts is empty (exports nothing)

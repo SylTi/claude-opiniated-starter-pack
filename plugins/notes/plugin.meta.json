@@ -1,0 +1,50 @@
+{
+  "pluginId": "notes",
+  "packageName": "@plugins/notes",
+  "version": "1.0.0",
+  "tier": "B",
+  "displayName": "Notes",
+  "description": "Simple note-taking app with full CRUD and RBAC",
+  "requestedCapabilities": [
+    {
+      "capability": "app:routes",
+      "reason": "Serve note CRUD endpoints"
+    },
+    {
+      "capability": "app:db:read",
+      "reason": "Read notes from database"
+    },
+    {
+      "capability": "app:db:write",
+      "reason": "Create, update, and delete notes"
+    },
+    {
+      "capability": "app:authz",
+      "reason": "Authorize note operations"
+    }
+  ],
+  "migrations": {
+    "dir": "./database/migrations",
+    "schemaVersion": 1
+  },
+  "authzNamespace": "notes.",
+  "tables": [
+    {
+      "name": "plugin_notes_notes",
+      "hasTenantId": true
+    },
+    {
+      "name": "plugin_notes_roles",
+      "hasTenantId": true
+    },
+    {
+      "name": "plugin_notes_role_members",
+      "hasTenantId": true
+    },
+    {
+      "name": "plugin_notes_role_abilities",
+      "hasTenantId": true
+    }
+  ],
+  "routePrefix": "/api/v1/apps/notes"
+}

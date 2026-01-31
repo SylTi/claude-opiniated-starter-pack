@@ -1,0 +1,21 @@
+{
+  "pluginId": "nav-links",
+  "packageName": "@plugins/nav-links",
+  "version": "1.0.0",
+  "tier": "A",
+  "displayName": "Custom Navigation Links",
+  "description": "Add custom links to the application navigation menu",
+  "requestedCapabilities": [
+    {
+      "capability": "ui:filter:nav",
+      "reason": "Add custom navigation links to the navbar"
+    }
+  ],
+  "hooks": [
+    {
+      "hook": "nav:items",
+      "handler": "navItemsFilter",
+      "priority": 50
+    }
+  ]
+}

@@ -207,6 +207,8 @@ Core features live in `core/`:
 
 Dependencies and cascade rules are documented in `interdependencies.md`.
 
+**Implementation deviations:** See `implementation-deviations.md` for conscious divergences from this spec (API versioning, integer IDs) that align with our existing architecture.
+
 Examples:
 - Tier A: `examples-plugins/tierA/*`
 - Tier B: `examples-plugins/tierB/*`
