@@ -1,5 +1,5 @@
 import { BaseSchema } from '@adonisjs/lucid/schema'
-import { setPluginSchemaVersion } from '#services/plugins/schema_version_helper'
+import { setPluginSchemaVersion } from '@saas/plugins-core/migrations'
 
 /**
  * Notes Plugin - Bump Schema Version
@@ -8,17 +8,15 @@ import { setPluginSchemaVersion } from '#services/plugins/schema_version_helper'
  * This should be the final migration of each release.
  *
  * SPEC COMPLIANCE:
- * - Uses setPluginSchemaVersion() helper (not raw SQL)
- * - Helper is imported from core services
+ * - Uses setPluginSchemaVersion() helper from @saas/plugins-core
+ * - Helper is importable by all plugins (not tied to api's internal aliases)
  */
 export default class extends BaseSchema {
   async up(): Promise<void> {
-    // Use the core helper to set schema version
     await setPluginSchemaVersion('notes', 1, this.db)
   }
 
   async down(): Promise<void> {
-    // Reset schema version to 0
     await setPluginSchemaVersion('notes', 0, this.db)
   }
 }

@@ -7,10 +7,18 @@
 
 import type { PluginManifest } from '@saas/plugins-core'
 import { pluginRegistry } from '@saas/plugins-core'
-import router from '@adonisjs/core/services/router'
+import app from '@adonisjs/core/services/app'
 import { serverPluginLoaders } from '@saas/config/plugins/server'
 import { RoutesRegistrar, createRoutesRegistrar } from './routes_registrar.js'
 import { pluginCapabilityService } from './plugin_capability_service.js'
+
+/**
+ * Get the router instance from the app container.
+ * This ensures we get the router after it's properly initialized.
+ */
+async function getRouter() {
+  return app.container.make('router')
+}
 
 /**
  * Route mount result.
@@ -71,21 +79,33 @@ export default class PluginRouteMounter {
       const pluginModule = await loader()
 
       // Validate and enforce route prefix
-      // Security: Plugins MUST use /api/v1/apps/{pluginId}/* pattern
-      const expectedPrefix = `/api/v1/apps/${pluginId}`
+      // Security: Plugins MUST use /api/v1/apps/{pluginId} or /api/v1/apps/{pluginId}/* pattern
+      const basePrefix = `/api/v1/apps/${pluginId}`
       const declaredPrefix = manifest.routePrefix
 
-      // If plugin declares a prefix, validate it matches the expected pattern
-      if (declaredPrefix && !declaredPrefix.startsWith(expectedPrefix)) {
+      // Determine the prefix to use:
+      // 1. If no declared prefix → use base prefix
+      // 2. If declared prefix is exact match → use it
+      // 3. If declared prefix is valid subpath → use it
+      // 4. If declared prefix is invalid → warn and use base prefix
+      let prefix: string
+      if (!declaredPrefix) {
+        prefix = basePrefix
+      } else if (declaredPrefix === basePrefix) {
+        prefix = declaredPrefix
+      } else if (declaredPrefix.startsWith(basePrefix + '/')) {
+        // Valid subpath (e.g., /api/v1/apps/notes/v2)
+        prefix = declaredPrefix
+      } else {
+        // Invalid prefix - doesn't start with the required base
         console.warn(
           `[PluginRouteMounter] Plugin "${pluginId}" declared invalid routePrefix "${declaredPrefix}". ` +
-            `Must start with "${expectedPrefix}". Using default.`
+            `Must be "${basePrefix}" or start with "${basePrefix}/". Using default.`
         )
+        prefix = basePrefix
       }
-
-      // Always enforce the correct prefix pattern, ignore invalid declarations
-      const prefix = expectedPrefix
-      const registrar = createRoutesRegistrar(pluginId, router, prefix)
+      const routerInstance = await getRouter()
+      const registrar = createRoutesRegistrar(pluginId, routerInstance, prefix)
       this.registrars.set(pluginId, registrar)
 
       // Call plugin's register function if it exists

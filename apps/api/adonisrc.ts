@@ -73,6 +73,10 @@ export default defineConfig({
     () => import('#start/routes'),
     () => import('#start/kernel'),
     () => import('#start/limiter'),
+    // Plugin routes mounting - MUST be after kernel.ts so named middleware are available
+    () => import('#start/plugin_routes_mount'),
+    // Dev: sync API port to frontend .env file
+    () => import('#start/dev_port_sync').catch(() => {}),
   ],
 
   /*

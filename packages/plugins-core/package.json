@@ -20,6 +20,10 @@
     "./enforcement": {
       "types": "./dist/enforcement/index.d.ts",
       "default": "./dist/enforcement/index.js"
+    },
+    "./migrations": {
+      "types": "./dist/migrations/index.d.ts",
+      "default": "./dist/migrations/index.js"
     }
   },
   "scripts": {

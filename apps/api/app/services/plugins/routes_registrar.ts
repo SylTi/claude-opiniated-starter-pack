@@ -10,6 +10,24 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import type router from '@adonisjs/core/services/router'
 
+// Middleware collection type
+type MiddlewareCollection = Awaited<typeof import('#start/kernel')>['middleware']
+
+// Cache for lazily loaded middleware collection
+let cachedMiddleware: MiddlewareCollection | null = null
+
+/**
+ * Lazily get the middleware collection from kernel.
+ * This avoids circular dependency issues during boot.
+ */
+async function getMiddlewareCollection(): Promise<MiddlewareCollection> {
+  if (!cachedMiddleware) {
+    const kernel = await import('#start/kernel')
+    cachedMiddleware = kernel.middleware
+  }
+  return cachedMiddleware
+}
+
 /**
  * Route handler type.
  */
@@ -60,44 +78,44 @@ export class RoutesRegistrar {
   /**
    * Register a GET route.
    */
-  get(path: string, handler: RouteHandler, middleware?: string[]): void {
-    this.registerRoute('get', path, handler, middleware)
+  get(path: string, handler: RouteHandler, middleware?: string[]): Promise<void> {
+    return this.registerRoute('get', path, handler, middleware)
   }
 
   /**
    * Register a POST route.
    */
-  post(path: string, handler: RouteHandler, middleware?: string[]): void {
-    this.registerRoute('post', path, handler, middleware)
+  post(path: string, handler: RouteHandler, middleware?: string[]): Promise<void> {
+    return this.registerRoute('post', path, handler, middleware)
   }
 
   /**
    * Register a PUT route.
    */
-  put(path: string, handler: RouteHandler, middleware?: string[]): void {
-    this.registerRoute('put', path, handler, middleware)
+  put(path: string, handler: RouteHandler, middleware?: string[]): Promise<void> {
+    return this.registerRoute('put', path, handler, middleware)
   }
 
   /**
    * Register a PATCH route.
    */
-  patch(path: string, handler: RouteHandler, middleware?: string[]): void {
-    this.registerRoute('patch', path, handler, middleware)
+  patch(path: string, handler: RouteHandler, middleware?: string[]): Promise<void> {
+    return this.registerRoute('patch', path, handler, middleware)
   }
 
   /**
    * Register a DELETE route.
    */
-  delete(path: string, handler: RouteHandler, middleware?: string[]): void {
-    this.registerRoute('delete', path, handler, middleware)
+  delete(path: string, handler: RouteHandler, middleware?: string[]): Promise<void> {
+    return this.registerRoute('delete', path, handler, middleware)
   }
 
   /**
    * Register multiple routes at once.
    */
-  registerRoutes(routes: RouteDefinition[]): void {
+  async registerRoutes(routes: RouteDefinition[]): Promise<void> {
     for (const route of routes) {
-      this.registerRoute(route.method, route.path, route.handler, route.middleware)
+      await this.registerRoute(route.method, route.path, route.handler, route.middleware)
     }
   }
 
@@ -111,32 +129,37 @@ export class RoutesRegistrar {
   /**
    * Internal route registration.
    */
-  private registerRoute(
+  private async registerRoute(
     method: 'get' | 'post' | 'put' | 'patch' | 'delete',
     path: string,
     handler: RouteHandler,
-    middleware?: string[]
-  ): void {
+    additionalMiddleware?: string[]
+  ): Promise<void> {
     // Ensure path starts with /
     const normalizedPath = path.startsWith('/') ? path : `/${path}`
     const fullPath = `${this.prefix}${normalizedPath}`
 
+    // Get the middleware collection (lazy loaded to avoid circular deps)
+    const middleware = await getMiddlewareCollection()
+
     // Create the route
-    const route = this.router[method](fullPath, async (ctx: HttpContext) => {
-      // Extend existing plugin context (set by middleware) instead of overwriting
-      // This preserves the richer context (manifest, state, capabilities) from middleware
-      const existingPlugin = (ctx as any).plugin || {}
-      ;(ctx as any).plugin = {
-        ...existingPlugin,
-        id: this.pluginId,
-      }
-      await handler(ctx)
-    })
+    // NOTE: ctx.plugin is fully set by pluginEnforcement middleware with:
+    // - id: the validated pluginId
+    // - manifest: from plugin registry
+    // - state: from database (tenant-specific)
+    // - grantedCapabilities: from registry
+    // We don't modify ctx.plugin here - the middleware handles it securely.
+    const route = this.router[method](fullPath, handler)
 
     // Apply default middleware (auth, tenant, plugin enforcement)
-    const defaultMiddleware = ['auth', 'tenant', `pluginEnforcement:${this.pluginId}`]
-    const allMiddleware = [...defaultMiddleware, ...(middleware || [])]
-    // Use type assertion for named middleware (AdonisJS parses string middleware names)
+    // Use the middleware collection functions which properly resolve the middleware
+    const pluginId = this.pluginId
+    const defaultMiddleware = [
+      middleware.auth(),
+      middleware.tenant(),
+      middleware.pluginEnforcement({ guards: [pluginId] }),
+    ]
+    const allMiddleware = [...defaultMiddleware, ...(additionalMiddleware || [])]
 
     route.use(allMiddleware as any)
 

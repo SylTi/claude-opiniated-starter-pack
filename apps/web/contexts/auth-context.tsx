@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import type { UserDTO } from '@saas/shared'
 import { authApi } from '@/lib/auth'
+import { setTenantId } from '@/lib/api'
 
 interface AuthContextType {
   user: UserDTO | null
@@ -47,9 +48,14 @@ export function AuthProvider({
         setUser(userData)
         setHasUserInfoCookie(true)
         setUserRole(userData.role)
+        // Set tenant cookie for API requests
+        if (userData.currentTenantId) {
+          setTenantId(userData.currentTenantId)
+        }
       } else {
         setUser(null)
         clearUserInfoCookie()
+        setTenantId(null)
       }
     } catch {
       setUser(null)
@@ -64,9 +70,14 @@ export function AuthProvider({
           setUser(userData)
           setHasUserInfoCookie(true)
           setUserRole(userData.role)
+          // Set tenant cookie for API requests
+          if (userData.currentTenantId) {
+            setTenantId(userData.currentTenantId)
+          }
         } else {
           setUser(null)
           clearUserInfoCookie()
+          setTenantId(null)
         }
       } catch {
         setUser(null)
@@ -94,6 +105,10 @@ export function AuthProvider({
         setUser(result.user)
         setHasUserInfoCookie(true)
         setUserRole(result.user.role)
+        // Set tenant cookie for API requests
+        if (result.user.currentTenantId) {
+          setTenantId(result.user.currentTenantId)
+        }
       }
 
       return {}
@@ -105,6 +120,7 @@ export function AuthProvider({
     await authApi.logout()
     setUser(null)
     clearUserInfoCookie()
+    setTenantId(null)
   }, [])
 
   const value: AuthContextType = {

@@ -10,6 +10,28 @@
  */
 
 import type { PluginManifest } from '@saas/plugins-core'
+import { readFileSync } from 'node:fs'
+import { resolve, dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+/**
+ * Get the monorepo root directory.
+ * packages/config -> ../.. -> monorepo root
+ */
+function getMonorepoRoot(): string {
+  return resolve(__dirname, '../..')
+}
+
+/**
+ * Load JSON manifest by reading the file directly.
+ */
+function loadJsonManifest(pluginId: string): PluginManifest {
+  const manifestPath = join(getMonorepoRoot(), 'plugins', pluginId, 'plugin.meta.json')
+  const content = readFileSync(manifestPath, 'utf-8')
+  return JSON.parse(content) as PluginManifest
+}
 
 /**
  * Type for manifest loader function.
@@ -38,19 +60,17 @@ export const serverPluginPackages: Record<string, string> = {
 
 /**
  * Static map of plugin manifests.
- * Keys are plugin IDs, values are dynamic imports of plugin.meta.json.
+ * Keys are plugin IDs, values are loaders for plugin.meta.json.
  */
 export const serverPluginManifests: Record<string, ManifestLoader> = {
   // Example Tier A plugin
   'nav-links': async () => {
-    const mod = await import('@plugins/nav-links/plugin.meta.json')
-    return mod.default as PluginManifest
+    return loadJsonManifest('nav-links')
   },
 
   // Example Tier B plugin
   notes: async () => {
-    const mod = await import('@plugins/notes/plugin.meta.json')
-    return mod.default as PluginManifest
+    return loadJsonManifest('notes')
   },
 }
 

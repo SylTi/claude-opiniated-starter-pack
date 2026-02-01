@@ -8,8 +8,12 @@ import { BaseSchema } from '@adonisjs/lucid/schema'
  */
 export default class extends BaseSchema {
   async up(): Promise<void> {
-    // 1. Roles table
     const rolesTable = 'plugin_notes_roles'
+    const membersTable = 'plugin_notes_role_members'
+    const abilitiesTable = 'plugin_notes_role_abilities'
+    const grantsTable = 'plugin_notes_role_resource_grants'
+
+    // 1. Roles table
     this.schema.createTable(rolesTable, (table) => {
       table.increments('id').primary()
       table
@@ -26,11 +30,7 @@ export default class extends BaseSchema {
       table.unique(['tenant_id', 'name'])
     })
 
-    await this.db.rawQuery(`SELECT app.apply_tenant_rls('${rolesTable}'::regclass);`)
-    await this.db.rawQuery(`SELECT app.assert_tenant_scoped_table('${rolesTable}'::regclass);`)
-
     // 2. Role members table
-    const membersTable = 'plugin_notes_role_members'
     this.schema.createTable(membersTable, (table) => {
       table.increments('id').primary()
       table
@@ -58,11 +58,7 @@ export default class extends BaseSchema {
       table.unique(['tenant_id', 'role_id', 'user_id'])
     })
 
-    await this.db.rawQuery(`SELECT app.apply_tenant_rls('${membersTable}'::regclass);`)
-    await this.db.rawQuery(`SELECT app.assert_tenant_scoped_table('${membersTable}'::regclass);`)
-
     // 3. Role abilities table
-    const abilitiesTable = 'plugin_notes_role_abilities'
     this.schema.createTable(abilitiesTable, (table) => {
       table.increments('id').primary()
       table
@@ -84,11 +80,7 @@ export default class extends BaseSchema {
       table.unique(['tenant_id', 'role_id', 'ability'])
     })
 
-    await this.db.rawQuery(`SELECT app.apply_tenant_rls('${abilitiesTable}'::regclass);`)
-    await this.db.rawQuery(`SELECT app.assert_tenant_scoped_table('${abilitiesTable}'::regclass);`)
-
     // 4. Resource grants table (for resource-level permissions)
-    const grantsTable = 'plugin_notes_role_resource_grants'
     this.schema.createTable(grantsTable, (table) => {
       table.increments('id').primary()
       table
@@ -112,8 +104,21 @@ export default class extends BaseSchema {
       table.unique(['tenant_id', 'role_id', 'resource_type', 'resource_id', 'ability'])
     })
 
-    await this.db.rawQuery(`SELECT app.apply_tenant_rls('${grantsTable}'::regclass);`)
-    await this.db.rawQuery(`SELECT app.assert_tenant_scoped_table('${grantsTable}'::regclass);`)
+    // Defer raw queries to run after all schema.createTable calls complete
+    this.defer(async (db) => {
+      // Apply RLS to all tables
+      await db.rawQuery(`SELECT app.apply_tenant_rls('${rolesTable}'::regclass);`)
+      await db.rawQuery(`SELECT app.assert_tenant_scoped_table('${rolesTable}'::regclass);`)
+
+      await db.rawQuery(`SELECT app.apply_tenant_rls('${membersTable}'::regclass);`)
+      await db.rawQuery(`SELECT app.assert_tenant_scoped_table('${membersTable}'::regclass);`)
+
+      await db.rawQuery(`SELECT app.apply_tenant_rls('${abilitiesTable}'::regclass);`)
+      await db.rawQuery(`SELECT app.assert_tenant_scoped_table('${abilitiesTable}'::regclass);`)
+
+      await db.rawQuery(`SELECT app.apply_tenant_rls('${grantsTable}'::regclass);`)
+      await db.rawQuery(`SELECT app.assert_tenant_scoped_table('${grantsTable}'::regclass);`)
+    })
   }
 
   async down(): Promise<void> {

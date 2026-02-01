@@ -64,16 +64,20 @@ export default class TenantsController {
   /**
    * List all tenants for the current user
    */
-  async index({ auth, response }: HttpContext): Promise<void> {
+  async index({ auth, response, authDb }: HttpContext): Promise<void> {
     const user = auth.user!
 
-    const memberships = await TenantMembership.query().where('userId', user.id).preload('tenant')
+    // Use authDb to apply RLS context (user can see their own memberships)
+    const memberships = await TenantMembership.query({ client: authDb })
+      .where('userId', user.id)
+      .preload('tenant')
 
     response.json({
       data: memberships.map((m) => ({
         id: m.tenant.id,
         name: m.tenant.name,
         slug: m.tenant.slug,
+        type: m.tenant.type,
         role: m.role,
         isCurrentTenant: m.tenant.id === user.currentTenantId,
         createdAt: m.tenant.createdAt.toISO(),

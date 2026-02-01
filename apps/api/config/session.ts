@@ -32,6 +32,8 @@ const sessionConfig = defineConfig({
     httpOnly: true,
     secure: app.inProduction,
     sameSite: 'lax',
+    // In dev, explicitly set domain to localhost for cross-port cookie sharing
+    ...(app.inProduction ? {} : { domain: 'localhost' }),
   },
 
   /**

@@ -136,27 +136,12 @@ export default class PluginBootService {
       }
     }
 
-    // 7. Mount routes (Tier B only)
-    console.log('[PluginBootService] Mounting routes...')
-    for (const manifest of registeredManifests) {
-      const plugin = pluginRegistry.get(manifest.pluginId)
-      if (plugin?.status !== 'quarantined' && manifest.tier === 'B') {
-        // Mark as active before mounting routes
-        pluginRegistry.setStatus(manifest.pluginId, 'active')
-
-        try {
-          const mountResult = await pluginRouteMounter.mountPlugin(manifest)
-          if (!mountResult.success && mountResult.error) {
-            result.warnings.push(
-              `Route mount warning for ${manifest.pluginId}: ${mountResult.error}`
-            )
-          }
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error)
-          result.warnings.push(`Route mount error for ${manifest.pluginId}: ${errorMessage}`)
-        }
-      }
-    }
+    // 7. Mark plugins as active (route mounting happens in preload phase)
+    // Note: Route mounting is deferred to start/plugin_routes_mount.ts preload
+    // because it requires named middleware from kernel.ts which isn't loaded yet during boot
+    console.log(
+      '[PluginBootService] Marking plugins as active (routes will be mounted in preload)...'
+    )
 
     // 8. Mark remaining plugins as active
     for (const manifest of registeredManifests) {
@@ -336,6 +321,39 @@ export default class PluginBootService {
       booted: pluginRegistry.getActive().length > 0 || pluginRegistry.getQuarantined().length > 0,
       stats: pluginRegistry.getStats(),
     }
+  }
+
+  /**
+   * Mount routes for all active Tier B plugins.
+   * This is called from a preload file AFTER kernel.ts is loaded,
+   * so that named middleware like 'pluginEnforcement' are available.
+   */
+  async mountRoutes(): Promise<{ mounted: number; warnings: string[] }> {
+    const warnings: string[] = []
+    let mounted = 0
+
+    console.log('[PluginBootService] Mounting plugin routes...')
+
+    const activePlugins = pluginRegistry.getActive()
+    const tierBPlugins = activePlugins.filter((p) => p.manifest.tier === 'B')
+
+    for (const plugin of tierBPlugins) {
+      try {
+        const mountResult = await pluginRouteMounter.mountPlugin(plugin.manifest)
+        if (mountResult.success) {
+          mounted++
+        } else if (mountResult.error) {
+          warnings.push(`Route mount warning for ${plugin.manifest.pluginId}: ${mountResult.error}`)
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        warnings.push(`Route mount error for ${plugin.manifest.pluginId}: ${errorMessage}`)
+      }
+    }
+
+    console.log(`[PluginBootService] Mounted routes for ${mounted} plugins`)
+
+    return { mounted, warnings }
   }
 }
 

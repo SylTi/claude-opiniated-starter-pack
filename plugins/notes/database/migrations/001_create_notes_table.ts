@@ -39,23 +39,26 @@ export default class extends BaseSchema {
       table.timestamp('updated_at', { useTz: true }).defaultTo(this.now())
     })
 
-    // Create index starting with tenant_id for RLS efficiency
-    await this.db.rawQuery(`
-      CREATE INDEX idx_plugin_notes_notes_tenant
-      ON ${this.tableName} (tenant_id, created_at DESC);
-    `)
+    // Defer raw queries to run after schema.createTable completes
+    this.defer(async (db) => {
+      // Create index starting with tenant_id for RLS efficiency
+      await db.rawQuery(`
+        CREATE INDEX idx_plugin_notes_notes_tenant
+        ON ${this.tableName} (tenant_id, created_at DESC);
+      `)
 
-    // Create index for user lookup
-    await this.db.rawQuery(`
-      CREATE INDEX idx_plugin_notes_notes_user
-      ON ${this.tableName} (tenant_id, user_id);
-    `)
+      // Create index for user lookup
+      await db.rawQuery(`
+        CREATE INDEX idx_plugin_notes_notes_user
+        ON ${this.tableName} (tenant_id, user_id);
+      `)
 
-    // Apply RLS using core helper function
-    await this.db.rawQuery(`SELECT app.apply_tenant_rls('${this.tableName}'::regclass);`)
+      // Apply RLS using core helper function
+      await db.rawQuery(`SELECT app.apply_tenant_rls('${this.tableName}'::regclass);`)
 
-    // Assert tenant-scoped table invariants (hard fail if violated)
-    await this.db.rawQuery(`SELECT app.assert_tenant_scoped_table('${this.tableName}'::regclass);`)
+      // Assert tenant-scoped table invariants (hard fail if violated)
+      await db.rawQuery(`SELECT app.assert_tenant_scoped_table('${this.tableName}'::regclass);`)
+    })
   }
 
   async down(): Promise<void> {

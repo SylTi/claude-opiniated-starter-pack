@@ -1,79 +1,64 @@
 /**
  * Schema Version Helper
  *
- * Helper function for plugins to update their schema version in migrations.
- * Called in the final migration of each release.
+ * Re-exports from @saas/plugins-core for backward compatibility.
+ * New code should import directly from @saas/plugins-core/migrations.
+ *
+ * Also provides additional helpers that use the default db connection.
  */
 
-import db from '@adonisjs/lucid/services/db'
+import app from '@adonisjs/core/services/app'
 import type { Database } from '@adonisjs/lucid/database'
+import {
+  setPluginSchemaVersion as coreSetPluginSchemaVersion,
+  getPluginSchemaVersion as coreGetPluginSchemaVersion,
+  type DatabaseClient,
+} from '@saas/plugins-core/migrations'
+
+// Re-export type
+export type { DatabaseClient }
+
+/**
+ * Get the database instance from the app container.
+ * This ensures we get the db after it's properly initialized.
+ */
+async function getDb(): Promise<Database> {
+  return app.container.make('lucid.db')
+}
 
 /**
  * Set the schema version for a plugin.
- * Called at the end of plugin migrations to record the current schema version.
- *
- * @param pluginId - The plugin identifier (e.g., 'notes')
- * @param schemaVersion - The new schema version (monotonic increasing integer)
- * @param database - Optional database client (for use in transactions)
- *
- * @example
- * // In a plugin migration:
- * async up() {
- *   // ... migration logic ...
- *   await setPluginSchemaVersion('notes', 1, this.db)
- * }
+ * Uses the default db connection if none provided.
  */
 export async function setPluginSchemaVersion(
   pluginId: string,
   schemaVersion: number,
-  database?: Database
+  database?: DatabaseClient
 ): Promise<void> {
-  const dbClient = database || db
-
-  await dbClient.rawQuery(
-    `
-    INSERT INTO plugin_db_state (plugin_id, schema_version, updated_at)
-    VALUES (?, ?, NOW())
-    ON CONFLICT (plugin_id) DO UPDATE SET
-      schema_version = EXCLUDED.schema_version,
-      updated_at = NOW()
-    `,
-    [pluginId, schemaVersion]
-  )
+  const dbClient = database || (await getDb())
+  return coreSetPluginSchemaVersion(pluginId, schemaVersion, dbClient)
 }
 
 /**
  * Get the current schema version for a plugin.
- * Returns 0 if the plugin has no recorded schema version.
- *
- * @param pluginId - The plugin identifier
- * @param database - Optional database client
+ * Uses the default db connection if none provided.
  */
 export async function getPluginSchemaVersion(
   pluginId: string,
-  database?: typeof db
+  database?: DatabaseClient
 ): Promise<number> {
-  const dbClient = database || db
-
-  const result = await dbClient.rawQuery<{ rows: Array<{ schema_version: number }> }>(
-    `SELECT schema_version FROM plugin_db_state WHERE plugin_id = ?`,
-    [pluginId]
-  )
-
-  if (result.rows.length === 0) {
-    return 0
-  }
-
-  return result.rows[0].schema_version
+  const dbClient = database || (await getDb())
+  return coreGetPluginSchemaVersion(pluginId, dbClient)
 }
 
 /**
  * Get all plugin schema versions.
+ * Uses the default db connection.
  */
 export async function getAllPluginSchemaVersions(
-  database?: typeof db
+  database?: Database
 ): Promise<Map<string, number>> {
-  const dbClient = database || db
+  const dbClient = database || (await getDb())
 
   const result = await dbClient.rawQuery<{
     rows: Array<{ plugin_id: string; schema_version: number }>
@@ -99,9 +84,9 @@ export async function updatePluginMigrationInfo(
   pluginId: string,
   version: string,
   migrationName: string,
-  database?: typeof db
+  database?: Database
 ): Promise<void> {
-  const dbClient = database || db
+  const dbClient = database || (await getDb())
 
   await dbClient.rawQuery(
     `

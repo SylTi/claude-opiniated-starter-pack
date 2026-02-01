@@ -24,12 +24,15 @@ import type { AuthzContext, AuthzCheck, AuthzDecision } from '@saas/shared'
 /**
  * Routes registrar interface.
  * Provided by the plugin system at registration time.
+ *
+ * NOTE: Methods return Promise<void> because route registration is async
+ * (middleware collection is lazily loaded). Always await route registrations.
  */
 interface RoutesRegistrar {
-  get(path: string, handler: (ctx: HttpContext) => Promise<void> | void): void
-  post(path: string, handler: (ctx: HttpContext) => Promise<void> | void): void
-  put(path: string, handler: (ctx: HttpContext) => Promise<void> | void): void
-  delete(path: string, handler: (ctx: HttpContext) => Promise<void> | void): void
+  get(path: string, handler: (ctx: HttpContext) => Promise<void> | void): Promise<void>
+  post(path: string, handler: (ctx: HttpContext) => Promise<void> | void): Promise<void>
+  put(path: string, handler: (ctx: HttpContext) => Promise<void> | void): Promise<void>
+  delete(path: string, handler: (ctx: HttpContext) => Promise<void> | void): Promise<void>
 }
 import type { CreateNoteDTO, UpdateNoteDTO, NoteDTO } from './types.js'
 import { NOTES_ABILITIES } from './types.js'
@@ -123,11 +126,11 @@ async function checkAuthz(
 /**
  * Register plugin routes.
  */
-export function register(context: PluginContext): void {
+export async function register(context: PluginContext): Promise<void> {
   const { routes } = context
 
   // GET /api/v1/apps/notes/notes - List notes
-  routes.get('/notes', async (ctx: HttpContext) => {
+  await routes.get('/notes', async (ctx: HttpContext) => {
     // Check read permission
     const authz = await checkAuthz(ctx, NOTES_ABILITIES.NOTE_READ)
     if (!authz.allowed) {
@@ -143,7 +146,7 @@ export function register(context: PluginContext): void {
   })
 
   // GET /api/v1/apps/notes/notes/:id - Get note
-  routes.get('/notes/:id', async (ctx: HttpContext) => {
+  await routes.get('/notes/:id', async (ctx: HttpContext) => {
     // Check read permission
     const authz = await checkAuthz(ctx, NOTES_ABILITIES.NOTE_READ)
     if (!authz.allowed) {
@@ -170,7 +173,7 @@ export function register(context: PluginContext): void {
   })
 
   // POST /api/v1/apps/notes/notes - Create note
-  routes.post('/notes', async (ctx: HttpContext) => {
+  await routes.post('/notes', async (ctx: HttpContext) => {
     // Check write permission
     const authz = await checkAuthz(ctx, NOTES_ABILITIES.NOTE_WRITE)
     if (!authz.allowed) {
@@ -207,7 +210,7 @@ export function register(context: PluginContext): void {
   })
 
   // PUT /api/v1/apps/notes/notes/:id - Update note
-  routes.put('/notes/:id', async (ctx: HttpContext) => {
+  await routes.put('/notes/:id', async (ctx: HttpContext) => {
     // Check write permission
     const authz = await checkAuthz(ctx, NOTES_ABILITIES.NOTE_WRITE)
     if (!authz.allowed) {
@@ -244,7 +247,7 @@ export function register(context: PluginContext): void {
   })
 
   // DELETE /api/v1/apps/notes/notes/:id - Delete note
-  routes.delete('/notes/:id', async (ctx: HttpContext) => {
+  await routes.delete('/notes/:id', async (ctx: HttpContext) => {
     // Check delete permission (more restrictive than write)
     const authz = await checkAuthz(ctx, NOTES_ABILITIES.NOTE_DELETE)
     if (!authz.allowed) {

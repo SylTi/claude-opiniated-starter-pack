@@ -65,7 +65,24 @@ export interface PluginManifest {
   /** Hook registrations (optional) */
   hooks?: HookRegistration[]
 
-  /** Route prefix for Tier B plugins (default: /apps/{pluginId}) */
+  /**
+   * Route prefix for Tier B plugins.
+   *
+   * Security: Plugins are ALWAYS mounted at /api/v1/apps/{pluginId}.
+   * Custom prefixes are only allowed as subpaths of this base path.
+   *
+   * Valid examples:
+   * - undefined (uses default: /api/v1/apps/{pluginId})
+   * - "/api/v1/apps/notes" (exact match)
+   * - "/api/v1/apps/notes/v2" (subpath)
+   *
+   * Invalid examples (will be ignored with a warning):
+   * - "/api/v1/other" (outside plugin namespace)
+   * - "/apps/notes" (missing /api/v1 prefix)
+   *
+   * The plugin route mounter enforces this constraint to prevent
+   * plugins from shadowing core routes or other plugins' routes.
+   */
   routePrefix?: string
 
   /** Tables declared by this plugin (Tier B only) */
