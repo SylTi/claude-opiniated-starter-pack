@@ -1,37 +1,89 @@
 'use client'
 
-import { useEffect, Suspense } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/auth-context'
 
+/**
+ * Get safe callback URL from search params.
+ * Only allows relative paths to prevent open redirect.
+ * Blocks auth routes to prevent redirect loops.
+ */
+function getSafeCallbackUrl(callbackUrl: string | null, isNewUser: boolean): string {
+  const defaultUrl = isNewUser ? '/profile' : '/dashboard'
+
+  if (!callbackUrl) {
+    return defaultUrl
+  }
+
+  // Must be a relative path starting with /
+  if (!callbackUrl.startsWith('/')) {
+    return defaultUrl
+  }
+
+  // Reject protocol-relative URLs (//evil.com)
+  if (callbackUrl.startsWith('//')) {
+    return defaultUrl
+  }
+
+  // Reject backslash (path traversal)
+  if (callbackUrl.includes('\\')) {
+    return defaultUrl
+  }
+
+  // Reject auth routes to prevent redirect loops
+  // These routes would just redirect back here or to login
+  if (
+    callbackUrl === '/login' ||
+    callbackUrl.startsWith('/login/') ||
+    callbackUrl.startsWith('/auth/')
+  ) {
+    return defaultUrl
+  }
+
+  return callbackUrl
+}
+
 function OAuthCallbackContent(): React.ReactElement {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { refreshUser } = useAuth()
+  const [refreshError, setRefreshError] = useState<string | null>(null)
 
   const success = searchParams.get('success')
   const error = searchParams.get('error')
   const isNewUser = searchParams.get('isNewUser') === 'true'
+  const callbackUrl = searchParams.get('callbackUrl')
+
+  // Determine redirect URL - use callbackUrl if provided, otherwise default
+  const redirectUrl = getSafeCallbackUrl(callbackUrl, isNewUser)
 
   useEffect(() => {
     if (success === 'true') {
-      // Refresh user data and redirect
-      refreshUser().then(() => {
-        router.push(isNewUser ? '/profile' : '/dashboard')
-      })
+      // Refresh user data and redirect to callback URL
+      refreshUser()
+        .then(() => {
+          router.push(redirectUrl)
+        })
+        .catch((err) => {
+          console.error('[OAuthCallback] Failed to refresh user:', err)
+          setRefreshError('Failed to complete authentication. Please try again.')
+        })
     }
-  }, [success, isNewUser, router, refreshUser])
+  }, [success, redirectUrl, router, refreshUser])
 
-  if (error) {
+  // Show error from URL params or from refreshUser failure
+  const displayError = error || refreshError
+  if (displayError) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
         <div className="max-w-md w-full space-y-8 text-center">
           <h2 className="text-2xl font-bold text-gray-900">Authentication Failed</h2>
           <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{displayError}</AlertDescription>
           </Alert>
           <Button onClick={() => router.push('/login')}>Back to Login</Button>
         </div>

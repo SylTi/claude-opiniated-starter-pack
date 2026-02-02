@@ -86,6 +86,12 @@ export const AUDIT_EVENT_TYPES = {
   PLUGIN_RBAC_MEMBER_REMOVED: 'plugin.rbac.member.removed',
   PLUGIN_RBAC_GRANT_ADDED: 'plugin.rbac.grant.added',
   PLUGIN_RBAC_GRANT_REMOVED: 'plugin.rbac.grant.removed',
+
+  // UI Incidents (Design/Navigation)
+  UI_SHELL_CRASH: 'ui.shell.crash',
+  UI_THEME_ERROR: 'ui.theme.error',
+  UI_NAV_MANDATORY_RESTORED: 'ui.nav.mandatory_restored',
+  UI_NAV_INVALID_MODEL: 'ui.nav.invalid_model',
 } as const
 
 /**

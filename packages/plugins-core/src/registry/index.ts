@@ -6,3 +6,4 @@
 
 export * from './hook_registry.js'
 export * from './plugin_registry.js'
+export * from './design_registry.js'

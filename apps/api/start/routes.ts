@@ -29,6 +29,7 @@ const PaymentController = () => import('#controllers/payment_controller')
 const WebhookController = () => import('#controllers/webhook_controller')
 const DiscountCodesController = () => import('#controllers/discount_codes_controller')
 const CouponsController = () => import('#controllers/coupons_controller')
+const NavigationController = () => import('#controllers/navigation_controller')
 
 router.get('/', async () => {
   return {
@@ -160,6 +161,15 @@ router
         router.get('/stats', [DashboardController, 'getUserStats'])
       })
       .prefix('/dashboard')
+      .use([middleware.auth(), middleware.authContext(), apiThrottle])
+
+    // Navigation - Protected routes (any logged-in user)
+    // Single source of truth for nav composition with full hook pipeline
+    router
+      .group(() => {
+        router.get('/model', [NavigationController, 'model'])
+      })
+      .prefix('/navigation')
       .use([middleware.auth(), middleware.authContext(), apiThrottle])
 
     // Users - Protected routes (any logged-in user)

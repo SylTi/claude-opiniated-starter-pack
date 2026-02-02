@@ -24,13 +24,20 @@
     "./migrations": {
       "types": "./dist/migrations/index.d.ts",
       "default": "./dist/migrations/index.js"
+    },
+    "./navigation": {
+      "types": "./dist/navigation/index.d.ts",
+      "default": "./dist/navigation/index.js"
     }
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^2.0.5"
   }
 }

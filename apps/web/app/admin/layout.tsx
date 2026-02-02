@@ -1,56 +1,39 @@
 import { type ReactNode } from "react"
-import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
-import { verifyUserCookie } from "@/lib/cookie-signing"
-import { AdminLayoutClient } from "./admin-layout-client"
+import { verifyUserFromApi } from "@/lib/server/auth"
 
 /**
  * Admin layout component (Server Component).
- * Performs server-side auth check to prevent FOUC (Flash of Unauthorized Content).
+ * Performs server-side auth check to prevent unauthorized access.
+ *
+ * SECURITY: API verification is the sole authoritative check.
+ * The API call verifies the user's fresh role from the database.
+ *
+ * The user-info cookie is still useful for:
+ * - UI hints (nav items, client-side checks)
+ * - Non-critical optimizations where false-positive is acceptable
+ *
+ * NOTE: Shell rendering is handled by ShellWrapper in the root providers.
  */
 export default async function AdminLayout({
   children,
 }: {
   children: ReactNode;
 }): Promise<React.ReactElement> {
-  const cookieStore = await cookies()
-  const userInfoCookie = cookieStore.get("user-info")
+  // API verification - always authoritative for admin access
+  const currentUser = await verifyUserFromApi()
 
-  // No cookie = not authenticated, redirect immediately (no flash)
-  if (!userInfoCookie?.value) {
+  if (!currentUser) {
+    // No valid session - redirect to login
     redirect("/login")
   }
 
-  // Verify the signed cookie
-  const userInfo = await verifyUserCookie(userInfoCookie.value)
-
-  // Invalid cookie or not admin = redirect (no flash)
-  if (!userInfo || userInfo.role !== "admin") {
+  if (currentUser.role !== "admin") {
+    // User's actual role (from DB) is not admin
     redirect("/dashboard")
   }
 
-  // User is verified admin - render the layout
-  return (
-    <div className="min-h-[calc(100vh-4rem)] bg-gray-50">
-      <div className="container mx-auto py-8 px-4">
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar */}
-          <aside className="w-full lg:w-64 shrink-0">
-            <nav className="bg-white rounded-lg shadow p-4">
-              <div className="mb-4 px-3">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Admin Panel
-                </h2>
-                <p className="text-sm text-gray-500">Manage your application</p>
-              </div>
-              <AdminLayoutClient />
-            </nav>
-          </aside>
-
-          {/* Main content */}
-          <div className="flex-1">{children}</div>
-        </div>
-      </div>
-    </div>
-  )
+  // User is verified admin with fresh role data - render children
+  // Shell structure is provided by ShellWrapper via the design system
+  return <>{children}</>
 }

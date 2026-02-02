@@ -7,8 +7,19 @@
  * CRITICAL: Plugin failures are isolated - one plugin failing does not crash the app.
  */
 
-import type { PluginManifest } from '@saas/plugins-core'
-import { pluginRegistry, capabilityEnforcer, hookRegistry } from '@saas/plugins-core'
+import type { PluginManifest, AppDesign, NavContext } from '@saas/plugins-core'
+import {
+  pluginRegistry,
+  capabilityEnforcer,
+  hookRegistry,
+  designRegistry,
+  isAppDesign,
+  validateThemeTokens,
+  assertNoIdCollisions,
+  buildNavModel,
+  FILTER_HOOKS,
+  ACTION_HOOKS,
+} from '@saas/plugins-core'
 import { serverPluginLoaders, loadAllPluginManifests } from '@saas/config/plugins/server'
 import { pluginSchemaChecker } from './plugin_schema_checker.js'
 import { pluginRouteMounter } from './plugin_route_mounter.js'
@@ -16,6 +27,23 @@ import { namespaceRegistry } from '#services/authz/namespace_registry'
 import { auditEventEmitter } from '#services/audit_event_emitter'
 import { AUDIT_EVENT_TYPES } from '@saas/shared'
 import type { AuthzResolver } from '@saas/shared'
+
+/**
+ * Check if running in safe mode.
+ * Safe mode disables all UI overrides (admin/auth) and all non-core plugins.
+ * Per spec section 7.1: keeps auth and admin reachable.
+ */
+function isSafeMode(): boolean {
+  return process.env.SAFE_MODE === '1' || process.env.SAFE_MODE === 'true'
+}
+
+/**
+ * Check if running in production mode.
+ * In production, spec requirements are strictly enforced.
+ */
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production'
+}
 
 /**
  * Plugin boot result.
@@ -49,6 +77,12 @@ export default class PluginBootService {
       warnings: [],
     }
 
+    // Check safe mode
+    if (isSafeMode()) {
+      console.log('[PluginBootService] SAFE MODE: Skipping main-app design registration')
+      result.warnings.push('Running in safe mode - default design will be used')
+    }
+
     // 1. Load all manifests
     console.log('[PluginBootService] Loading plugin manifests...')
     const manifests = await loadAllPluginManifests()
@@ -59,16 +93,103 @@ export default class PluginBootService {
       return result
     }
 
-    // 2. Register all plugins
+    // 1.5. Separate main-app plugins from others
+    const mainAppManifests: PluginManifest[] = []
+    const otherManifests: PluginManifest[] = []
+
+    for (const [, manifest] of manifests) {
+      if (manifest.tier === 'main-app') {
+        mainAppManifests.push(manifest)
+      } else {
+        otherManifests.push(manifest)
+      }
+    }
+
+    // Validate exactly one main-app exists (unless in safe mode)
+    if (!isSafeMode()) {
+      if (mainAppManifests.length === 0) {
+        const message = 'No main-app plugin found. Application will use default design.'
+        if (isProduction()) {
+          // In production, main-app is required per spec section 1.2
+          console.error(`[PluginBootService] FATAL: ${message}`)
+          throw new Error(message)
+        } else {
+          // In development/test, allow fallback with warning
+          console.warn(`[PluginBootService] ${message}`)
+          result.warnings.push(message)
+        }
+      } else if (mainAppManifests.length > 1) {
+        const error = `Multiple main-app plugins found: ${mainAppManifests.map((m) => m.pluginId).join(', ')}. Only one is allowed.`
+        console.error(`[PluginBootService] FATAL: ${error}`)
+        throw new Error(error)
+      }
+    }
+
+    // 2. Register all plugins (main-app FIRST to ensure design is available)
     console.log('[PluginBootService] Registering plugins...')
     const registeredManifests: PluginManifest[] = []
 
-    for (const [pluginId, manifest] of manifests) {
+    // Register main-app first
+    for (const manifest of mainAppManifests) {
+      if (isSafeMode()) {
+        result.disabled.push(manifest.pluginId)
+        continue
+      }
+
+      try {
+        const regResult = pluginRegistry.register(manifest)
+        if (!regResult.success) {
+          const errorMsg = regResult.errors.join('; ')
+
+          // In production, main-app registration failure is boot-fatal per spec §1.2
+          if (isProduction()) {
+            console.error(`[PluginBootService] FATAL: main-app registration failed: ${errorMsg}`)
+            throw new Error(`main-app registration failed: ${errorMsg}`)
+          }
+
+          // Non-production: quarantine and continue
+          result.quarantined.push({
+            pluginId: manifest.pluginId,
+            error: errorMsg,
+          })
+          continue
+        }
+
+        // Register design immediately after successful registration
+        // This MUST succeed before adding to registeredManifests
+        await this.registerMainAppDesign(manifest)
+
+        // Only add to registered list AFTER design registration succeeds
+        registeredManifests.push(manifest)
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+
+        // Quarantine in registry so it won't be activated in step 8
+        pluginRegistry.quarantine(manifest.pluginId, errorMessage)
+        result.quarantined.push({ pluginId: manifest.pluginId, error: errorMessage })
+
+        // In production, main-app boot failure is boot-fatal per spec §1.2
+        if (isProduction()) {
+          console.error(`[PluginBootService] FATAL: main-app boot failed: ${errorMessage}`)
+          throw new Error(`main-app boot failed: ${errorMessage}`)
+        }
+      }
+    }
+
+    // Then register other plugins (unless in safe mode)
+    for (const manifest of otherManifests) {
+      // Safe mode: disable ALL non-core plugins per spec section 7.1
+      if (isSafeMode()) {
+        console.log(`[PluginBootService] SAFE MODE: Skipping plugin "${manifest.pluginId}"`)
+        result.disabled.push(manifest.pluginId)
+        continue
+      }
+
       try {
         const regResult = pluginRegistry.register(manifest)
         if (!regResult.success) {
           result.quarantined.push({
-            pluginId,
+            pluginId: manifest.pluginId,
             error: regResult.errors.join('; '),
           })
           continue
@@ -76,7 +197,7 @@ export default class PluginBootService {
         registeredManifests.push(manifest)
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
-        result.quarantined.push({ pluginId, error: errorMessage })
+        result.quarantined.push({ pluginId: manifest.pluginId, error: errorMessage })
       }
     }
 
@@ -136,6 +257,22 @@ export default class PluginBootService {
       }
     }
 
+    // 6.5 Validate full navigation pipeline with hooks (boot-fatal per spec §5.3)
+    // This catches collisions that only appear after hooks are applied
+    // Per spec: collision detection is ALWAYS boot-fatal, regardless of environment
+    if (!isSafeMode() && designRegistry.has()) {
+      console.log('[PluginBootService] Validating full navigation pipeline with hooks...')
+      try {
+        await this.validateFullNavPipeline()
+        console.log('[PluginBootService] Full navigation pipeline validation passed')
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        console.error(`[PluginBootService] FATAL: Full nav pipeline collision: ${errorMessage}`)
+        // Boot-fatal in ALL environments per spec §5.3
+        throw new Error(`Navigation collision detected (boot-fatal): ${errorMessage}`)
+      }
+    }
+
     // 7. Mark plugins as active (route mounting happens in preload phase)
     // Note: Route mounting is deferred to start/plugin_routes_mount.ts preload
     // because it requires named middleware from kernel.ts which isn't loaded yet during boot
@@ -160,6 +297,211 @@ export default class PluginBootService {
     )
 
     return result
+  }
+
+  /**
+   * Register main-app design.
+   * Called immediately after main-app plugin registration.
+   *
+   * Validates per spec:
+   * - §2.1: AppShell is required
+   * - §2.1: cssVars is required in appTokens()
+   * - §5.3: Collision detection on baseline nav
+   */
+  private async registerMainAppDesign(manifest: PluginManifest): Promise<void> {
+    if (manifest.tier !== 'main-app') {
+      return
+    }
+
+    console.log(`[PluginBootService] Loading design from main-app plugin "${manifest.pluginId}"...`)
+
+    const loader = serverPluginLoaders[manifest.pluginId]
+    if (!loader) {
+      throw new Error(`No loader found for main-app plugin "${manifest.pluginId}"`)
+    }
+
+    const pluginModule = await loader()
+
+    // Look for design export
+    const design = (pluginModule as Record<string, unknown>).design as AppDesign | undefined
+    if (!design) {
+      throw new Error(
+        `Main-app plugin "${manifest.pluginId}" must export a "design" object implementing AppDesign interface`
+      )
+    }
+
+    // Validate design contract (spec §2.1)
+    if (!isAppDesign(design)) {
+      throw new Error(
+        `Main-app plugin "${manifest.pluginId}" design is invalid. ` +
+          `Required: designId, displayName, appTokens(), navBaseline(), AppShell`
+      )
+    }
+
+    // Validate cssVars in appTokens (spec §2.1)
+    const tokens = design.appTokens()
+    const tokenValidation = validateThemeTokens(tokens)
+    if (!tokenValidation.valid) {
+      throw new Error(
+        `Main-app plugin "${manifest.pluginId}" appTokens() invalid: ${tokenValidation.errors.join('; ')}`
+      )
+    }
+
+    // Validate baseline nav for collisions (spec §5.3 - boot-fatal)
+    // Check multiple contexts to catch role-specific collisions
+    const validationContexts = [
+      {
+        name: 'admin',
+        context: {
+          userRole: 'admin' as const,
+          entitlements: new Set<string>(['admin']),
+          tenantId: 'validation',
+          tierLevel: 99,
+          hasMultipleTenants: true,
+        },
+      },
+      {
+        name: 'user',
+        context: {
+          userRole: 'user' as const,
+          entitlements: new Set<string>(),
+          tenantId: 'validation',
+          tierLevel: 1,
+          hasMultipleTenants: false,
+        },
+      },
+      {
+        name: 'guest',
+        context: {
+          userRole: 'guest' as const,
+          entitlements: new Set<string>(),
+          tenantId: null,
+          tierLevel: 0,
+          hasMultipleTenants: false,
+        },
+      },
+    ]
+
+    for (const { name, context } of validationContexts) {
+      try {
+        const baselineNav = design.navBaseline(context)
+        assertNoIdCollisions(baselineNav)
+      } catch (collisionError) {
+        throw new Error(
+          `Main-app plugin "${manifest.pluginId}" baseline nav has ID collisions for ${name} context: ` +
+            (collisionError instanceof Error ? collisionError.message : String(collisionError))
+        )
+      }
+    }
+    console.log('[PluginBootService] Baseline nav collision check passed for all contexts')
+
+    // Register the design
+    designRegistry.register(design)
+    console.log(`[PluginBootService] Registered design "${design.designId}" from main-app plugin`)
+  }
+
+  /**
+   * Validate full navigation pipeline with hooks.
+   *
+   * Per spec §5.3: Collision detection must be boot-fatal.
+   * This runs buildNavModel with skipHooks: false to catch collisions
+   * that only appear after hooks modify the navigation.
+   *
+   * Validates against a context matrix:
+   * - admin + multi-tenant
+   * - admin + single-tenant
+   * - user + multi-tenant
+   * - user + single-tenant
+   * - guest
+   *
+   * @throws Error if any collision is detected
+   */
+  private async validateFullNavPipeline(): Promise<void> {
+    const design = designRegistry.get()
+
+    // Context matrix for validation
+    const validationContexts: Array<{ name: string; context: NavContext }> = [
+      {
+        name: 'admin-multi-tenant',
+        context: {
+          userId: 'validation',
+          userRole: 'admin',
+          entitlements: new Set(['admin']),
+          tenantId: 'validation-tenant',
+          tierLevel: 99,
+          hasMultipleTenants: true,
+        },
+      },
+      {
+        name: 'admin-single-tenant',
+        context: {
+          userId: 'validation',
+          userRole: 'admin',
+          entitlements: new Set(['admin']),
+          tenantId: 'validation-tenant',
+          tierLevel: 99,
+          hasMultipleTenants: false,
+        },
+      },
+      {
+        name: 'user-multi-tenant',
+        context: {
+          userId: 'validation',
+          userRole: 'user',
+          entitlements: new Set(),
+          tenantId: 'validation-tenant',
+          tierLevel: 1,
+          hasMultipleTenants: true,
+        },
+      },
+      {
+        name: 'user-single-tenant',
+        context: {
+          userId: 'validation',
+          userRole: 'user',
+          entitlements: new Set(),
+          tenantId: 'validation-tenant',
+          tierLevel: 1,
+          hasMultipleTenants: false,
+        },
+      },
+      {
+        name: 'guest',
+        context: {
+          userRole: 'guest',
+          entitlements: new Set(),
+          tenantId: null,
+          tierLevel: 0,
+          hasMultipleTenants: false,
+        },
+      },
+    ]
+
+    const collisionErrors: string[] = []
+
+    for (const { name, context } of validationContexts) {
+      try {
+        // Build with full pipeline including hooks
+        // skipPermissionFilter: true - we want to check ALL items for collisions
+        await buildNavModel({
+          design,
+          context,
+          skipHooks: false, // Run hooks - this is the key difference from baseline validation
+          skipPermissionFilter: true, // Check all items, not just visible ones
+          skipValidation: false, // Enable collision detection
+        })
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        collisionErrors.push(`[${name}] ${errorMessage}`)
+      }
+    }
+
+    if (collisionErrors.length > 0) {
+      throw new Error(
+        `Full pipeline collision detected in ${collisionErrors.length} context(s):\n` +
+          collisionErrors.join('\n')
+      )
+    }
   }
 
   /**
@@ -194,6 +536,10 @@ export default class PluginBootService {
 
     const pluginModule = await loader()
 
+    // Build sets of known hook names for O(1) lookup
+    const knownFilterHooks = new Set<string>(Object.values(FILTER_HOOKS))
+    const knownActionHooks = new Set<string>(Object.values(ACTION_HOOKS))
+
     for (const hookReg of manifest.hooks) {
       // Get handler function from plugin module
       const handler = (pluginModule as Record<string, unknown>)[hookReg.handler]
@@ -204,26 +550,36 @@ export default class PluginBootService {
         continue
       }
 
-      // Determine if it's a filter or action based on hook name
-      const isFilter =
-        hookReg.hook.includes(':') ||
-        hookReg.hook.startsWith('nav:') ||
-        hookReg.hook.startsWith('dashboard:')
+      // Determine if it's a filter or action based on known hook constants
+      // Priority: known filter > known action > fallback to filter for UI hooks
+      const isKnownFilter = knownFilterHooks.has(hookReg.hook)
+      const isKnownAction = knownActionHooks.has(hookReg.hook)
 
-      if (isFilter) {
-        hookRegistry.addFilter(
+      // Warn if hook is unknown (not in either constant)
+      if (!isKnownFilter && !isKnownAction) {
+        console.warn(
+          `[PluginBootService] Unknown hook "${hookReg.hook}" from plugin "${manifest.pluginId}". ` +
+            'Consider adding it to FILTER_HOOKS or ACTION_HOOKS constants.'
+        )
+      }
+
+      // Classify: known action → action, everything else → filter (safer default for UI hooks)
+      const isAction = isKnownAction && !isKnownFilter
+
+      if (isAction) {
+        hookRegistry.addAction(
           hookReg.hook,
           manifest.pluginId,
-          handler as (data: unknown) => unknown,
+          handler as (data: unknown) => void,
           {
             priority: hookReg.priority,
           }
         )
       } else {
-        hookRegistry.addAction(
+        hookRegistry.addFilter(
           hookReg.hook,
           manifest.pluginId,
-          handler as (data: unknown) => void,
+          handler as (data: unknown) => unknown,
           {
             priority: hookReg.priority,
           }

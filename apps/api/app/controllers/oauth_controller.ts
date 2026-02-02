@@ -14,6 +14,12 @@ import { systemOps } from '#services/system_operation_service'
 // Supported providers (must match ally config)
 type SupportedProvider = 'google' | 'github'
 
+// Session key for storing callback URLs keyed by OAuth state
+const OAUTH_CALLBACKS_KEY = 'oauth_callbacks'
+
+// Maximum number of pending OAuth flows to prevent session bloat
+const MAX_PENDING_OAUTH_FLOWS = 10
+
 export default class OAuthController {
   private authService = new AuthService()
   private cookieSigning = new CookieSigningService()
@@ -22,8 +28,20 @@ export default class OAuthController {
   /**
    * Redirect to OAuth provider
    * GET /api/v1/auth/oauth/:provider/redirect
+   *
+   * Accepts optional callbackUrl query param to redirect user after OAuth completes.
+   * Uses OAuth state parameter as key to support concurrent flows (multiple tabs/windows).
+   *
+   * Flow:
+   * 1. Generate OAuth redirect URL (includes unique state parameter)
+   * 2. Extract state from redirect URL
+   * 3. Store callbackUrl in session keyed by state
+   * 4. On callback, state from query params looks up the correct callbackUrl
+   *
+   * This works because OAuth state is unique per flow and survives the redirect
+   * through the OAuth provider - no cookies needed for flow identification.
    */
-  async redirect({ ally, params, response }: HttpContext): Promise<void> {
+  async redirect({ ally, params, response, request, session }: HttpContext): Promise<void> {
     const provider = params.provider
 
     if (!this.isValidProvider(provider)) {
@@ -34,16 +52,123 @@ export default class OAuthController {
       return
     }
 
-    const redirectUrl = await ally.use(provider).redirectUrl()
-    response.redirect(redirectUrl)
+    // Generate OAuth redirect URL - this creates a unique state parameter
+    const oauthRedirectUrl = await ally.use(provider).redirectUrl()
+
+    // Extract state from the redirect URL - this is our unique flow identifier
+    const state = this.extractStateFromUrl(oauthRedirectUrl)
+
+    if (state) {
+      const callbackUrl = request.input('callbackUrl')
+      if (callbackUrl && typeof callbackUrl === 'string') {
+        // Security: Only allow relative paths to prevent open redirect
+        // Also block backslash to prevent path traversal (matches frontend validation)
+        if (
+          callbackUrl.startsWith('/') &&
+          !callbackUrl.startsWith('//') &&
+          !callbackUrl.includes('\\')
+        ) {
+          // Get or initialize the callbacks map in session
+          const callbacks = (session.get(OAUTH_CALLBACKS_KEY) as Record<string, string>) || {}
+
+          // Limit entries to prevent session bloat from abandoned flows
+          this.limitCallbackEntries(callbacks)
+
+          // Store callback URL keyed by OAuth state
+          callbacks[state] = callbackUrl
+          session.put(OAUTH_CALLBACKS_KEY, callbacks)
+        }
+      }
+    }
+
+    response.redirect(oauthRedirectUrl)
+  }
+
+  /**
+   * Extract state parameter from OAuth redirect URL.
+   */
+  private extractStateFromUrl(url: string): string | null {
+    try {
+      const parsed = new URL(url)
+      return parsed.searchParams.get('state')
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Limit callback entries to prevent session bloat from abandoned OAuth flows.
+   * Removes oldest entries (FIFO) when limit is exceeded.
+   */
+  private limitCallbackEntries(callbacks: Record<string, string>): void {
+    const keys = Object.keys(callbacks)
+    if (keys.length >= MAX_PENDING_OAUTH_FLOWS) {
+      // Remove oldest entries (first in object iteration order)
+      const toRemove = keys.slice(0, keys.length - MAX_PENDING_OAUTH_FLOWS + 1)
+      for (const key of toRemove) {
+        delete callbacks[key]
+      }
+    }
+  }
+
+  /**
+   * Retrieve callback URL using OAuth state as key (without consuming).
+   * Used to peek at the callback URL before OAuth validation completes.
+   *
+   * @param state - OAuth state parameter from callback
+   * @param session - HTTP session
+   * @returns The callback URL if found, undefined otherwise
+   */
+  private getCallbackUrl(
+    state: string | null,
+    session: HttpContext['session']
+  ): string | undefined {
+    if (!state) {
+      return undefined
+    }
+
+    const callbacks = (session.get(OAUTH_CALLBACKS_KEY) as Record<string, string>) || {}
+    return callbacks[state]
+  }
+
+  /**
+   * Consume (remove) callback URL entry from session.
+   * Called only after OAuth validation succeeds to prevent losing the entry on failures.
+   *
+   * @param state - OAuth state parameter from callback
+   * @param session - HTTP session
+   */
+  private consumeCallbackUrl(state: string | null, session: HttpContext['session']): void {
+    if (!state) {
+      return
+    }
+
+    const callbacks = (session.get(OAUTH_CALLBACKS_KEY) as Record<string, string>) || {}
+    if (callbacks[state]) {
+      delete callbacks[state]
+      session.put(OAUTH_CALLBACKS_KEY, callbacks)
+    }
   }
 
   /**
    * Handle OAuth callback
    * GET /api/v1/auth/oauth/:provider/callback
+   *
+   * Uses OAuth state from query params to look up the correct callbackUrl.
+   *
+   * LIMITATION: Concurrent OAuth flows for the SAME provider are not fully supported.
+   * Ally uses a single state cookie per provider (e.g., google_oauth_state), so
+   * starting OAuth in tab B overwrites tab A's state. Tab A will fail with
+   * stateMisMatch() error. Different providers can run concurrently.
+   *
+   * The callbackUrl mapping by state ensures that when a flow succeeds, it gets
+   * the correct callback URL for that specific flow.
    */
-  async callback({ ally, params, auth, response, request }: HttpContext): Promise<void> {
+  async callback({ ally, params, auth, response, request, session }: HttpContext): Promise<void> {
     const provider = params.provider
+
+    // Get OAuth state from query params
+    const state = request.input('state') as string | null
 
     if (!this.isValidProvider(provider)) {
       return this.redirectWithError(response, 'Invalid OAuth provider')
@@ -51,22 +176,35 @@ export default class OAuthController {
 
     const oauth = ally.use(provider)
 
-    // Check for errors
+    // Check for errors - don't consume callbackUrl yet so retry can preserve it
     if (oauth.accessDenied()) {
       return this.redirectWithError(response, 'Access was denied')
     }
 
     if (oauth.stateMisMatch()) {
-      return this.redirectWithError(response, 'Request expired. Please try again')
+      // This happens when: (1) session expired, (2) user started OAuth in another tab
+      // for the same provider (overwrites state cookie), or (3) potential CSRF attack.
+      // Guide user to retry from a single tab.
+      // Note: callbackUrl is preserved in session for retry attempts
+      return this.redirectWithError(
+        response,
+        'Session expired or interrupted. Please close other login tabs and try again.'
+      )
     }
 
     if (oauth.hasError()) {
       return this.redirectWithError(response, oauth.getError() || 'Authentication failed')
     }
 
+    // Retrieve callbackUrl (but don't consume yet - wait for oauth.user() to succeed)
+    const callbackUrl = this.getCallbackUrl(state, session)
+
     try {
       const oauthUser = await oauth.user()
       const { user, isNewUser } = await this.findOrCreateUser(oauthUser, provider)
+
+      // OAuth flow fully succeeded - now safe to consume the callbackUrl
+      this.consumeCallbackUrl(state, session)
 
       // Record login attempt
       await this.authService.recordLoginAttempt(
@@ -92,10 +230,13 @@ export default class OAuthController {
         path: '/',
       })
 
-      // Redirect to frontend with success
+      // Redirect to frontend with success (callbackUrl already retrieved at start of method)
       const redirectUrl = new URL('/auth/callback', this.frontendUrl)
       redirectUrl.searchParams.set('success', 'true')
       redirectUrl.searchParams.set('isNewUser', isNewUser.toString())
+      if (callbackUrl) {
+        redirectUrl.searchParams.set('callbackUrl', callbackUrl)
+      }
       response.redirect(redirectUrl.toString())
     } catch (error) {
       logger.error({ err: error }, 'OAuth callback error')

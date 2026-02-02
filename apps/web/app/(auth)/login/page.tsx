@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,11 +17,61 @@ import { oauthApi } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 import { loginSchema, type LoginFormData } from "@/lib/validations";
 
+/**
+ * Validate and sanitize callback URL to prevent open redirect attacks.
+ * Only allows relative paths starting with /.
+ * Blocks auth routes to prevent redirect loops.
+ */
+function getSafeCallbackUrl(callbackUrl: string | null): string {
+  const defaultUrl = "/dashboard";
+
+  if (!callbackUrl) {
+    return defaultUrl;
+  }
+
+  // Must be a relative path starting with /
+  if (!callbackUrl.startsWith("/")) {
+    return defaultUrl;
+  }
+
+  // Reject protocol-relative URLs (//evil.com)
+  if (callbackUrl.startsWith("//")) {
+    return defaultUrl;
+  }
+
+  // Reject backslash (can be used for path traversal on some systems)
+  if (callbackUrl.includes("\\")) {
+    return defaultUrl;
+  }
+
+  // Reject auth routes to prevent redirect loops after login
+  if (
+    callbackUrl === "/login" ||
+    callbackUrl.startsWith("/login/") ||
+    callbackUrl.startsWith("/auth/") ||
+    callbackUrl === "/register" ||
+    callbackUrl.startsWith("/register/")
+  ) {
+    return defaultUrl;
+  }
+
+  // Note: @ is allowed as it's valid in query strings (e.g., ?email=user@example.com)
+  // For relative paths starting with /, @ cannot indicate credentials
+
+  return callbackUrl;
+}
+
 export default function LoginPage(): React.ReactElement {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [requiresMfa, setRequiresMfa] = useState(false);
+
+  // Get safe callback URL from query params
+  const redirectUrl = useMemo(() => {
+    return getSafeCallbackUrl(searchParams.get("callbackUrl"));
+  }, [searchParams]);
 
   const {
     register,
@@ -37,12 +87,12 @@ export default function LoginPage(): React.ReactElement {
     document.title = "Sign In | SaaS";
   }, []);
 
-  // Redirect authenticated users to dashboard
+  // Redirect authenticated users to callback URL or dashboard
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      router.push("/dashboard");
+      router.push(redirectUrl);
     }
-  }, [isAuthenticated, authLoading, router]);
+  }, [isAuthenticated, authLoading, router, redirectUrl]);
 
   const onSubmit = async (data: LoginFormData): Promise<void> => {
     try {
@@ -54,7 +104,7 @@ export default function LoginPage(): React.ReactElement {
         return;
       }
 
-      router.push("/dashboard");
+      router.push(redirectUrl);
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -65,7 +115,9 @@ export default function LoginPage(): React.ReactElement {
   };
 
   const handleOAuthLogin = (provider: "google" | "github"): void => {
-    window.location.href = oauthApi.getRedirectUrl(provider);
+    // Pass callbackUrl to OAuth flow so it can be restored after authentication
+    const oauthUrl = oauthApi.getRedirectUrl(provider, redirectUrl);
+    window.location.href = oauthUrl;
   };
 
   return (

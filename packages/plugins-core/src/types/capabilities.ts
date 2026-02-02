@@ -18,6 +18,10 @@
  * - app:db:write - Write to plugin-prefixed tables
  * - app:jobs - Register background jobs
  * - app:authz - Register authorization resolver for plugin namespace
+ *
+ * Main-app tier (Design ownership):
+ * - ui:design:global - Own global theme tokens and shell components
+ * - ui:nav:baseline - Provide baseline navigation model
  */
 export const PLUGIN_CAPABILITIES = {
   // Tier A - UI capabilities
@@ -33,6 +37,10 @@ export const PLUGIN_CAPABILITIES = {
   'app:db:write': 'app:db:write',
   'app:jobs': 'app:jobs',
   'app:authz': 'app:authz',
+
+  // Main-app tier - Design capabilities
+  'ui:design:global': 'ui:design:global',
+  'ui:nav:baseline': 'ui:nav:baseline',
 } as const
 
 export type PluginCapability = (typeof PLUGIN_CAPABILITIES)[keyof typeof PLUGIN_CAPABILITIES]
@@ -70,13 +78,34 @@ export const TIER_B_CAPABILITIES: PluginCapability[] = [
 ]
 
 /**
+ * Main-app tier capabilities (design ownership).
+ */
+export const MAIN_APP_CAPABILITIES: PluginCapability[] = [
+  PLUGIN_CAPABILITIES['ui:design:global'],
+  PLUGIN_CAPABILITIES['ui:nav:baseline'],
+]
+
+/**
  * Validate that capabilities are appropriate for the plugin tier.
  */
 export function validateCapabilitiesForTier(
-  tier: 'A' | 'B',
+  tier: 'A' | 'B' | 'main-app',
   capabilities: PluginCapability[]
 ): { valid: boolean; invalidCapabilities: PluginCapability[] } {
-  const allowedCapabilities = tier === 'A' ? TIER_A_CAPABILITIES : [...TIER_A_CAPABILITIES, ...TIER_B_CAPABILITIES]
+  let allowedCapabilities: PluginCapability[]
+
+  switch (tier) {
+    case 'A':
+      allowedCapabilities = TIER_A_CAPABILITIES
+      break
+    case 'B':
+      allowedCapabilities = [...TIER_A_CAPABILITIES, ...TIER_B_CAPABILITIES]
+      break
+    case 'main-app':
+      // Main-app can use Tier A UI capabilities plus design capabilities
+      allowedCapabilities = [...TIER_A_CAPABILITIES, ...MAIN_APP_CAPABILITIES]
+      break
+  }
 
   const invalidCapabilities = capabilities.filter((cap) => !allowedCapabilities.includes(cap))
 

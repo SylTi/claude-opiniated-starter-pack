@@ -1,9 +1,13 @@
 import type { ReactNode } from 'react'
 
+/**
+ * Auth layout component.
+ *
+ * NOTE: Shell rendering is handled by ShellWrapper in the root providers.
+ * This layout passes children through - the actual auth shell structure
+ * comes from the design system (DefaultAuthShell or design.authOverride.shell).
+ */
 export default function AuthLayout({ children }: { children: ReactNode }): React.ReactElement {
-  return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">{children}</div>
-    </div>
-  )
+  // Shell structure is provided by ShellWrapper via the design system
+  return <>{children}</>
 }

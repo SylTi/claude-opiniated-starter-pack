@@ -1,0 +1,18 @@
+{
+  "pluginId": "main-app",
+  "packageName": "@plugins/main-app",
+  "version": "1.0.0",
+  "tier": "main-app",
+  "displayName": "Main Application",
+  "description": "Core design ownership plugin providing global theme and baseline navigation",
+  "requestedCapabilities": [
+    {
+      "capability": "ui:design:global",
+      "reason": "Own global theme tokens and shell components"
+    },
+    {
+      "capability": "ui:nav:baseline",
+      "reason": "Provide baseline navigation model"
+    }
+  ]
+}

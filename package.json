@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm -r --parallel run dev",
+    "dev": "pnpm run plugins:build && pnpm -r --parallel run dev",
     "build": "pnpm -r run build",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm --filter web run typecheck && pnpm --filter api run typecheck",
@@ -17,6 +17,7 @@
     "shared:build": "pnpm --filter @saas/shared run build",
     "config:build": "pnpm --filter @saas/config run build",
     "plugins-core:build": "pnpm --filter @saas/plugins-core run build",
+    "plugins:build": "pnpm --filter './plugins/*' run build",
     "web:dev": "pnpm --filter web run dev",
     "api:dev": "pnpm --filter api run dev",
     "web:build": "pnpm --filter web run build",

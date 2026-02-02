@@ -2,7 +2,7 @@
  * @saas/plugins-core
  *
  * Core package for the plugin system.
- * Provides types, registries, enforcement, and migration helpers for plugins.
+ * Provides types, registries, enforcement, navigation, and migration helpers for plugins.
  */
 
 // Types
@@ -13,6 +13,9 @@ export * from './registry/index.js'
 
 // Enforcement
 export * from './enforcement/index.js'
+
+// Navigation
+export * from './navigation/index.js'
 
 // Migration helpers
 export * from './migrations/index.js'

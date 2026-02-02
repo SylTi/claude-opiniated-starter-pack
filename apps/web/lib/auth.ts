@@ -192,9 +192,15 @@ export type OAuthProvider = "google" | "github";
 export const oauthApi = {
   /**
    * Get OAuth redirect URL
+   * @param provider - OAuth provider (google, github)
+   * @param callbackUrl - Optional URL to redirect to after OAuth completes
    */
-  getRedirectUrl(provider: OAuthProvider): string {
-    return `${API_BASE_URL}/api/v1/auth/oauth/${provider}/redirect`;
+  getRedirectUrl(provider: OAuthProvider, callbackUrl?: string): string {
+    const baseUrl = `${API_BASE_URL}/api/v1/auth/oauth/${provider}/redirect`;
+    if (callbackUrl) {
+      return `${baseUrl}?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+    }
+    return baseUrl;
   },
 
   /**

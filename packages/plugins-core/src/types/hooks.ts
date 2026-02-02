@@ -69,9 +69,17 @@ export interface HookRegistration {
  * Built-in filter hooks.
  */
 export const FILTER_HOOKS = {
-  // Navigation
+  // Navigation (legacy - kept for backward compatibility)
   'nav:items': 'nav:items',
   'nav:user-menu': 'nav:user-menu',
+
+  // Navigation V2 - section-based nav model
+  'ui:nav:main': 'ui:nav:main',
+  'ui:nav:admin': 'ui:nav:admin',
+  'ui:user:menu': 'ui:user:menu',
+
+  // Theme configuration
+  'ui:theme:config': 'ui:theme:config',
 
   // Dashboard
   'dashboard:widgets': 'dashboard:widgets',

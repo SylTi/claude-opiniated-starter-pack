@@ -1059,6 +1059,82 @@ POST /api/v1/invitations/:token/decline
 
 ---
 
+## Navigation
+
+### Get Navigation Model
+
+Get the composed navigation model for the authenticated user. This endpoint is the single source of truth for navigation composition, running the full pipeline including hooks registered by plugins.
+
+```
+GET /api/v1/navigation/model
+```
+
+**Authentication:** Required
+
+**Response:**
+```json
+{
+  "data": {
+    "nav": {
+      "main": [
+        {
+          "id": "core.main",
+          "label": "Main",
+          "order": 100,
+          "items": [
+            {
+              "id": "core.dashboard",
+              "label": "Dashboard",
+              "href": "/dashboard",
+              "icon": "Home",
+              "order": 100
+            }
+          ]
+        }
+      ],
+      "admin": [],
+      "userMenu": [
+        {
+          "id": "core.account",
+          "label": "Account",
+          "order": 9000,
+          "items": [
+            {
+              "id": "core.logout",
+              "label": "Log out",
+              "href": "#",
+              "icon": "LogOut",
+              "order": 9999,
+              "onClick": "logout"
+            }
+          ]
+        }
+      ]
+    },
+    "designId": "main-app",
+    "isSafeMode": false
+  }
+}
+```
+
+**Error Response (503 - Design Not Registered):**
+```json
+{
+  "error": "DesignNotRegistered",
+  "message": "No design registered. Plugin system may not be fully initialized."
+}
+```
+
+**Error Response (500 - Navigation Build Failed):**
+```json
+{
+  "error": "NavigationBuildFailed",
+  "message": "Navigation model could not be built: [collision details]"
+}
+```
+
+---
+
 ## Dashboard
 
 ### Get User Stats

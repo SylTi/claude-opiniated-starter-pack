@@ -8,11 +8,37 @@ import type { CapabilityRequirement } from './capabilities.js'
 import type { HookRegistration } from './hooks.js'
 
 /**
+ * User role for plugin access control.
+ * Matches UserRole from @saas/shared.
+ */
+export type PluginRequiredRole = 'admin' | 'user' | 'guest'
+
+/**
+ * Valid required role values for validation.
+ */
+export const VALID_REQUIRED_ROLES: readonly PluginRequiredRole[] = ['admin', 'user', 'guest'] as const
+
+/**
+ * Access control configuration for plugin UI routes.
+ * Enforced by the plugin layout at /apps/[pluginId].
+ */
+export interface PluginAccessControl {
+  /**
+   * Minimum role required to access the plugin UI.
+   * - 'admin': Only admins can access
+   * - 'user': Admins and regular users (not guests)
+   * - 'guest': Anyone authenticated (default if not specified)
+   */
+  requiredRole?: PluginRequiredRole
+}
+
+/**
  * Plugin tiers define access levels:
  * - A: UI plugins (unprivileged) - filters/slots only, no server routes, no DB
  * - B: App plugins (moderately privileged) - routes, own tables, background jobs
+ * - main-app: Design ownership (exactly one allowed) - global theme, baseline nav, shells
  */
-export type PluginTier = 'A' | 'B'
+export type PluginTier = 'A' | 'B' | 'main-app'
 
 /**
  * Plugin migration configuration.
@@ -102,6 +128,12 @@ export interface PluginManifest {
 
   /** Plugin dependencies (other plugin IDs) */
   dependencies?: string[]
+
+  /**
+   * Access control for plugin UI routes.
+   * If not specified, any authenticated user can access.
+   */
+  accessControl?: PluginAccessControl
 }
 
 /**
@@ -126,8 +158,8 @@ export function validatePluginManifest(manifest: PluginManifest): {
     errors.push('version is required and must be a string')
   }
 
-  if (!manifest.tier || !['A', 'B'].includes(manifest.tier)) {
-    errors.push('tier must be "A" or "B"')
+  if (!manifest.tier || !['A', 'B', 'main-app'].includes(manifest.tier)) {
+    errors.push('tier must be "A", "B", or "main-app"')
   }
 
   if (!Array.isArray(manifest.requestedCapabilities)) {
@@ -206,6 +238,54 @@ export function validatePluginManifest(manifest: PluginManifest): {
     }
     if (manifest.authzNamespace) {
       errors.push('Tier A plugins cannot have authzNamespace')
+    }
+  }
+
+  // Main-app tier cannot have routes, tables, or migrations
+  // It is a special tier for design ownership only
+  if (manifest.tier === 'main-app') {
+    if (manifest.routePrefix) {
+      errors.push('main-app tier cannot have routePrefix (design-only plugin)')
+    }
+    if (manifest.tables && manifest.tables.length > 0) {
+      errors.push('main-app tier cannot have database tables (design-only plugin)')
+    }
+    if (manifest.migrations) {
+      errors.push('main-app tier cannot have migrations (design-only plugin)')
+    }
+    if (manifest.authzNamespace) {
+      errors.push('main-app tier cannot have authzNamespace (design-only plugin)')
+    }
+
+    // Main-app must request design capabilities
+    if (Array.isArray(manifest.requestedCapabilities)) {
+      const hasDesignCapability = manifest.requestedCapabilities.some(
+        (cap) => cap.capability === 'ui:design:global'
+      )
+      if (!hasDesignCapability) {
+        errors.push(
+          'main-app tier must request "ui:design:global" capability. ' +
+            'Add { capability: "ui:design:global", reason: "..." } to requestedCapabilities.'
+        )
+      }
+    }
+  }
+
+  // Validate accessControl if present
+  if (manifest.accessControl !== undefined) {
+    if (
+      typeof manifest.accessControl !== 'object' ||
+      manifest.accessControl === null ||
+      Array.isArray(manifest.accessControl)
+    ) {
+      errors.push('accessControl must be a plain object (not null or array)')
+    } else if (manifest.accessControl.requiredRole !== undefined) {
+      if (!VALID_REQUIRED_ROLES.includes(manifest.accessControl.requiredRole as PluginRequiredRole)) {
+        errors.push(
+          `accessControl.requiredRole must be one of: ${VALID_REQUIRED_ROLES.join(', ')} ` +
+            `(got "${manifest.accessControl.requiredRole}")`
+        )
+      }
     }
   }
 

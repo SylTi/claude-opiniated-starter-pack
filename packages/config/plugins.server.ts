@@ -54,6 +54,7 @@ export type ServerPluginLoader = () => Promise<{
  * This MUST stay in sync with serverPluginManifests.
  */
 export const serverPluginPackages: Record<string, string> = {
+  'main-app': '@plugins/main-app',
   'nav-links': '@plugins/nav-links',
   notes: '@plugins/notes',
 }
@@ -63,6 +64,11 @@ export const serverPluginPackages: Record<string, string> = {
  * Keys are plugin IDs, values are loaders for plugin.meta.json.
  */
 export const serverPluginManifests: Record<string, ManifestLoader> = {
+  // Main-app design ownership plugin
+  'main-app': async () => {
+    return loadJsonManifest('main-app')
+  },
+
   // Example Tier A plugin
   'nav-links': async () => {
     return loadJsonManifest('nav-links')
@@ -79,8 +85,13 @@ export const serverPluginManifests: Record<string, ManifestLoader> = {
  * Keys are plugin IDs, values are dynamic imports of server.js.
  */
 export const serverPluginLoaders: Record<string, ServerPluginLoader> = {
-  // Tier A plugins don't have server entrypoints
-  // 'nav-links': not needed - UI only
+  // Main-app plugin (design ownership)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  'main-app': () => import('@plugins/main-app') as any,
+
+  // Tier A plugins with server-side hooks
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  'nav-links': () => import('@plugins/nav-links/server') as any,
 
   // Tier B plugins have server entrypoints
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
