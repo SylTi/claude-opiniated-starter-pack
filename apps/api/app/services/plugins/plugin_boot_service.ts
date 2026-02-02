@@ -7,7 +7,7 @@
  * CRITICAL: Plugin failures are isolated - one plugin failing does not crash the app.
  */
 
-import type { PluginManifest, AppDesign, NavContext } from '@saas/plugins-core'
+import type { PluginManifest, AppDesign } from '@saas/plugins-core'
 import {
   pluginRegistry,
   capabilityEnforcer,
@@ -23,10 +23,13 @@ import {
 import { serverPluginLoaders, loadAllPluginManifests } from '@saas/config/plugins/server'
 import { pluginSchemaChecker } from './plugin_schema_checker.js'
 import { pluginRouteMounter } from './plugin_route_mounter.js'
+import { buildNavValidationContexts } from './nav_validation_contexts.js'
+import { buildValidationEntitlementSets } from './nav_validation_entitlements.js'
 import { namespaceRegistry } from '#services/authz/namespace_registry'
 import { auditEventEmitter } from '#services/audit_event_emitter'
 import { AUDIT_EVENT_TYPES } from '@saas/shared'
 import type { AuthzResolver } from '@saas/shared'
+import SubscriptionTier from '#models/subscription_tier'
 
 /**
  * Check if running in safe mode.
@@ -61,6 +64,11 @@ export interface PluginBootResult {
  * Plugin Boot Service.
  */
 export default class PluginBootService {
+  private static readonly MAX_NAV_VALIDATION_CONTEXTS = (() => {
+    const parsed = Number.parseInt(process.env.PLUGIN_NAV_VALIDATION_MAX_CONTEXTS ?? '', 10)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 5000
+  })()
+
   /**
    * Boot all registered plugins.
    * This is called during application startup.
@@ -418,64 +426,18 @@ export default class PluginBootService {
    */
   private async validateFullNavPipeline(): Promise<void> {
     const design = designRegistry.get()
-
-    // Context matrix for validation
-    const validationContexts: Array<{ name: string; context: NavContext }> = [
-      {
-        name: 'admin-multi-tenant',
-        context: {
-          userId: 'validation',
-          userRole: 'admin',
-          entitlements: new Set(['admin']),
-          tenantId: 'validation-tenant',
-          tierLevel: 99,
-          hasMultipleTenants: true,
-        },
-      },
-      {
-        name: 'admin-single-tenant',
-        context: {
-          userId: 'validation',
-          userRole: 'admin',
-          entitlements: new Set(['admin']),
-          tenantId: 'validation-tenant',
-          tierLevel: 99,
-          hasMultipleTenants: false,
-        },
-      },
-      {
-        name: 'user-multi-tenant',
-        context: {
-          userId: 'validation',
-          userRole: 'user',
-          entitlements: new Set(),
-          tenantId: 'validation-tenant',
-          tierLevel: 1,
-          hasMultipleTenants: true,
-        },
-      },
-      {
-        name: 'user-single-tenant',
-        context: {
-          userId: 'validation',
-          userRole: 'user',
-          entitlements: new Set(),
-          tenantId: 'validation-tenant',
-          tierLevel: 1,
-          hasMultipleTenants: false,
-        },
-      },
-      {
-        name: 'guest',
-        context: {
-          userRole: 'guest',
-          entitlements: new Set(),
-          tenantId: null,
-          tierLevel: 0,
-          hasMultipleTenants: false,
-        },
-      },
-    ]
+    const tierLevels = await this.getValidationTierLevels()
+    const entitlementSets = this.getValidationEntitlementSets()
+    const validationContexts = buildNavValidationContexts({
+      tierLevels,
+      entitlementSets,
+    })
+    if (validationContexts.length > PluginBootService.MAX_NAV_VALIDATION_CONTEXTS) {
+      throw new Error(
+        `Validation context matrix too large (${validationContexts.length}). ` +
+          `Refine entitlement/tier validation inputs or increase PLUGIN_NAV_VALIDATION_MAX_CONTEXTS.`
+      )
+    }
 
     const collisionErrors: string[] = []
 
@@ -502,6 +464,57 @@ export default class PluginBootService {
           collisionErrors.join('\n')
       )
     }
+  }
+
+  /**
+   * Get tier levels used for nav validation contexts.
+   * Includes active DB tiers and default guardrails.
+   */
+  private async getValidationTierLevels(): Promise<number[]> {
+    const defaultLevels = [0, 1, 99]
+
+    try {
+      const activeTiers = await SubscriptionTier.query().where('is_active', true).select('level')
+      const levels = new Set<number>(defaultLevels)
+
+      for (const tier of activeTiers) {
+        if (Number.isFinite(tier.level)) {
+          levels.add(Math.trunc(tier.level))
+        }
+      }
+      return Array.from(levels).sort((a, b) => a - b)
+    } catch (error) {
+      console.warn(
+        '[PluginBootService] Failed to load subscription tiers for nav validation, using defaults:',
+        error instanceof Error ? error.message : String(error)
+      )
+      return defaultLevels
+    }
+  }
+
+  /**
+   * Build entitlement sets used for nav validation contexts.
+   * Includes baseline role entitlements plus known granted capabilities.
+   */
+  private getValidationEntitlementSets(): ReadonlySet<string>[] {
+    const allGrantedCapabilities = new Set<string>()
+    const grantedByPlugin: Array<ReadonlySet<string>> = []
+
+    for (const plugin of pluginRegistry.getAll()) {
+      const pluginGranted = new Set<string>()
+      for (const capability of plugin.grantedCapabilities) {
+        allGrantedCapabilities.add(capability)
+        pluginGranted.add(capability)
+      }
+      if (pluginGranted.size > 0) {
+        grantedByPlugin.push(pluginGranted)
+      }
+    }
+
+    return buildValidationEntitlementSets({
+      allGrantedCapabilities,
+      grantedByPlugin,
+    })
   }
 
   /**

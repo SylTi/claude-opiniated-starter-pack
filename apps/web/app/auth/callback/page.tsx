@@ -75,8 +75,12 @@ function OAuthCallbackContent(): React.ReactElement {
     }
   }, [success, redirectUrl, router, refreshUser])
 
-  // Show error from URL params or from refreshUser failure
-  const displayError = error || refreshError
+  // Show error from URL params, refresh failure, or invalid callback status
+  const invalidCallback = success !== 'true' && !error
+  const displayError =
+    error ||
+    refreshError ||
+    (invalidCallback ? 'Invalid authentication callback. Please sign in again.' : null)
   if (displayError) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">

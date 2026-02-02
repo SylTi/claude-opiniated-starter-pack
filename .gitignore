@@ -54,3 +54,13 @@ packages/config/plugins.*.d.ts.map
 packages/config/plugins.client.d.ts
 packages/config/plugins.server.d.ts
 packages/config/plugins.migrations.d.ts
+
+# accidental generated artifacts under source trees
+packages/plugins-core/src/**/*.js
+packages/plugins-core/src/**/*.js.map
+packages/plugins-core/src/**/*.d.ts
+packages/plugins-core/src/**/*.d.ts.map
+packages/shared/src/**/*.js
+packages/shared/src/**/*.js.map
+packages/shared/src/**/*.d.ts
+packages/shared/src/**/*.d.ts.map

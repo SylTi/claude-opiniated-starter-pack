@@ -151,10 +151,36 @@ describe("OAuth Callback Page", () => {
       });
     });
 
-    it("shows loading state when no success or error", () => {
+    it("shows invalid callback error when no success or error", () => {
       render(<OAuthCallbackPage />);
 
-      expect(document.querySelector(".animate-spin")).toBeInTheDocument();
+      expect(screen.getByText("Authentication Failed")).toBeInTheDocument();
+      expect(
+        screen.getByText("Invalid authentication callback. Please sign in again.")
+      ).toBeInTheDocument();
+    });
+  });
+
+  describe("refresh failure", () => {
+    beforeEach(() => {
+      mockSearchParams.mockReturnValue({
+        get: (key: string) => {
+          if (key === "success") return "true";
+          if (key === "isNewUser") return "false";
+          return null;
+        },
+      });
+      mockRefreshUser.mockRejectedValue(new Error("refresh failed"));
+    });
+
+    it("shows an error instead of hanging on spinner when refresh fails", async () => {
+      render(<OAuthCallbackPage />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText("Failed to complete authentication. Please try again.")
+        ).toBeInTheDocument();
+      });
     });
   });
 });
