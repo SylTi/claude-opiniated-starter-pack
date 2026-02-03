@@ -1,16 +1,21 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { api, ApiError } from "@/lib/api";
 
-// Mock fetch globally
+// Mock fetch with proper isolation
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+const originalFetch = globalThis.fetch;
 
 describe("api client", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    globalThis.fetch = mockFetch;
     if (typeof document !== "undefined") {
       document.cookie = "XSRF-TOKEN=test-xsrf";
     }
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
   });
 
   describe("api.get", () => {
@@ -314,6 +319,14 @@ describe("ApiError", () => {
 describe("handleResponse (via api methods)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    globalThis.fetch = mockFetch;
+    if (typeof document !== "undefined") {
+      document.cookie = "XSRF-TOKEN=test-xsrf";
+    }
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
   });
 
   it("handles missing error field in response", async () => {

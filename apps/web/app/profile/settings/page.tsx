@@ -35,6 +35,10 @@ export default function SettingsPage(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!user) {
+      return;
+    }
+
     const loadData = async (): Promise<void> => {
       try {
         const [accounts, history] = await Promise.all([
@@ -50,7 +54,7 @@ export default function SettingsPage(): React.ReactElement {
       }
     };
     loadData();
-  }, []);
+  }, [user]);
 
   const handleLink = (provider: "google" | "github"): void => {
     window.location.href = oauthApi.getLinkUrl(provider);

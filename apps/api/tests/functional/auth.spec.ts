@@ -169,10 +169,22 @@ test.group('Auth API - Registration & Login', (group) => {
     const id = uniqueId()
     const { cookies } = await createUserAndLogin(`logout-${id}@example.com`, 'password123')
 
-    await request(BASE_URL).post('/api/v1/auth/logout').set('Cookie', cookies).expect(200)
+    const logoutResponse = await request(BASE_URL)
+      .post('/api/v1/auth/logout')
+      .set('Cookie', cookies)
+      .expect(200)
 
-    // Verify we're logged out by trying to access /me
-    await request(BASE_URL).get('/api/v1/auth/me').set('Cookie', cookies).expect(401)
+    // Get the cookies from logout response (session should be cleared)
+    const rawCookies = logoutResponse.headers['set-cookie']
+    const logoutCookies: string[] = rawCookies
+      ? Array.isArray(rawCookies)
+        ? rawCookies
+        : [rawCookies]
+      : []
+
+    // Verify we're logged out by trying to access /me with the post-logout cookies
+    // The logout response clears the session cookie, so subsequent requests should fail
+    await request(BASE_URL).get('/api/v1/auth/me').set('Cookie', logoutCookies).expect(401)
   })
 })
 

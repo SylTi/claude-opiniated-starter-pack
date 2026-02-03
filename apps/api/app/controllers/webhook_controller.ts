@@ -8,27 +8,27 @@ export default class WebhookController {
    * POST /api/v1/webhooks/stripe
    */
   async handleStripe({ request, response }: HttpContext): Promise<void> {
-    // Get raw body (set by RawBodyMiddleware)
-    const rawBody = request.rawBody
-
-    if (!rawBody) {
-      return response.badRequest({
-        error: 'InvalidPayload',
-        message: 'Missing request body',
-      })
-    }
-
-    // Get Stripe signature header
-    const signature = request.header('stripe-signature')
-
-    if (!signature) {
-      return response.badRequest({
-        error: 'InvalidSignature',
-        message: 'Missing Stripe signature header',
-      })
-    }
-
     try {
+      // Get raw body (set by WebhookRawBodyMiddleware)
+      const rawBody = request.rawBody
+
+      if (!rawBody) {
+        return response.badRequest({
+          error: 'InvalidPayload',
+          message: 'Missing request body',
+        })
+      }
+
+      // Get Stripe signature header
+      const signature = request.header('stripe-signature')
+
+      if (!signature) {
+        return response.badRequest({
+          error: 'InvalidSignature',
+          message: 'Missing Stripe signature header',
+        })
+      }
+
       const paymentService = new PaymentService()
       const result = await paymentService.processWebhook(rawBody, signature)
 
@@ -44,7 +44,7 @@ export default class WebhookController {
     } catch (error) {
       // Log detailed error internally for debugging
       logger.error(
-        { err: error, signature: signature?.substring(0, 20) + '...' },
+        { err: error, signature: request.header('stripe-signature')?.substring(0, 20) + '...' },
         'Stripe webhook processing failed'
       )
 

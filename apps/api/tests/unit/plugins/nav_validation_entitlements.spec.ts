@@ -42,8 +42,8 @@ test.group('nav_validation_entitlements', () => {
     })
     const keys = new Set(result.map(toKey))
 
-    // 2^3 capability subsets + empty/admin baselines
-    assert.isAtLeast(keys.size, 10)
+    // (2^3 - 1) non-empty capability subsets + empty + admin baselines = 7 + 2 = 9
+    assert.isAtLeast(keys.size, 9)
     assert.isTrue(keys.has('cap.a|cap.b|cap.c'))
     assert.isTrue(keys.has('cap.a|cap.b'))
     assert.isTrue(keys.has('cap.a|cap.c'))

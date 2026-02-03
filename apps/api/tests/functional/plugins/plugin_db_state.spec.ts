@@ -3,6 +3,7 @@ import testUtils from '@adonisjs/core/services/test_utils'
 import PluginDbState from '#models/plugin_db_state'
 import db from '@adonisjs/lucid/services/db'
 import { setPluginSchemaVersion } from '#services/plugins/schema_version_helper'
+import { DateTime } from 'luxon'
 
 test.group('PluginDbState Model - CRUD', (group) => {
   group.each.setup(() => testUtils.db().truncate())
@@ -19,7 +20,8 @@ test.group('PluginDbState Model - CRUD', (group) => {
     assert.equal(state.schemaVersion, 1)
     assert.equal(state.installedPluginVersion, '1.0.0')
     assert.equal(state.lastMigrationName, '001_initial')
-    assert.instanceOf(state.updatedAt, Date)
+    // Lucid ORM returns DateTime from Luxon, not native Date
+    assert.isTrue(DateTime.isDateTime(state.updatedAt))
   })
 
   test('finds plugin by pluginId', async ({ assert }) => {

@@ -58,7 +58,11 @@ export default defineConfig({
     () => import('@adonisjs/limiter/limiter_provider'),
     () => import('@adonisjs/shield/shield_provider'),
     // Plugin system boot - loads plugins, validates capabilities, mounts routes
-    () => import('#providers/plugin_boot_provider'),
+    // Only runs in web environment - migrations run independently via database.ts config
+    {
+      file: () => import('#providers/plugin_boot_provider'),
+      environment: ['web'],
+    },
   ],
 
   /*

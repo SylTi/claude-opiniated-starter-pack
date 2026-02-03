@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AdminUsersPage from "@/app/admin/users/page";
-import type { SubscriptionTier, SubscriptionTierDTO, SubscriptionDTO } from "@saas/shared";
+import type { SubscriptionTierDTO, SubscriptionDTO } from "@saas/shared";
 
 function createMockTier(slug: string, level: number): SubscriptionTierDTO {
   return {
@@ -36,18 +36,12 @@ vi.mock("@/contexts/auth-context", () => ({
 // Mock the API
 const mockApiGet = vi.fn();
 const mockApiPost = vi.fn();
-const mockApiPut = vi.fn();
 const mockApiDelete = vi.fn();
-const mockAdminBillingListTiers = vi.fn();
 vi.mock("@/lib/api", () => ({
   api: {
     get: (...args: unknown[]) => mockApiGet(...args),
     post: (...args: unknown[]) => mockApiPost(...args),
-    put: (...args: unknown[]) => mockApiPut(...args),
     delete: (...args: unknown[]) => mockApiDelete(...args),
-  },
-  adminBillingApi: {
-    listTiers: (...args: unknown[]) => mockAdminBillingListTiers(...args),
   },
   ApiError: class ApiError extends Error {
     statusCode: number;
@@ -87,10 +81,9 @@ const mockUsers = [
     email: "admin@example.com",
     fullName: "Admin User",
     role: "admin",
-    subscriptionTier: "tier2" as SubscriptionTier,
-    subscriptionExpiresAt: null,
     currentTenantId: null,
     currentTenantName: null,
+    currentTenantType: null,
     emailVerified: true,
     emailVerifiedAt: "2024-01-01T00:00:00.000Z",
     mfaEnabled: true,
@@ -103,10 +96,9 @@ const mockUsers = [
     email: "user@example.com",
     fullName: "Regular User",
     role: "user",
-    subscriptionTier: "free" as SubscriptionTier,
-    subscriptionExpiresAt: null,
     currentTenantId: null,
     currentTenantName: null,
+    currentTenantType: null,
     emailVerified: false,
     emailVerifiedAt: null,
     mfaEnabled: false,
@@ -116,11 +108,6 @@ const mockUsers = [
   },
 ];
 
-const mockTiers = [
-  createMockTier("free", 0),
-  createMockTier("tier1", 1),
-  createMockTier("tier2", 2),
-];
 
 describe("Admin Users Page", () => {
   beforeEach(() => {
@@ -141,8 +128,6 @@ describe("Admin Users Page", () => {
     mockUseAuth.mockReturnValue({
       user: adminUser,
     });
-
-    mockAdminBillingListTiers.mockResolvedValue(mockTiers);
   });
 
   describe("loading state", () => {
@@ -430,36 +415,6 @@ describe("Admin Users Page", () => {
     });
   });
 
-  describe("subscription tier management", () => {
-    beforeEach(() => {
-      mockApiGet.mockResolvedValue({ data: mockUsers });
-    });
-
-    it("displays subscription tier selects for each user", async () => {
-      render(<AdminUsersPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText("admin@example.com")).toBeInTheDocument();
-      });
-
-      // Find the tier select triggers (combobox roles)
-      const selectTriggers = screen.getAllByRole("combobox");
-      // Should have one select per user
-      expect(selectTriggers.length).toBe(2);
-    });
-
-    it("displays current tier values in selects", async () => {
-      render(<AdminUsersPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText("admin@example.com")).toBeInTheDocument();
-      });
-
-      // Should show tier badges
-      expect(screen.getByText("Enterprise")).toBeInTheDocument();
-      expect(screen.getByText("Free")).toBeInTheDocument();
-    });
-  });
 
   describe("verify/unverify email error handling", () => {
     beforeEach(() => {
@@ -618,25 +573,6 @@ describe("Admin Users Page", () => {
     });
   });
 
-  describe("tier badge variants", () => {
-    it("displays tier1 users with secondary badge", async () => {
-      const usersWithTier1 = [
-        {
-          ...mockUsers[0],
-          subscriptionTier: "tier1" as SubscriptionTier,
-        },
-      ];
-      mockApiGet.mockResolvedValue({ data: usersWithTier1 });
-      render(<AdminUsersPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText("admin@example.com")).toBeInTheDocument();
-      });
-
-      // The tier badge should be visible
-      expect(screen.getByText("Pro")).toBeInTheDocument();
-    });
-  });
 
   describe("user with null name", () => {
     it("displays dash for null fullName", async () => {

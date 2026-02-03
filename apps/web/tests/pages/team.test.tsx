@@ -281,12 +281,12 @@ describe("Team Management Page", () => {
       });
     });
 
-    it("displays team management description", async () => {
+    it("displays tenant management description", async () => {
       render(<TeamManagementPage />);
 
       await waitFor(() => {
         expect(
-          screen.getByText("Manage your team members and invitations")
+          screen.getByText("Manage your tenant members and invitations")
         ).toBeInTheDocument();
       });
     });
@@ -351,11 +351,11 @@ describe("Team Management Page", () => {
       });
     });
 
-    it("displays team members section", async () => {
+    it("displays tenant members section", async () => {
       render(<TeamManagementPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("Team Members")).toBeInTheDocument();
+        expect(screen.getByText("Tenant Members")).toBeInTheDocument();
       });
     });
 
@@ -467,7 +467,7 @@ describe("Team Management Page", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText(/You can view team members but cannot make changes/i)
+          screen.getByText(/You can view tenant members but cannot make changes/i)
         ).toBeInTheDocument();
       });
     });
@@ -476,7 +476,7 @@ describe("Team Management Page", () => {
       render(<TeamManagementPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("Team Members")).toBeInTheDocument();
+        expect(screen.getByText("Tenant Members")).toBeInTheDocument();
       });
 
       expect(screen.queryByText("Invite New Member")).not.toBeInTheDocument();
@@ -818,7 +818,7 @@ describe("Team Management Page", () => {
       render(<TeamManagementPage />);
 
       await waitFor(() => {
-        expect(toast.error).toHaveBeenCalledWith("You don't have permission to manage this team");
+        expect(toast.error).toHaveBeenCalledWith("You don't have permission to manage this tenant");
         expect(mockPush).toHaveBeenCalledWith("/dashboard");
       });
     });
@@ -842,7 +842,7 @@ describe("Team Management Page", () => {
       render(<TeamManagementPage />);
 
       await waitFor(() => {
-        expect(toast.error).toHaveBeenCalledWith("Failed to fetch team data");
+        expect(toast.error).toHaveBeenCalledWith("Failed to fetch tenant data");
       });
     });
   });

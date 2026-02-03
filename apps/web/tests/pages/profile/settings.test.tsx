@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import SettingsPage from "@/app/profile/settings/page";
 import type { SubscriptionTier } from "@saas/shared";
@@ -97,6 +97,13 @@ describe("Settings Page", () => {
     );
   });
 
+  afterEach(async () => {
+    // Flush any pending state updates to avoid act() warnings
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  });
+
   describe("when user is not authenticated", () => {
     beforeEach(() => {
       mockUseAuth.mockReturnValue({
@@ -128,16 +135,27 @@ describe("Settings Page", () => {
     });
 
     describe("loading state", () => {
-      it("shows loading spinner while fetching data", () => {
+      it("shows loading spinner while fetching data", async () => {
+        let resolveAccounts: (value: unknown[]) => void;
+        let resolveHistory: (value: unknown[]) => void;
+
         mockGetAccounts.mockImplementation(
-          () => new Promise((resolve) => setTimeout(resolve, 100))
+          () => new Promise((resolve) => { resolveAccounts = resolve; })
         );
         mockGetLoginHistory.mockImplementation(
-          () => new Promise((resolve) => setTimeout(resolve, 100))
+          () => new Promise((resolve) => { resolveHistory = resolve; })
         );
+
         render(<SettingsPage />);
 
         expect(document.querySelector(".animate-spin")).toBeInTheDocument();
+
+        // Resolve promises to avoid dangling async operations
+        await act(async () => {
+          resolveAccounts!([]);
+          resolveHistory!([]);
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
       });
     });
 

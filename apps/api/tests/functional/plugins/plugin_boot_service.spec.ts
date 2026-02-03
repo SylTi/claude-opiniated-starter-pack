@@ -89,8 +89,8 @@ test.group('Plugin Boot Service - Route Mounting', (group) => {
 
     const registrar = createRoutesRegistrar('test-plugin', routerInstance)
 
-    // Register a test route
-    registrar.get('/test', async (ctx) => {
+    // Register a test route (must await - route registration is async due to middleware loading)
+    await registrar.get('/test', async (ctx) => {
       ctx.response.json({ success: true })
     })
 
