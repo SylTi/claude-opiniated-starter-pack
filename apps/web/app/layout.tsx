@@ -7,10 +7,38 @@ import type { UserDTO } from '@saas/shared'
 import { Providers } from '@/components/providers'
 import { Toaster } from '@/components/ui/sonner'
 import { verifyUserCookie } from '@/lib/cookie-signing'
+import { type Theme, THEME_COOKIE_NAME, DEFAULT_THEME } from '@/lib/theme-config'
+import { design } from '@saas/config/main-app'
 
-export const metadata: Metadata = {
-  title: 'SaaS Monorepo',
-  description: 'Modern SaaS application with Next.js and AdonisJS',
+/**
+ * Default metadata fallback.
+ */
+const DEFAULT_METADATA: Metadata = {
+  title: 'SaaS App',
+  description: 'A modern SaaS application',
+}
+
+/**
+ * Generate metadata from main-app plugin design.
+ * Falls back to defaults if design doesn't provide branding.
+ */
+export function generateMetadata(): Metadata {
+  try {
+    const tokens = design.appTokens()
+    const iconUrl = tokens.faviconUrl ?? tokens.logoUrl
+    return {
+      title: tokens.appName ?? DEFAULT_METADATA.title,
+      description: tokens.appDescription ?? DEFAULT_METADATA.description,
+      ...(iconUrl && {
+        icons: {
+          icon: iconUrl,
+        },
+      }),
+    }
+  } catch {
+    // If design fails, use safe defaults
+    return DEFAULT_METADATA
+  }
 }
 
 /**
@@ -26,10 +54,18 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>): Promise<React.ReactElement> {
-  const userInfoCookie = (await cookies()).get('user-info')
+  const cookieStore = await cookies()
+  const userInfoCookie = cookieStore.get('user-info')
+  const themeCookie = cookieStore.get(THEME_COOKIE_NAME)
+
   let hasVerifiedUserCookie = false
   let initialUserRole: UserDTO['role'] | null = null
   const serverSafeMode = isSafeMode()
+
+  // Parse theme from cookie (validate it's a valid Theme value)
+  const initialTheme: Theme = (themeCookie?.value === 'light' || themeCookie?.value === 'dark')
+    ? themeCookie.value
+    : DEFAULT_THEME
 
   if (userInfoCookie?.value) {
     const userInfo = await verifyUserCookie(userInfoCookie.value)
@@ -40,12 +76,13 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="en">
+    <html lang="en" className={initialTheme === 'dark' ? 'dark' : ''}>
       <body className="antialiased">
         <Providers
           initialHasUserInfoCookie={hasVerifiedUserCookie}
           initialUserRole={initialUserRole}
           serverSafeMode={serverSafeMode}
+          initialTheme={initialTheme}
         >
           {/* Header is rendered inside Providers (needs context) but outside ShellWrapper */}
           {/* Only page content goes through ShellWrapper for area-specific layouts */}

@@ -19,3 +19,6 @@ export * from './navigation/index.js'
 
 // Migration helpers
 export * from './migrations/index.js'
+
+// NOTE: Framework context is NOT re-exported here because it uses React hooks
+// and would break server component imports. Import from '@saas/plugins-core/framework' instead.

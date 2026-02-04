@@ -22,10 +22,14 @@ export interface ThemeTokens {
    */
   cssVars: Record<string, string>
 
-  /** Application name (e.g., 'MyProduct') */
+  /** Application name (e.g., 'MyProduct') - used for page title */
   appName?: string
-  /** Logo URL (e.g., '/logo.svg') */
+  /** Application description for metadata */
+  appDescription?: string
+  /** Logo URL for header/branding (e.g., '/logo.svg') */
   logoUrl?: string
+  /** Favicon URL for browser tab (e.g., '/favicon.png') */
+  faviconUrl?: string
 
   // ---- Typed convenience properties (optional extensions) ----
   // These MUST map to cssVars when used. They provide better DX/type safety.
@@ -161,6 +165,44 @@ export interface AreaOverride {
 }
 
 /**
+ * Props passed to a custom header override.
+ * All slots are provided by the skeleton and can be arranged freely.
+ */
+export interface HeaderOverrideProps {
+  /** Brand slot (logo + app name link) */
+  brand: unknown // React.ReactNode on frontend
+  /** Main navigation slot (typically nav.main) */
+  mainNavigation: unknown // React.ReactNode on frontend
+  /** Tenant switcher slot */
+  tenantSwitcher: unknown // React.ReactNode on frontend
+  /** User menu slot */
+  userMenu: unknown // React.ReactNode on frontend
+  /** Pending-auth slot (cookie exists, user still loading) */
+  pendingNavigation: unknown // React.ReactNode on frontend
+  /** Guest auth actions slot (Sign in / Get started) */
+  authActions: unknown // React.ReactNode on frontend
+  /** Whether the user is authenticated */
+  isAuthenticated: boolean
+  /** Whether session cookie exists but user is still loading */
+  isPendingUser: boolean
+}
+
+/**
+ * Header override configuration.
+ * Allows main-app plugins to control header layout while reusing skeleton slots.
+ */
+export interface HeaderOverride {
+  Header: (props: HeaderOverrideProps) => unknown
+}
+
+/**
+ * Props for AppProviders wrapper component.
+ */
+export interface AppProvidersProps {
+  children: unknown // React.ReactNode on frontend
+}
+
+/**
  * App Design interface.
  * Implemented by the main-app plugin to provide global design.
  */
@@ -205,6 +247,15 @@ export interface AppDesign {
   authOverride?: AreaOverride
 
   /**
+   * Optional override for skeleton header layout.
+   * If missing or crashing, skeleton uses its default header.
+   *
+   * This controls placement/layout of header slots (brand, main nav,
+   * tenant switcher, user menu), not their underlying security behavior.
+   */
+  headerOverride?: HeaderOverride
+
+  /**
    * Shell overrides for different areas (alternative to specific overrides).
    * If not provided, default shells are used.
    * @deprecated Use AppShell, adminOverride, authOverride instead.
@@ -216,6 +267,25 @@ export interface AppDesign {
    * Use for any initialization.
    */
   onRegister?(): void | Promise<void>
+
+  /**
+   * Optional app-level providers wrapper (SPEC EXTENSION).
+   *
+   * Wraps the entire app with plugin-specific context providers.
+   * Rendered above AuthProvider/DesignProvider/NavigationProvider.
+   *
+   * Use this for providers that need to wrap the entire app, not just
+   * the content area (which is handled by AppShell).
+   *
+   * Example use cases:
+   * - RouterProvider (for framework-agnostic routing)
+   * - ThemeProvider (for CSS variables at document level)
+   * - Plugin-specific global contexts
+   *
+   * The skeleton provides a FrameworkContext with Next.js primitives
+   * (router, Link, Image) that can be consumed via useFramework() hook.
+   */
+  AppProviders?: (props: AppProvidersProps) => unknown
 }
 
 /**

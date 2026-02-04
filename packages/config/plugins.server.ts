@@ -4,15 +4,15 @@
  * Static loader maps for server-side plugin discovery.
  * NO fs.readdir at runtime - all plugins must be listed here.
  *
- * To add a new plugin:
- * 1. Add its manifest loader to serverPluginManifests
- * 2. Add its server entrypoint loader to serverPluginLoaders
+ * Plugin configuration is in plugins.config.ts (can be overridden per deployment).
+ * This file contains the loading logic which receives upstream updates.
  */
 
 import type { PluginManifest } from '@saas/plugins-core'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ALL_PLUGINS, getMainAppPluginId } from './plugins.config.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -51,52 +51,33 @@ export type ServerPluginLoader = () => Promise<{
  * Used for sync resolution - the packageName from metadata is authoritative.
  *
  * Keys are plugin IDs, values are package names (e.g., '@plugins/notes').
- * This MUST stay in sync with serverPluginManifests.
  */
-export const serverPluginPackages: Record<string, string> = {
-  'main-app': '@plugins/main-app',
-  'nav-links': '@plugins/nav-links',
-  notes: '@plugins/notes',
-}
+export const serverPluginPackages: Record<string, string> = Object.fromEntries(
+  Object.entries(ALL_PLUGINS).map(([id, config]) => [id, config.packageName])
+)
 
 /**
  * Static map of plugin manifests.
  * Keys are plugin IDs, values are loaders for plugin.meta.json.
  */
-export const serverPluginManifests: Record<string, ManifestLoader> = {
-  // Main-app design ownership plugin
-  'main-app': async () => {
-    return loadJsonManifest('main-app')
-  },
-
-  // Example Tier A plugin
-  'nav-links': async () => {
-    return loadJsonManifest('nav-links')
-  },
-
-  // Example Tier B plugin
-  notes: async () => {
-    return loadJsonManifest('notes')
-  },
-}
+export const serverPluginManifests: Record<string, ManifestLoader> = Object.fromEntries(
+  Object.entries(ALL_PLUGINS).map(([id]) => [
+    id,
+    async () => loadJsonManifest(id),
+  ])
+)
 
 /**
  * Static map of plugin server entrypoints.
  * Keys are plugin IDs, values are dynamic imports of server.js.
  */
-export const serverPluginLoaders: Record<string, ServerPluginLoader> = {
-  // Main-app plugin (design ownership)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  'main-app': () => import('@plugins/main-app') as any,
-
-  // Tier A plugins with server-side hooks
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  'nav-links': () => import('@plugins/nav-links/server') as any,
-
-  // Tier B plugins have server entrypoints
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  notes: () => import('@plugins/notes') as any,
-}
+export const serverPluginLoaders: Record<string, ServerPluginLoader> = Object.fromEntries(
+  Object.entries(ALL_PLUGINS).map(([id, config]) => [
+    id,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    config.serverImport as any,
+  ])
+)
 
 /**
  * Get all registered plugin IDs.
@@ -111,6 +92,11 @@ export function getRegisteredPluginIds(): string[] {
 export function isPluginRegistered(pluginId: string): boolean {
   return pluginId in serverPluginManifests
 }
+
+/**
+ * Get the main-app plugin ID.
+ */
+export { getMainAppPluginId }
 
 /**
  * Load a plugin's manifest.

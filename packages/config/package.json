@@ -5,6 +5,14 @@
   "exports": {
     "./tsconfig": "./tsconfig.base.json",
     "./eslint": "./eslint.base.js",
+    "./main-app": {
+      "types": "./main-app.d.ts",
+      "default": "./main-app.js"
+    },
+    "./main-app/client": {
+      "types": "./main-app.client.d.ts",
+      "default": "./main-app.client.js"
+    },
     "./plugins/server": {
       "types": "./plugins.server.d.ts",
       "default": "./plugins.server.js"

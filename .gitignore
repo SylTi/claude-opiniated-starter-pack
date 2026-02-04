@@ -50,10 +50,14 @@ coverage/
 
 # packages/config TypeScript build outputs (source files are .ts, not compiled .js)
 packages/config/plugins.*.js
+packages/config/plugins.*.d.ts
 packages/config/plugins.*.d.ts.map
-packages/config/plugins.client.d.ts
-packages/config/plugins.server.d.ts
-packages/config/plugins.migrations.d.ts
+packages/config/main-app.js
+packages/config/main-app.d.ts
+packages/config/main-app.d.ts.map
+packages/config/main-app.client.js
+packages/config/main-app.client.d.ts
+packages/config/main-app.client.d.ts.map
 
 # accidental generated artifacts under source trees
 packages/plugins-core/src/**/*.js
@@ -64,3 +68,7 @@ packages/shared/src/**/*.js
 packages/shared/src/**/*.js.map
 packages/shared/src/**/*.d.ts
 packages/shared/src/**/*.d.ts.map
+
+# Custom main-app plugins (local development only)
+# To use a custom main-app, edit packages/config/plugins.config.ts (single file)
+# Use: git update-index --skip-worktree packages/config/plugins.config.ts

@@ -34,7 +34,6 @@
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tabs": "^1.1.13",
-    "@plugins/main-app": "workspace:*",
     "@saas/config": "workspace:*",
     "@saas/plugins-core": "workspace:*",
     "@saas/shared": "workspace:*",

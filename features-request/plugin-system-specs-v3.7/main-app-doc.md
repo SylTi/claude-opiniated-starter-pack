@@ -106,7 +106,9 @@ The skeleton will use:
 - `appTokens()` always
 - `AppShell` always (for product area)
 - `navBaseline()` always
+- `AppProviders` if provided (wraps entire app)
 - `adminOverride` and `authOverride` only if provided and valid
+- `headerOverride` only if provided and valid
 
 Rules:
 - `appTokens()` and `navBaseline()` must be **pure**
@@ -185,6 +187,155 @@ export const design: AppDesign = {
   },
 }
 ~~~
+
+### 5.1.1 Using FrameworkContext (optional)
+If your plugin needs framework-agnostic routing or components, use the `FrameworkContext` from `@saas/plugins-core/framework`:
+
+~~~tsx
+import { useFramework } from '@saas/plugins-core/framework'
+
+function MyComponent() {
+  const framework = useFramework()
+
+  if (!framework) {
+    // Running outside skeleton (e.g., standalone mode)
+    return null
+  }
+
+  const { router, Link, Image } = framework
+
+  return (
+    <div>
+      <Link href="/dashboard">Go to Dashboard</Link>
+      <button onClick={() => router.push('/settings')}>Settings</button>
+    </div>
+  )
+}
+~~~
+
+The `FrameworkContext` provides:
+- `router` - Navigation methods (push, replace, back, refresh) and current state (pathname, searchParams)
+- `Link` - Framework-specific link component
+- `Image` - Framework-specific optimized image component
+
+**Import paths:**
+- Types (server-safe): `import type { ... } from '@saas/plugins-core/types'`
+- Framework hooks (client-only): `import { useFramework } from '@saas/plugins-core/framework'`
+
+### 5.1.2 Using AppProviders (optional)
+If your plugin needs to wrap the **entire app** with context providers, use `AppProviders`:
+
+~~~tsx
+import type { AppDesign } from '@saas/plugins-core/types'
+import { useFramework } from '@saas/plugins-core/framework'
+
+// Your plugin's providers that need to wrap the entire app
+function MyAppProviders({ children }: { children: React.ReactNode }) {
+  const framework = useFramework()
+
+  return (
+    <MyRouterProvider
+      router={framework?.router}
+      Link={framework?.Link}
+      Image={framework?.Image}
+    >
+      <MyThemeProvider>
+        <MyGlobalStateProvider>
+          {children}
+        </MyGlobalStateProvider>
+      </MyThemeProvider>
+    </MyRouterProvider>
+  )
+}
+
+export const design: AppDesign = {
+  // ... required fields (appTokens, AppShell, navBaseline)
+
+  // Optional: wrap entire app with your providers
+  AppProviders: MyAppProviders,
+}
+~~~
+
+When to use `AppProviders`:
+- You need providers above the header/navigation (e.g., theme CSS variables)
+- You have framework-agnostic routing that needs to wrap the entire app
+- You have global state that all components need access to
+
+### 5.1.3 Using headerOverride (optional)
+Use `headerOverride` when you want custom placement of the skeleton header slots
+(for example centered `Library | Use` navigation with tenant/user controls on the right).
+
+`headerOverride` only changes **layout**. The skeleton still owns:
+- authenticated nav data (from nav model + filters + permission checks)
+- tenant switching behavior
+- user menu behavior
+- fallback behavior in safe mode or on override crash
+
+Example:
+~~~tsx
+import type { AppDesign } from '@saas/plugins-core/types'
+
+export const design: AppDesign = {
+  // ...appTokens, AppShell, navBaseline
+  headerOverride: {
+    Header({
+      brand,
+      mainNavigation,
+      tenantSwitcher,
+      userMenu,
+      authActions,
+      pendingNavigation,
+      isAuthenticated,
+      isPendingUser,
+    }) {
+      return (
+        <header className="border-b border-border bg-background">
+          <div className="container mx-auto grid h-16 grid-cols-[1fr_auto_1fr] items-center px-4">
+            <div className="justify-self-start">{brand}</div>
+
+            <div className="justify-self-center rounded-full border border-border bg-muted/40 px-2 py-1">
+              <div className="flex items-center gap-1">{mainNavigation}</div>
+            </div>
+
+            <div className="justify-self-end flex items-center gap-3">
+              {isAuthenticated ? (
+                <>
+                  {tenantSwitcher}
+                  {userMenu}
+                </>
+              ) : isPendingUser ? (
+                pendingNavigation
+              ) : (
+                authActions
+              )}
+            </div>
+          </div>
+        </header>
+      )
+    },
+  },
+}
+~~~
+
+If `headerOverride` throws, skeleton logs an incident and falls back to default header.
+
+When NOT to use `AppProviders`:
+- Providers only needed in the content area → use `AppShell` instead
+- Page-specific providers → wrap in individual pages
+
+Provider hierarchy:
+1. `FrameworkProvider` (skeleton) - Next.js primitives
+2. `AppProviders` (your plugin) - Your app-level providers
+3. `AuthProvider` (skeleton) - Authentication
+4. `DesignProvider` (skeleton) - Theme tokens
+5. `NavigationProvider` (skeleton) - Nav model
+6. `AppShell` (your plugin) - Content area shell
+
+**Safe mode behavior:**
+- When `SAFE_MODE=1`, `AppProviders` is **skipped entirely**
+- Skeleton wraps `AppProviders` in an error boundary as fallback
+- If `AppProviders` crashes, app continues without it
+- Your app should work without `AppProviders` (test with `SAFE_MODE=1`)
 
 ---
 
@@ -360,6 +511,7 @@ As a plugin author:
 ## 12) Minimal checklist before shipping
 - [ ] `plugin.meta.json` present and valid
 - [ ] `design` implements `AppDesign`
+- [ ] `AppProviders` (if used) doesn't break when `useFramework()` returns null
 - [ ] nav IDs are unique and stable
 - [ ] pages match deterministically, no side effects
 - [ ] capabilities declared and enforced on server

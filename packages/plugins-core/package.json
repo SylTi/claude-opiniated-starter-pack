@@ -28,6 +28,10 @@
     "./navigation": {
       "types": "./dist/navigation/index.d.ts",
       "default": "./dist/navigation/index.js"
+    },
+    "./framework": {
+      "types": "./dist/framework/framework-context.d.ts",
+      "default": "./dist/framework/framework-context.js"
     }
   },
   "scripts": {
@@ -37,7 +41,11 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@types/react": "^19.0.0",
     "typescript": "^5.6.3",
     "vitest": "^2.0.5"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
   }
 }

@@ -241,20 +241,40 @@ export function validatePluginManifest(manifest: PluginManifest): {
     }
   }
 
-  // Main-app tier cannot have routes, tables, or migrations
-  // It is a special tier for design ownership only
+  // Main-app tier: design ownership + optional Tier B features
+  // Per spec §1.3: Main App may contain a design module (always) + optional Tier B server module
   if (manifest.tier === 'main-app') {
+    // Main-app cannot have routePrefix (routes go through standard plugin mount)
     if (manifest.routePrefix) {
-      errors.push('main-app tier cannot have routePrefix (design-only plugin)')
+      errors.push('main-app tier cannot have routePrefix (routes are mounted at app level)')
     }
-    if (manifest.tables && manifest.tables.length > 0) {
-      errors.push('main-app tier cannot have database tables (design-only plugin)')
+
+    // Main-app CAN have tables, migrations, and authzNamespace (like Tier B)
+    // Validate tables if present
+    if (manifest.tables) {
+      for (const table of manifest.tables) {
+        if (!table.name.startsWith(`plugin_${manifest.pluginId}_`)) {
+          errors.push(`Table "${table.name}" must be prefixed with "plugin_${manifest.pluginId}_"`)
+        }
+        if (table.hasTenantId !== true && !manifest.globalTables?.includes(table.name)) {
+          errors.push(`Table "${table.name}" must declare hasTenantId: true (or be listed in globalTables)`)
+        }
+      }
     }
+
+    // Validate migrations if present
     if (manifest.migrations) {
-      errors.push('main-app tier cannot have migrations (design-only plugin)')
+      if (typeof manifest.migrations.schemaVersion !== 'number' || manifest.migrations.schemaVersion < 0) {
+        errors.push('migrations.schemaVersion must be a non-negative integer')
+      }
+      if (!manifest.migrations.dir || typeof manifest.migrations.dir !== 'string') {
+        errors.push('migrations.dir is required when migrations is specified')
+      }
     }
-    if (manifest.authzNamespace) {
-      errors.push('main-app tier cannot have authzNamespace (design-only plugin)')
+
+    // Validate authzNamespace if present
+    if (manifest.authzNamespace && !manifest.authzNamespace.endsWith('.')) {
+      errors.push('authzNamespace must end with a dot (e.g., "myapp.")')
     }
 
     // Main-app must request design capabilities

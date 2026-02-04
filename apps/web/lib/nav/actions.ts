@@ -37,7 +37,7 @@ import {
   ensureMandatoryItems,
   assertNoIdCollisions,
 } from '@saas/plugins-core'
-import { design as mainAppDesign } from '@plugins/main-app'
+import { design as mainAppDesign } from '@saas/config/main-app'
 import { createDefaultNavModel } from './build-nav-model'
 import { verifyUserFromApi, buildNavContextFromUser } from '@/lib/server/auth'
 import { cookies } from 'next/headers'
@@ -199,7 +199,7 @@ function getApiBaseUrl(): string {
 const NAV_FETCH_TIMEOUT_MS = 5000
 
 /**
- * Cookie names that are allowed to be forwarded to the API.
+ * Cookie names that are always forwarded to the API.
  */
 const AUTH_COOKIE_NAMES = new Set([
   process.env.AUTH_SESSION_COOKIE_NAME ?? 'adonis-session',
@@ -211,12 +211,36 @@ const AUTH_COOKIE_NAMES = new Set([
 ])
 
 /**
+ * Check if a cookie name looks like an AdonisJS session data cookie.
+ * AdonisJS stores session data in a cookie named with the session ID
+ * (alphanumeric string, typically 20+ characters).
+ */
+function isSessionDataCookie(name: string): boolean {
+  // Session IDs are alphanumeric, typically 20-40 characters
+  // Exclude known non-session cookies
+  const knownNonSession = new Set([
+    'saas-theme',
+    'tenant_id',
+    '__next_hmr_refresh_hash__',
+    'XSRF-TOKEN',
+  ])
+  if (knownNonSession.has(name)) {
+    return false
+  }
+  // Match alphanumeric strings of 15+ characters (session IDs)
+  return /^[a-z0-9]{15,}$/i.test(name)
+}
+
+/**
  * Build auth cookie header from request cookies.
+ * Includes named auth cookies and AdonisJS session data cookies.
  */
 function buildAuthCookieHeader(
   allCookies: Array<{ name: string; value: string }>
 ): string | null {
-  const authCookies = allCookies.filter((c) => AUTH_COOKIE_NAMES.has(c.name))
+  const authCookies = allCookies.filter((c) =>
+    AUTH_COOKIE_NAMES.has(c.name) || isSessionDataCookie(c.name)
+  )
   if (authCookies.length === 0) {
     return null
   }
@@ -224,20 +248,28 @@ function buildAuthCookieHeader(
 }
 
 /**
+ * Result type for API fetch with detailed status.
+ */
+type FetchNavResult =
+  | { status: 'success'; data: ServerNavResult }
+  | { status: 'unauthenticated' }
+  | { status: 'api_error'; code?: number }
+
+/**
  * Fetch navigation model from the API.
  *
  * The API is the single source of truth for navigation composition.
  * It runs the full pipeline including hooks registered in the API runtime.
  *
- * @returns Navigation result from API or null if fetch failed
+ * @returns Detailed result indicating success, unauthenticated, or API error
  */
-async function fetchNavFromApi(): Promise<ServerNavResult | null> {
+async function fetchNavFromApi(): Promise<FetchNavResult> {
   const cookieStore = await cookies()
   const allCookies = cookieStore.getAll()
   const cookieHeader = buildAuthCookieHeader(allCookies)
 
   if (!cookieHeader) {
-    return null
+    return { status: 'unauthenticated' }
   }
 
   const controller = new AbortController()
@@ -257,9 +289,14 @@ async function fetchNavFromApi(): Promise<ServerNavResult | null> {
 
     clearTimeout(timeoutId)
 
+    if (response.status === 401 || response.status === 403) {
+      // User not authenticated or session expired
+      return { status: 'unauthenticated' }
+    }
+
     if (!response.ok) {
       console.warn(`[nav:api] API returned ${response.status}`)
-      return null
+      return { status: 'api_error', code: response.status }
     }
 
     const json = await response.json()
@@ -267,10 +304,10 @@ async function fetchNavFromApi(): Promise<ServerNavResult | null> {
 
     if (!data || !data.nav) {
       console.warn('[nav:api] Invalid response structure')
-      return null
+      return { status: 'api_error' }
     }
 
-    return data
+    return { status: 'success', data }
   } catch (error) {
     clearTimeout(timeoutId)
 
@@ -280,7 +317,7 @@ async function fetchNavFromApi(): Promise<ServerNavResult | null> {
       console.warn('[nav:api] Fetch failed:', error instanceof Error ? error.message : error)
     }
 
-    return null
+    return { status: 'api_error' }
   }
 }
 
@@ -337,11 +374,45 @@ export async function buildNavigationServerSide(
   // The API is the only runtime where hooks are registered.
   const apiResult = await fetchNavFromApi()
 
-  if (apiResult) {
-    return apiResult
+  if (apiResult.status === 'success') {
+    return apiResult.data
   }
 
-  // API unavailable - per spec, we cannot skip the hooks stage
+  // Handle unauthenticated users - return guest navigation
+  if (apiResult.status === 'unauthenticated') {
+    ensureDesignRegistered()
+    const design = designRegistry.get()
+
+    // Build guest context with minimal permissions
+    const guestContext: NavContext = {
+      userId: undefined,
+      tenantId: null,
+      entitlements: new Set<string>(),
+      userRole: 'guest',
+      isTenantAdmin: false,
+      hasMultipleTenants: false,
+      tenantPlanId: clientHints?.tenantPlanId,
+      tierLevel: 0,
+    }
+
+    // Build navigation using design's contribution (if available)
+    const baseNav = design
+      ? await buildNavModel({ design, context: guestContext, skipHooks: true })
+      : createDefaultNavModel(guestContext)
+    const withMandatory = ensureMandatoryItems(baseNav, guestContext)
+    const sorted = applySorting(withMandatory)
+    assertNoIdCollisions(sorted)
+    // Apply permission filter - guest has no entitlements, so most items will be filtered
+    const filtered = applyPermissionFilter(sorted, guestContext.entitlements, guestContext.abilities)
+
+    return {
+      nav: filtered,
+      designId: design?.designId ?? null,
+      isSafeMode: false,
+    }
+  }
+
+  // API unavailable - per spec, we cannot skip the hooks stage for authenticated users
   // Throwing here ensures we don't violate the required pipeline order
   console.error('[nav] API unavailable - cannot build navigation without hook pipeline')
   throw new Error(

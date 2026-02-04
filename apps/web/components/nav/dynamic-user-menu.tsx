@@ -1,5 +1,7 @@
 'use client'
 
+import { Moon, Sun } from 'lucide-react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -12,6 +14,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAuth } from '@/contexts/auth-context'
 import { useUserMenuNav } from '@/contexts/navigation-context'
+import { THEME_COOKIE_NAME } from '@/lib/theme-config'
+import { cn } from '@/lib/utils'
 import type { NavSectionWithIcons } from '@/lib/nav/types'
 
 interface DynamicUserMenuProps {
@@ -20,6 +24,85 @@ interface DynamicUserMenuProps {
    * Required when using DynamicUserMenu directly.
    */
   sections: NavSectionWithIcons[]
+}
+
+const THEME_TOGGLE_ITEM_ID = 'app.theme.toggle'
+const NOTARIUM_THEME_COOKIE_NAME = 'notarium-theme'
+
+type ThemeMode = 'light' | 'dark'
+
+function readThemeFromDocument(): ThemeMode {
+  if (typeof document === 'undefined') {
+    return 'light'
+  }
+  return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+}
+
+function writeThemeCookie(cookieName: string, theme: ThemeMode): void {
+  document.cookie = `${cookieName}=${theme};path=/;max-age=31536000;SameSite=Lax`
+}
+
+function applyTheme(theme: ThemeMode): void {
+  if (theme === 'dark') {
+    document.documentElement.classList.add('dark')
+  } else {
+    document.documentElement.classList.remove('dark')
+  }
+
+  // Keep both skeleton and notarium theme cookies in sync.
+  writeThemeCookie(THEME_COOKIE_NAME, theme)
+  writeThemeCookie(NOTARIUM_THEME_COOKIE_NAME, theme)
+}
+
+function ThemeToggleMenuItem(): React.ReactElement {
+  const [theme, setTheme] = useState<ThemeMode>(() => readThemeFromDocument())
+  const isDark = theme === 'dark'
+
+  const toggleTheme = (): void => {
+    setTheme((currentTheme) => {
+      const nextTheme = currentTheme === 'dark' ? 'light' : 'dark'
+      applyTheme(nextTheme)
+      return nextTheme
+    })
+  }
+
+  return (
+    <div className="px-2 py-1.5">
+      <div className="flex items-center justify-between gap-3 rounded-sm px-1 text-sm">
+        <span className="font-medium">Theme</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={isDark}
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          onClick={toggleTheme}
+          className={cn(
+            'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border border-border bg-muted transition-colors',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
+          )}
+        >
+          <Sun
+            className={cn(
+              'absolute left-1 h-3.5 w-3.5 transition-opacity',
+              isDark ? 'opacity-50 text-muted-foreground' : 'opacity-0'
+            )}
+          />
+          <Moon
+            className={cn(
+              'absolute right-1 h-3.5 w-3.5 transition-opacity',
+              isDark ? 'opacity-0' : 'opacity-50 text-muted-foreground'
+            )}
+          />
+          <span
+            className={cn(
+              'pointer-events-none block h-5 w-5 rounded-full bg-background shadow-sm transition-transform',
+              isDark ? 'translate-x-6' : 'translate-x-0.5'
+            )}
+          />
+        </button>
+      </div>
+    </div>
+  )
 }
 
 /**
@@ -110,6 +193,12 @@ export function DynamicUserMenu({ sections }: DynamicUserMenuProps): React.React
           <div key={section.id}>
             {sectionIndex > 0 && <DropdownMenuSeparator />}
             {section.items.map((item) => {
+              if (item.id === THEME_TOGGLE_ITEM_ID) {
+                return (
+                  <ThemeToggleMenuItem key={item.id} />
+                )
+              }
+
               const Icon = item.icon
 
               // Determine click handler:

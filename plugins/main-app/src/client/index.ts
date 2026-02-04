@@ -5,12 +5,12 @@
  * This is used by the frontend to access design components.
  */
 
-export { design } from '../design'
-export { MainAppShell } from './components/AppShell'
+export { design } from '../design.js'
+export { MainAppShell } from './components/AppShell.js'
 
 // Re-export the client design with AppShell attached
-import { design as baseDesign } from '../design'
-import { MainAppShell } from './components/AppShell'
+import { design as baseDesign } from '../design.js'
+import { MainAppShell } from './components/AppShell.js'
 import type { AppDesign } from '@saas/plugins-core'
 
 /**

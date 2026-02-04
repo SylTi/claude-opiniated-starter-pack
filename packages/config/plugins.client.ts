@@ -30,6 +30,8 @@ export type ClientPluginLoader = () => Promise<{
  *
  * Keys are plugin IDs, values are package names (e.g., '@plugins/notes').
  * This MUST stay in sync with clientPluginManifests.
+ *
+ * NOTE: Main-app plugin is loaded via @saas/config/main-app/client
  */
 export const clientPluginPackages: Record<string, string> = {
   'nav-links': '@plugins/nav-links',
@@ -39,15 +41,14 @@ export const clientPluginPackages: Record<string, string> = {
 /**
  * Static map of plugin manifests for the client.
  * Keys are plugin IDs, values are dynamic imports of plugin.meta.json.
+ *
+ * NOTE: Main-app plugin is loaded via @saas/config/main-app
  */
 export const clientPluginManifests: Record<string, ManifestLoader> = {
-  // Example Tier A plugin
   'nav-links': async () => {
     const mod = await import('@plugins/nav-links/plugin.meta.json')
     return mod.default as PluginManifest
   },
-
-  // Example Tier B plugin
   notes: async () => {
     const mod = await import('@plugins/notes/plugin.meta.json')
     return mod.default as PluginManifest
@@ -57,13 +58,12 @@ export const clientPluginManifests: Record<string, ManifestLoader> = {
 /**
  * Static map of plugin client entrypoints.
  * Keys are plugin IDs, values are dynamic imports of client.js.
+ *
+ * NOTE: Main-app plugin is loaded via @saas/config/main-app/client
  */
 export const clientPluginLoaders: Record<string, ClientPluginLoader> = {
-  // Tier A plugins have client entrypoints
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   'nav-links': () => import('@plugins/nav-links') as any,
-
-  // Tier B plugins may also have client entrypoints
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   notes: () => import('@plugins/notes/client') as any,
 }

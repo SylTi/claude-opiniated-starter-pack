@@ -5,4 +5,4 @@
  * It defines the global theme tokens and baseline navigation.
  */
 
-export { design } from './design'
+export { design } from './design.js'

@@ -90,46 +90,61 @@ function getNavBaseline(context: NavContext): NavModel {
   const userMenuSections: NavSection[] = []
 
   // Main navigation for authenticated users
+  // Each item is its own section so they render as direct links in the header
+  // (NavSection renders multi-item sections as dropdowns)
   if (context.userRole) {
-    const mainItems = [
-      {
-        id: 'core.dashboard',
-        label: 'Dashboard',
-        href: '/dashboard',
-        icon: 'LayoutDashboard',
-        order: 100,
-      },
-    ]
+    // Dashboard - always shown
+    mainSections.push({
+      id: 'core.dashboard.section',
+      label: 'Dashboard',
+      order: 100,
+      items: [
+        {
+          id: 'core.dashboard',
+          label: 'Dashboard',
+          href: '/dashboard',
+          icon: 'LayoutDashboard',
+          order: 100,
+        },
+      ],
+    })
 
     // Notes link when tenant is selected
     // Uses /apps/* route which has proper access control checks
     if (context.tenantId) {
-      mainItems.push({
-        id: 'core.notes',
+      mainSections.push({
+        id: 'core.notes.section',
         label: 'Notes',
-        href: '/apps/notes',
-        icon: 'FileText',
         order: 200,
+        items: [
+          {
+            id: 'core.notes',
+            label: 'Notes',
+            href: '/apps/notes',
+            icon: 'FileText',
+            order: 100,
+          },
+        ],
       })
     }
 
     // Admin link for admin users
     if (context.userRole === 'admin') {
-      mainItems.push({
-        id: 'core.admin.link',
+      mainSections.push({
+        id: 'core.admin.link.section',
         label: 'Admin',
-        href: '/admin/dashboard',
-        icon: 'Shield',
         order: 900,
+        items: [
+          {
+            id: 'core.admin.link',
+            label: 'Admin',
+            href: '/admin/dashboard',
+            icon: 'Shield',
+            order: 100,
+          },
+        ],
       })
     }
-
-    mainSections.push({
-      id: 'core.main',
-      label: 'Main',
-      order: 100,
-      items: mainItems,
-    })
   }
 
   // Admin sidebar navigation

@@ -129,6 +129,22 @@ export type ShellOverride = {
   Shell: React.ComponentType<ShellProps>
 }
 
+export type AppProvidersProps = {
+  children: React.ReactNode
+}
+
+export type HeaderOverrideProps = {
+  // Skeleton-provided slots. Layout is plugin-controlled.
+  brand: React.ReactNode
+  mainNavigation: React.ReactNode
+  tenantSwitcher: React.ReactNode
+  userMenu: React.ReactNode
+  pendingNavigation: React.ReactNode
+  authActions: React.ReactNode
+  isAuthenticated: boolean
+  isPendingUser: boolean
+}
+
 export interface AppDesign {
   /**
    * Baseline theme for the product area (always used).
@@ -161,10 +177,32 @@ export interface AppDesign {
   }
 
   /**
+   * Optional override for the skeleton header layout.
+   * The skeleton still owns the slot content and security behavior.
+   * The plugin owns placement/layout.
+   */
+  headerOverride?: {
+    Header: React.ComponentType<HeaderOverrideProps>
+  }
+
+  /**
    * Baseline navigation model (before plugin filters).
    * This is the product-defined "default nav".
    */
   navBaseline(ctx: NavContext): NavModel
+
+  /**
+   * Optional app-level providers wrapper.
+   * Wraps the entire app with plugin-specific context providers.
+   * Rendered above AuthProvider/DesignProvider/NavigationProvider.
+   *
+   * Use this for providers that need to wrap the entire app, not just
+   * the content area (which is handled by AppShell).
+   *
+   * The skeleton provides a FrameworkContext with framework primitives
+   * (router, Link, Image) that can be consumed via useFramework() hook.
+   */
+  AppProviders?: React.ComponentType<AppProvidersProps>
 }
 ```
 
@@ -178,10 +216,118 @@ If an override exists but crashes:
 - skeleton uses default admin/auth shell
 - skeleton does NOT block login/admin access
 
+For `headerOverride`:
+- skeleton logs an incident
+- skeleton falls back to the default header layout
+- tenant switch/user menu behavior remains skeleton-owned
+
 ### 2.4 NavContext notes
 - `tenantId` is nullable because UI includes auth pages, tenant picker, and onboarding.
 - Server endpoints still treat tenant as mandatory.
 - `userRole` is coarse; for fine-grained checks use `entitlements` or `abilities`.
+
+### 2.5 FrameworkContext (skeleton-provided)
+The skeleton provides a `FrameworkContext` with framework-specific primitives that plugins can consume.
+
+**Import paths:**
+- Types (server-safe): `import type { ... } from '@saas/plugins-core/types'`
+- Framework hooks (client-only): `import { useFramework } from '@saas/plugins-core/framework'`
+
+```ts
+// From @saas/plugins-core/framework
+export interface FrameworkContextValue {
+  /** Router adapter for navigation */
+  router: {
+    push: (path: string) => void
+    replace: (path: string) => void
+    back: () => void
+    refresh: () => void
+    pathname: string
+    searchParams: URLSearchParams
+  }
+  /** Link component adapter */
+  Link: React.ComponentType<LinkProps>
+  /** Image component adapter */
+  Image: React.ComponentType<ImageProps>
+}
+```
+
+Access via `useFramework()` hook in client components:
+```ts
+import { useFramework } from '@saas/plugins-core/framework'
+
+const framework = useFramework()
+if (framework) {
+  // Use framework.router, framework.Link, framework.Image
+}
+```
+
+This enables plugins to:
+- Stay framework-agnostic (not import Next.js directly)
+- Work with the skeleton's router, Link, and Image components
+- Set up their own routing abstractions using these primitives
+
+**Note:** The framework context uses React hooks and must only be imported in client components.
+Do NOT import from `@saas/plugins-core` main entry in server components - use the `/framework` subpath.
+
+### 2.6 AppProviders (optional)
+If your plugin needs to wrap the **entire app** with context providers (above the shell), use `AppProviders`:
+
+```tsx
+import type { AppDesign } from '@saas/plugins-core/types'
+import { useFramework } from '@saas/plugins-core/framework'
+
+export const design: AppDesign = {
+  // ... other required fields
+
+  AppProviders({ children }) {
+    const framework = useFramework()
+    return (
+      <MyRouterProvider router={framework?.router}>
+        <MyThemeProvider>
+          {children}
+        </MyThemeProvider>
+      </MyRouterProvider>
+    )
+  },
+}
+```
+
+Provider hierarchy (outermost to innermost):
+1. `FrameworkProvider` (skeleton) - Next.js primitives
+2. `AppProviders` (plugin, optional) - Plugin's app-level providers
+3. `AuthProvider` (skeleton) - Authentication state
+4. `DesignProvider` (skeleton) - Theme tokens
+5. `NavigationProvider` (skeleton) - Navigation model
+6. `AppShell` (plugin) - Content area shell
+
+Use `AppProviders` for:
+- Framework-agnostic routing adapters
+- Theme providers that apply CSS variables at document level
+- Global plugin contexts that need to wrap the entire app
+
+Do NOT use `AppProviders` for:
+- Content-area-only providers (use AppShell instead)
+- Providers that only need to wrap specific pages
+
+### 2.7 AppProviders and Safe Mode
+`AppProviders` follows the same safe mode rules as other design overrides:
+
+**Safe mode behavior:**
+- When `SAFE_MODE=1`, `AppProviders` is **skipped entirely**
+- Skeleton renders core providers without plugin wrapper
+- This ensures app remains accessible if `AppProviders` breaks
+
+**Error boundary fallback:**
+- `AppProviders` is wrapped in an error boundary
+- If `AppProviders` throws during render, skeleton catches it
+- Falls back to rendering without `AppProviders` (same as safe mode)
+- Error is logged for debugging
+
+**Design implications:**
+- `AppProviders` must handle `useFramework()` returning null gracefully
+- Don't assume `AppProviders` will always run - app should work without it
+- Test your app with `SAFE_MODE=1` to verify fallback behavior
 
 ---
 
@@ -587,7 +733,7 @@ export async function buildNavModel({
 }
 ```
 
-### 8.3 Skeleton: override fallback (admin/auth)
+### 8.3 Skeleton: override fallback (admin/auth/header)
 `apps/web/lib/theme/getShellForArea.tsx`
 ```tsx
 import React from 'react'
@@ -629,17 +775,110 @@ export function getShellForArea({
 }
 ```
 
+Header layout override fallback:
+```tsx
+export function renderHeader({
+  design,
+  slots,
+  defaultHeader,
+}: {
+  design: any
+  slots: HeaderOverrideProps
+  defaultHeader: React.ReactNode
+}) {
+  try {
+    if (design?.headerOverride?.Header) {
+      const Header = design.headerOverride.Header
+      return <Header {...slots} />
+    }
+    return defaultHeader
+  } catch (_err) {
+    // Log incident and keep app navigable.
+    return defaultHeader
+  }
+}
+```
+
 ---
 
-## 9) Implementation checklist
-- [ ] Add `AppDesign` + `NavModel` types to your plugin-kit package
-- [ ] Main App plugin exports a `design` module implementing `AppDesign`
-- [ ] Skeleton loads design early (server and client)
-- [ ] Build nav via `navBaseline → filters → mandatory restore → sort → collision check → permission filter`
-- [ ] Add reserved IDs enforcement (boot-fatal if violated)
-- [ ] Implement override fallback for admin/auth
-- [ ] Add SAFE_MODE to disable overrides and non-core plugins for recovery
-- [ ] Collision check includes userMenu sections and items
+## 9) Deployment Override (Switching Main-App Plugins)
+
+The skeleton never imports directly from plugin packages. Instead, it imports from `@saas/config/main-app` which re-exports from the configured main-app plugin.
+
+### 9.1 Single file configuration
+
+All main-app configuration is in **one file**: `packages/config/plugins.config.ts`
+
+To switch main-app plugins (e.g., from `@plugins/main-app` to `@plugins/notarium`):
+
+```bash
+# 1. Mark the file as skip-worktree so local changes aren't committed
+git update-index --skip-worktree packages/config/plugins.config.ts
+```
+
+```typescript
+// 2. Update MAIN_APP_PLUGIN config
+export const MAIN_APP_PLUGIN: PluginConfig = {
+  id: 'notarium',
+  packageName: '@plugins/notarium',
+  serverImport: () => import('@plugins/notarium'),
+  clientImport: () => import('@plugins/notarium/client'),
+  manifestImport: () => import('@plugins/notarium/plugin.meta.json'),
+}
+
+// 3. Update the re-exports at the bottom of the file
+export { design } from '@plugins/notarium'
+export { clientDesign } from '@plugins/notarium/client'
+```
+
+### 9.2 What the main-app plugin provides
+
+The main-app plugin's `appTokens()` controls application branding:
+
+| Token | Used for |
+|-------|----------|
+| `appName` | Page title, header branding |
+| `appDescription` | Meta description |
+| `logoUrl` | Header logo |
+| `faviconUrl` | Browser tab icon (falls back to logoUrl) |
+
+Example:
+```typescript
+appTokens() {
+  return {
+    cssVars: { '--brand': '#4f46e5', ... },
+    appName: 'Notarium',
+    appDescription: 'Knowledge management system',
+    logoUrl: '/logo.svg',
+    faviconUrl: '/favicon.png',
+  }
+}
+```
+
+### 9.3 Import paths
+
+The skeleton uses these import paths (never direct plugin imports):
+
+| Import | Source |
+|--------|--------|
+| `@saas/config/main-app` | Server-side design |
+| `@saas/config/main-app/client` | Client-side design |
+
+These re-export from `plugins.config.ts`, which points to the actual plugin.
+
+---
+
+## 10) Implementation checklist
+- [x] Add `AppDesign` + `NavModel` types to your plugin-kit package
+- [x] Main App plugin exports a `design` module implementing `AppDesign`
+- [x] Skeleton loads design early (server and client)
+- [x] Build nav via `navBaseline → filters → mandatory restore → sort → collision check → permission filter`
+- [x] Add reserved IDs enforcement (boot-fatal if violated)
+- [x] Implement override fallback for admin/auth
+- [x] Add SAFE_MODE to disable overrides and non-core plugins for recovery
+- [x] Collision check includes userMenu sections and items
+- [x] Single-file deployment override via `plugins.config.ts`
+- [x] Metadata (title, description, favicon) from plugin's `appTokens()`
 
 ---
 

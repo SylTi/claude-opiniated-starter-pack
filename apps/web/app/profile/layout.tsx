@@ -1,25 +1,62 @@
 'use client'
 
-import { type ReactNode } from 'react'
+import { type ReactNode, useMemo } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { User, Shield, Settings, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/auth-context'
+import { useUserMenuNav } from '@/contexts/navigation-context'
+import type { NavItemWithIcon, NavSectionWithIcons } from '@/lib/nav/types'
 
-const navigation = [
-  { name: 'Profile', href: '/profile', icon: User },
-  { name: 'Security', href: '/profile/security', icon: Shield },
-  { name: 'Settings', href: '/profile/settings', icon: Settings },
+/**
+ * Core skeleton navigation items for the profile sidebar.
+ * These items are always present and cannot be removed by plugins (per spec §5.2).
+ */
+const coreNavigation = [
+  { id: 'core.profile', name: 'Profile', href: '/profile', icon: User },
+  { id: 'core.security', name: 'Security', href: '/profile/security', icon: Shield },
+  { id: 'core.settings', name: 'Settings', href: '/profile/settings', icon: Settings },
 ]
+
+/**
+ * Extract plugin-provided settings items from userMenu sections.
+ * Per spec §5.1: Plugins can add items to reserved sections like core.settings.
+ * Per spec §3.2: userMenu sections allow "grouped plugin settings menus".
+ */
+function getPluginSettingsItems(userMenuSections: NavSectionWithIcons[]): NavItemWithIcon[] {
+  // Look for sections with settings-related IDs
+  // Main-app plugins typically use 'app.settings' section ID
+  const settingsSections = userMenuSections.filter(
+    (section) =>
+      section.id.includes('settings') ||
+      section.id.includes('preferences') ||
+      section.id.includes('config')
+  )
+
+  // Flatten items from all settings sections
+  return settingsSections.flatMap((section) => section.items)
+}
 
 /**
  * Profile layout component.
  * Authentication is handled by Next.js proxy (proxy.ts).
+ *
+ * Navigation composition (per spec §5.1, §3.2):
+ * - Core items (Profile, Security, Settings) are skeleton-owned and always present
+ * - Plugin items are extracted from userMenu sections with settings-related IDs
+ * - Items are sorted by order then id for deterministic display
  */
 export default function ProfileLayout({ children }: { children: ReactNode }): React.ReactElement {
   const pathname = usePathname()
   const { user, isLoading } = useAuth()
+  const userMenuSections = useUserMenuNav()
+
+  // Get plugin-provided settings items
+  const pluginItems = useMemo(
+    () => getPluginSettingsItems(userMenuSections),
+    [userMenuSections]
+  )
 
   // Show loading state while auth context initializes
   if (isLoading || !user) {
@@ -37,11 +74,12 @@ export default function ProfileLayout({ children }: { children: ReactNode }): Re
           {/* Sidebar */}
           <aside className="w-full lg:w-64 shrink-0">
             <nav className="bg-white rounded-lg shadow p-4">
+              {/* Core navigation items (skeleton-owned) */}
               <ul className="space-y-1">
-                {navigation.map((item) => {
+                {coreNavigation.map((item) => {
                   const isActive = pathname === item.href
                   return (
-                    <li key={item.name}>
+                    <li key={item.id}>
                       <Link
                         href={item.href}
                         className={cn(
@@ -58,6 +96,38 @@ export default function ProfileLayout({ children }: { children: ReactNode }): Re
                   )
                 })}
               </ul>
+
+              {/* Plugin-provided settings items */}
+              {pluginItems.length > 0 && (
+                <>
+                  <div className="my-3 border-t border-gray-200" />
+                  <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    App Settings
+                  </div>
+                  <ul className="space-y-1">
+                    {pluginItems.map((item) => {
+                      const isActive = pathname === item.href
+                      const Icon = item.icon
+                      return (
+                        <li key={item.id}>
+                          <Link
+                            href={item.href}
+                            className={cn(
+                              'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                              isActive
+                                ? 'bg-blue-50 text-blue-700'
+                                : 'text-gray-700 hover:bg-gray-100'
+                            )}
+                          >
+                            {Icon && <Icon className="h-5 w-5" />}
+                            {item.label}
+                          </Link>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </>
+              )}
             </nav>
           </aside>
 

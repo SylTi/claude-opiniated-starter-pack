@@ -64,13 +64,15 @@ function getSafeCallbackUrl(callbackUrl: string | null): string {
 export default function LoginPage(): React.ReactElement {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { login, refreshUser, isAuthenticated, isLoading: authLoading } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [requiresMfa, setRequiresMfa] = useState(false);
 
-  // Get safe callback URL from query params
+  // Get safe callback URL from query params (supports both callbackUrl and returnTo)
   const redirectUrl = useMemo(() => {
-    return getSafeCallbackUrl(searchParams.get("callbackUrl"));
+    const callbackUrl = searchParams.get("callbackUrl");
+    const returnTo = searchParams.get("returnTo");
+    return getSafeCallbackUrl(callbackUrl ?? returnTo);
   }, [searchParams]);
 
   const {
@@ -104,9 +106,18 @@ export default function LoginPage(): React.ReactElement {
         return;
       }
 
-      router.push(redirectUrl);
+      const refreshedUser = await refreshUser();
+      if (!refreshedUser) {
+        setError("Login succeeded but your session could not be verified. Please try again.");
+        return;
+      }
+
+      router.replace(redirectUrl);
+      router.refresh();
     } catch (err) {
       if (err instanceof ApiError) {
+        setError(err.message);
+      } else if (err instanceof Error && err.message) {
         setError(err.message);
       } else {
         setError("An unexpected error occurred");

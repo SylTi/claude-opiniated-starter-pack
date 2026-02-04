@@ -87,10 +87,15 @@ export const MAIN_APP_CAPABILITIES: PluginCapability[] = [
 
 /**
  * Validate that capabilities are appropriate for the plugin tier.
+ *
+ * @param tier - Plugin tier
+ * @param capabilities - List of capabilities to validate
+ * @param pluginId - Plugin ID (optional, used for validating plugin-specific capabilities)
  */
 export function validateCapabilitiesForTier(
   tier: 'A' | 'B' | 'main-app',
-  capabilities: PluginCapability[]
+  capabilities: PluginCapability[],
+  pluginId?: string
 ): { valid: boolean; invalidCapabilities: PluginCapability[] } {
   let allowedCapabilities: PluginCapability[]
 
@@ -102,12 +107,29 @@ export function validateCapabilitiesForTier(
       allowedCapabilities = [...TIER_A_CAPABILITIES, ...TIER_B_CAPABILITIES]
       break
     case 'main-app':
-      // Main-app can use Tier A UI capabilities plus design capabilities
-      allowedCapabilities = [...TIER_A_CAPABILITIES, ...MAIN_APP_CAPABILITIES]
+      // Main-app can use Tier A, Tier B, and design capabilities
+      // Per spec §1.3: Main App may contain design module + optional Tier B server module
+      allowedCapabilities = [...TIER_A_CAPABILITIES, ...TIER_B_CAPABILITIES, ...MAIN_APP_CAPABILITIES]
       break
   }
 
-  const invalidCapabilities = capabilities.filter((cap) => !allowedCapabilities.includes(cap))
+  const invalidCapabilities = capabilities.filter((cap) => {
+    // Check if it's in the allowed list
+    if (allowedCapabilities.includes(cap)) {
+      return false
+    }
+
+    // For Tier B and main-app, allow plugin-specific capabilities
+    // These are custom capabilities that start with the plugin's namespace (e.g., "myapp.core")
+    if ((tier === 'B' || tier === 'main-app') && pluginId) {
+      const pluginPrefix = `${pluginId}.`
+      if (cap.startsWith(pluginPrefix)) {
+        return false // Valid plugin-specific capability
+      }
+    }
+
+    return true // Invalid capability
+  })
 
   return {
     valid: invalidCapabilities.length === 0,

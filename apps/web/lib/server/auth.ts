@@ -37,7 +37,7 @@ import { cookies } from 'next/headers'
 const SESSION_COOKIE_NAME = process.env.AUTH_SESSION_COOKIE_NAME ?? 'adonis-session'
 
 /**
- * Cookie names that are allowed to be forwarded to the API.
+ * Cookie names that are always forwarded to the API.
  * SECURITY: Only auth-related cookies should be forwarded.
  *
  * The session cookie name is configurable via AUTH_SESSION_COOKIE_NAME env var.
@@ -50,6 +50,27 @@ const AUTH_COOKIE_NAMES = new Set([
   'auth_token',        // JWT token cookie (if used)
   'refresh_token',     // Refresh token cookie (if used)
 ])
+
+/**
+ * Check if a cookie name looks like an AdonisJS session data cookie.
+ * AdonisJS stores session data in a cookie named with the session ID
+ * (alphanumeric string, typically 20+ characters).
+ */
+function isSessionDataCookie(name: string): boolean {
+  // Session IDs are alphanumeric, typically 20-40 characters
+  // Exclude known non-session cookies
+  const knownNonSession = new Set([
+    'theme',
+    'tenant_id',
+    '__next_hmr_refresh_hash__',
+    'XSRF-TOKEN',
+  ])
+  if (knownNonSession.has(name)) {
+    return false
+  }
+  // Match alphanumeric strings of 15+ characters (session IDs)
+  return /^[a-z0-9]{15,}$/i.test(name)
+}
 
 /**
  * Trusted API origins for cookie forwarding.
@@ -171,16 +192,18 @@ const API_BASE_URL = getApiBaseUrl()
 /**
  * Build a cookie header string containing only auth-related cookies.
  *
- * SECURITY: Only forwards cookies in AUTH_COOKIE_NAMES to prevent
- * leaking unrelated cookies (analytics, preferences, etc.) to the API.
+ * SECURITY: Only forwards cookies in AUTH_COOKIE_NAMES plus AdonisJS
+ * session data cookies to prevent leaking unrelated cookies.
  *
- * @param cookieStore - Next.js cookie store
+ * @param allCookies - All cookies from the request
  * @returns Cookie header string or null if no auth cookies present
  */
 function buildAuthCookieHeader(
   allCookies: Array<{ name: string; value: string }>
 ): string | null {
-  const authCookies = allCookies.filter((c) => AUTH_COOKIE_NAMES.has(c.name))
+  const authCookies = allCookies.filter((c) =>
+    AUTH_COOKIE_NAMES.has(c.name) || isSessionDataCookie(c.name)
+  )
 
   if (authCookies.length === 0) {
     return null

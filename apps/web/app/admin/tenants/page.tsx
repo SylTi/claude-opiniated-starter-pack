@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { adminTenantsApi, adminBillingApi, ApiError } from "@/lib/api"
+import { useAuth } from "@/contexts/auth-context"
 import { Badge } from "@/components/ui/badge"
 import {
   Table,
@@ -31,6 +32,7 @@ import type { AdminTenantDTO, SubscriptionTierDTO } from "@saas/shared"
 
 export default function AdminTenantsPage(): React.ReactElement {
   const router = useRouter()
+  const { user, refreshUser } = useAuth()
   const [tenants, setTenants] = useState<AdminTenantDTO[]>([])
   const [tiers, setTiers] = useState<SubscriptionTierDTO[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -67,7 +69,13 @@ export default function AdminTenantsPage(): React.ReactElement {
     try {
       await adminTenantsApi.updateTier(tenantId, { subscriptionTier: tier })
       toast.success("Tenant subscription tier updated successfully")
-      fetchData()
+      await fetchData()
+
+      // Keep the current session in sync if its active tenant tier changed.
+      if (user?.currentTenantId === tenantId) {
+        await refreshUser()
+        router.refresh()
+      }
     } catch (error) {
       if (error instanceof ApiError) {
         toast.error(error.message)
