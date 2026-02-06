@@ -1203,6 +1203,20 @@ GET /api/v1/admin/stats
 
 Plugin management endpoints for enabling/disabling plugins per tenant.
 
+### Plugin Route Namespacing
+
+Per spec §5.2, all plugin routes (including main-app plugins) are namespaced under:
+
+```
+/api/v1/apps/{pluginId}/...
+```
+
+For example, the notarium plugin routes are at:
+- `/api/v1/apps/notarium/records`
+- `/api/v1/apps/notarium/onboarding/status`
+- `/api/v1/apps/notarium/comments`
+- etc.
+
 ### List Available Plugins
 
 ```

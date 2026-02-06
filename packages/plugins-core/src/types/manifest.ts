@@ -274,7 +274,7 @@ export function validatePluginManifest(manifest: PluginManifest): {
 
     // Validate authzNamespace if present
     if (manifest.authzNamespace && !manifest.authzNamespace.endsWith('.')) {
-      errors.push('authzNamespace must end with a dot (e.g., "myapp.")')
+      errors.push('authzNamespace must end with a dot (e.g., "notarium.")')
     }
 
     // Main-app must request design capabilities

@@ -26,7 +26,7 @@ const coreNavigation = [
  */
 function getPluginSettingsItems(userMenuSections: NavSectionWithIcons[]): NavItemWithIcon[] {
   // Look for sections with settings-related IDs
-  // Main-app plugins typically use 'app.settings' section ID
+  // The notarium plugin uses 'app.settings' section ID
   const settingsSections = userMenuSections.filter(
     (section) =>
       section.id.includes('settings') ||

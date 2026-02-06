@@ -445,12 +445,14 @@ export default class PluginBootService {
       try {
         // Build with full pipeline including hooks
         // skipPermissionFilter: true - we want to check ALL items for collisions
+        // quietMode: true - suppress "mandatory item restored" logs during validation
         await buildNavModel({
           design,
           context,
           skipHooks: false, // Run hooks - this is the key difference from baseline validation
           skipPermissionFilter: true, // Check all items, not just visible ones
           skipValidation: false, // Enable collision detection
+          quietMode: true, // Suppress expected logs during validation (spec §5.3)
         })
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
@@ -693,9 +695,10 @@ export default class PluginBootService {
   }
 
   /**
-   * Mount routes for all active Tier B plugins.
+   * Mount routes for all active plugins that can have routes.
    * This is called from a preload file AFTER kernel.ts is loaded,
    * so that named middleware like 'pluginEnforcement' are available.
+   * Per spec §1.3: Both Tier B and main-app plugins can register routes.
    */
   async mountRoutes(): Promise<{ mounted: number; warnings: string[] }> {
     const warnings: string[] = []
@@ -704,9 +707,12 @@ export default class PluginBootService {
     console.log('[PluginBootService] Mounting plugin routes...')
 
     const activePlugins = pluginRegistry.getActive()
-    const tierBPlugins = activePlugins.filter((p) => p.manifest.tier === 'B')
+    // Per spec §1.3: Main App may contain design module + optional Tier B server module
+    const pluginsWithRoutes = activePlugins.filter(
+      (p) => p.manifest.tier === 'B' || p.manifest.tier === 'main-app'
+    )
 
-    for (const plugin of tierBPlugins) {
+    for (const plugin of pluginsWithRoutes) {
       try {
         const mountResult = await pluginRouteMounter.mountPlugin(plugin.manifest)
         if (mountResult.success) {

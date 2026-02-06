@@ -37,6 +37,7 @@ export default class NavigationController {
   async model(ctx: HttpContext): Promise<void> {
     const { auth, response } = ctx
     const user = auth.user
+
     if (!user) {
       return response.unauthorized({
         error: 'Unauthorized',

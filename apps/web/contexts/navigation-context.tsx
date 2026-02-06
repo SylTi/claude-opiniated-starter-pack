@@ -84,20 +84,29 @@ export function NavigationProvider({
   // This ensures error boundaries can catch them (throwing in useEffect doesn't propagate)
   const [fatalError, setFatalError] = useState<Error | null>(null)
 
+  // Extract only the user fields we need for navContext
+  // This prevents navContext from changing when user object reference changes
+  // but the relevant fields haven't changed (e.g., after refreshUser)
+  const userRole = user?.role ?? null
+  const userCurrentTenantId = user?.currentTenantId ?? null
+  const userTierLevel = user?.effectiveSubscriptionTier?.level ?? 0
+
   // Build navigation context from user state
+  // Depends on specific fields, not the entire user object, to prevent
+  // unnecessary rebuilds when user reference changes but data is same
   // TODO: hasMultipleTenants should come from API (e.g., user.tenants.length > 1)
   // Currently defaults to false; TenantSwitcher component handles its own visibility
   const navContext = useMemo((): NavContext => {
     return {
-      userRole: user?.role ?? null,
-      entitlements: new Set<string>(user?.role === 'admin' ? ['admin'] : []),
-      tenantId: user?.currentTenantId ? String(user.currentTenantId) : null,
-      tierLevel: user?.effectiveSubscriptionTier?.level ?? 0,
+      userRole,
+      entitlements: new Set<string>(userRole === 'admin' ? ['admin'] : []),
+      tenantId: userCurrentTenantId ? String(userCurrentTenantId) : null,
+      tierLevel: userTierLevel,
       // Default to false - the switch-tenant nav item won't show unless API provides this
       // This is safer than assuming admins have multiple tenants
       hasMultipleTenants: false,
     }
-  }, [user])
+  }, [userRole, userCurrentTenantId, userTierLevel])
 
   // Default click handlers
   const defaultHandlers = useMemo(() => ({
@@ -177,13 +186,17 @@ export function NavigationProvider({
     throw fatalError
   }
 
-  const value: NavigationContextType = {
-    nav,
-    navContext,
-    isLoading,
-    refreshNav: buildNav,
-    error,
-  }
+  // Memoize context value to prevent unnecessary re-renders of consumers
+  const value = useMemo<NavigationContextType>(
+    () => ({
+      nav,
+      navContext,
+      isLoading,
+      refreshNav: buildNav,
+      error,
+    }),
+    [nav, navContext, isLoading, buildNav, error]
+  )
 
   return (
     <NavigationContext.Provider value={value}>

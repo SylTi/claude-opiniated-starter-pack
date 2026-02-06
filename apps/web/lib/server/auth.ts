@@ -60,7 +60,7 @@ function isSessionDataCookie(name: string): boolean {
   // Session IDs are alphanumeric, typically 20-40 characters
   // Exclude known non-session cookies
   const knownNonSession = new Set([
-    'theme',
+    'notarium-theme',
     'tenant_id',
     '__next_hmr_refresh_hash__',
     'XSRF-TOKEN',

@@ -228,6 +228,8 @@ export default class OAuthController {
         sameSite: 'lax', // Match session cookie setting for OAuth compatibility
         maxAge: 2 * 60 * 60, // 2 hours, matches session age
         path: '/',
+        // In dev, set domain to localhost for cross-port cookie sharing (Next.js on 3000, API on 3333)
+        ...(process.env.NODE_ENV === 'production' ? {} : { domain: 'localhost' }),
       })
 
       // Redirect to frontend with success (callbackUrl already retrieved at start of method)

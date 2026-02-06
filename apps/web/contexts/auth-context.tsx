@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from 'react'
 import type { UserDTO } from '@saas/shared'
 import { authApi } from '@/lib/auth'
 import { setTenantId } from '@/lib/api'
@@ -154,16 +154,22 @@ export function AuthProvider({
     }
   }, [isLoading, refreshUser, user, user?.id, user?.currentTenantId])
 
-  const value: AuthContextType = {
-    user,
-    isLoading,
-    isAuthenticated: !!user,
-    hasUserInfoCookie,
-    userRole,
-    login,
-    logout,
-    refreshUser,
-  }
+  // Memoize context value to prevent unnecessary re-renders of consumers
+  // Without this, every AuthProvider render creates a new value object,
+  // causing all useAuth() consumers to re-render even if values are unchanged.
+  const value = useMemo<AuthContextType>(
+    () => ({
+      user,
+      isLoading,
+      isAuthenticated: !!user,
+      hasUserInfoCookie,
+      userRole,
+      login,
+      logout,
+      refreshUser,
+    }),
+    [user, isLoading, hasUserInfoCookie, userRole, login, logout, refreshUser]
+  )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

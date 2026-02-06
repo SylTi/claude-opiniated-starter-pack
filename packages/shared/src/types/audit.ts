@@ -87,6 +87,9 @@ export const AUDIT_EVENT_TYPES = {
   PLUGIN_RBAC_GRANT_ADDED: 'plugin.rbac.grant.added',
   PLUGIN_RBAC_GRANT_REMOVED: 'plugin.rbac.grant.removed',
 
+  // Plugin Custom Events (plugin-specific audit events)
+  PLUGIN_CUSTOM: 'plugin.custom',
+
   // UI Incidents (Design/Navigation)
   UI_SHELL_CRASH: 'ui.shell.crash',
   UI_THEME_ERROR: 'ui.theme.error',
@@ -104,8 +107,8 @@ export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[keyof typeof AUDIT_EVENT
  */
 export interface AuditEventActor {
   /** Type of actor */
-  type: 'user' | 'service' | 'system'
-  /** Actor identifier (user ID, service name) */
+  type: 'user' | 'service' | 'system' | 'plugin'
+  /** Actor identifier (user ID, service name, plugin ID) */
   id: string | number | null
   /** IP address (sanitized if needed) */
   ip?: string | null

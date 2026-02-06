@@ -16,12 +16,15 @@ export interface NavItemProps {
 
   /** Variant for different nav contexts */
   variant?: 'header' | 'sidebar' | 'dropdown'
+
+  /** Optional click handler (e.g., to close parent dropdown) */
+  onClick?: () => void
 }
 
 /**
  * Navigation item component.
  */
-export function NavItem({ item, className, variant = 'header' }: NavItemProps): React.ReactElement {
+export function NavItem({ item, className, variant = 'header', onClick }: NavItemProps): React.ReactElement {
   const pathname = usePathname()
   const isActive = pathname === item.href
 
@@ -32,7 +35,10 @@ export function NavItem({ item, className, variant = 'header' }: NavItemProps): 
     return (
       <button
         type="button"
-        onClick={item.onClick}
+        onClick={() => {
+          item.onClick?.()
+          onClick?.()
+        }}
         className={cn(
           'flex items-center gap-2 text-sm font-medium transition-colors',
           variant === 'header' && 'px-3 py-2 hover:bg-gray-100 rounded-md',
@@ -59,6 +65,7 @@ export function NavItem({ item, className, variant = 'header' }: NavItemProps): 
         href={item.href}
         target="_blank"
         rel="noopener noreferrer"
+        onClick={onClick}
         className={cn(
           'flex items-center gap-2 text-sm font-medium transition-colors',
           variant === 'header' && 'px-3 py-2 hover:bg-gray-100 rounded-md',
@@ -82,6 +89,7 @@ export function NavItem({ item, className, variant = 'header' }: NavItemProps): 
   return (
     <Link
       href={item.href}
+      onClick={onClick}
       className={cn(
         'flex items-center gap-2 text-sm font-medium transition-colors',
         variant === 'header' && [

@@ -6,11 +6,82 @@
  */
 
 import type { PluginManifest } from '@saas/plugins-core'
-import { pluginRegistry } from '@saas/plugins-core'
+import { pluginRegistry, hookRegistry } from '@saas/plugins-core'
 import app from '@adonisjs/core/services/app'
 import { serverPluginLoaders } from '@saas/config/plugins/server'
 import { RoutesRegistrar, createRoutesRegistrar } from './routes_registrar.js'
 import { pluginCapabilityService } from './plugin_capability_service.js'
+import { auditEventEmitter } from '#services/audit_event_emitter'
+import { AUDIT_EVENT_TYPES } from '@saas/shared'
+
+/**
+ * Create hooks registry adapter for plugin registration.
+ * Wraps the global hookRegistry for the specific plugin.
+ */
+function createHooksAdapter(pluginId: string) {
+  return {
+    registerAction: (hook: string, handler: (...args: unknown[]) => void | Promise<void>) => {
+      hookRegistry.addAction(hook, pluginId, handler)
+    },
+    registerFilter: (
+      hook: string,
+      handler: (value: unknown, ...args: unknown[]) => unknown | Promise<unknown>
+    ) => {
+      hookRegistry.addFilter(hook, pluginId, handler as (data: unknown) => unknown)
+    },
+  }
+}
+
+/**
+ * Create entitlements service adapter for plugin registration.
+ * Checks plugin capabilities at runtime.
+ */
+function createEntitlementsAdapter(pluginId: string) {
+  return {
+    has: (capability: string, ctx: { plugin?: { grantedCapabilities?: string[] } }): boolean => {
+      // Check if capability is in the granted list
+      const granted = ctx.plugin?.grantedCapabilities ?? []
+      return granted.includes(capability)
+    },
+    require: (capability: string, ctx: { plugin?: { grantedCapabilities?: string[] } }): void => {
+      const granted = ctx.plugin?.grantedCapabilities ?? []
+      if (!granted.includes(capability)) {
+        throw new Error(
+          `Plugin "${pluginId}" requires capability "${capability}" but it was not granted`
+        )
+      }
+    },
+  }
+}
+
+/**
+ * Create audit service adapter for plugin registration.
+ * Wraps the global audit event emitter.
+ */
+function createAuditAdapter(pluginId: string) {
+  return {
+    record: async (event: {
+      action: string
+      resourceType: string
+      resourceId?: string | number
+      metadata?: Record<string, unknown>
+    }): Promise<void> => {
+      await auditEventEmitter.emit({
+        tenantId: null, // Will be filled from context in actual handlers
+        type: AUDIT_EVENT_TYPES.PLUGIN_CUSTOM,
+        actor: { type: 'plugin', id: pluginId },
+        resource: {
+          type: event.resourceType,
+          id: event.resourceId?.toString() ?? '',
+        },
+        meta: {
+          action: event.action,
+          ...(event.metadata ?? {}),
+        },
+      })
+    },
+  }
+}
 
 /**
  * Get the router instance from the app container.
@@ -78,8 +149,8 @@ export default class PluginRouteMounter {
       // Load plugin module
       const pluginModule = await loader()
 
-      // Validate and enforce route prefix
-      // Security: Plugins MUST use /api/v1/apps/{pluginId} or /api/v1/apps/{pluginId}/* pattern
+      // Per spec §5.2: ALL plugins (including main-app) register routes under /api/v1/apps/{pluginId}
+      // Main-app's server module is Tier B and MUST follow all Tier B rules (spec §1.3)
       const basePrefix = `/api/v1/apps/${pluginId}`
       const declaredPrefix = manifest.routePrefix
 
@@ -110,8 +181,16 @@ export default class PluginRouteMounter {
 
       // Call plugin's register function if it exists
       if (typeof pluginModule.register === 'function') {
+        // Create adapters for the full plugin context
+        const hooks = createHooksAdapter(pluginId)
+        const entitlements = createEntitlementsAdapter(pluginId)
+        const audit = createAuditAdapter(pluginId)
+
         await pluginModule.register({
           routes: registrar,
+          hooks,
+          entitlements,
+          audit,
           pluginId,
           manifest,
         })
@@ -142,13 +221,17 @@ export default class PluginRouteMounter {
   }
 
   /**
-   * Mount routes for all active Tier B plugins.
+   * Mount routes for all active plugins that can register routes.
+   * Per spec §1.3: Both Tier B and main-app plugins can have routes.
    */
   async mountPluginRoutes(): Promise<RouteMountResult[]> {
     const results: RouteMountResult[] = []
 
-    // Get all active Tier B plugins
-    const activePlugins = pluginRegistry.getActive().filter((p) => p.manifest.tier === 'B')
+    // Get all active plugins that can have routes (Tier B and main-app)
+    // Per spec §1.3: Main App may contain design module + optional Tier B server module
+    const activePlugins = pluginRegistry
+      .getActive()
+      .filter((p) => p.manifest.tier === 'B' || p.manifest.tier === 'main-app')
 
     for (const plugin of activePlugins) {
       const result = await this.mountPlugin(plugin.manifest)

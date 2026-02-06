@@ -39,9 +39,9 @@ export class PluginRegistry {
       errors.push(...manifestValidation.errors)
     }
 
-    // Validate capabilities for tier
+    // Validate capabilities for tier (pass pluginId to allow plugin-specific capabilities)
     const capabilities = manifest.requestedCapabilities.map((c) => c.capability) as PluginCapability[]
-    const capValidation = validateCapabilitiesForTier(manifest.tier, capabilities)
+    const capValidation = validateCapabilitiesForTier(manifest.tier, capabilities, manifest.pluginId)
     if (!capValidation.valid) {
       errors.push(
         `Invalid capabilities for Tier ${manifest.tier}: ${capValidation.invalidCapabilities.join(', ')}`

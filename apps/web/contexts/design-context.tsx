@@ -10,14 +10,74 @@
 import {
   createContext,
   useContext,
+  useCallback,
   useLayoutEffect,
   useMemo,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react'
-import { usePathname } from 'next/navigation'
 import type { AppDesign, ThemeTokens, ShellArea } from '@saas/plugins-core'
 import { applyThemeTokens, getDefaultThemeTokens } from '@/lib/theme/apply-theme-tokens'
 import { getTokensForArea } from '@/lib/theme/get-shell-for-area'
+
+/**
+ * Get pathname from window.location (client-side only).
+ * Returns '/' on server.
+ */
+function getPathnameSnapshot(): string {
+  if (typeof window === 'undefined') return '/'
+  return window.location.pathname
+}
+
+/**
+ * Server snapshot for useSyncExternalStore.
+ */
+function getServerPathnameSnapshot(): string {
+  return '/'
+}
+
+/**
+ * Subscribe to pathname changes.
+ * Uses a MutationObserver on document.body to detect URL changes
+ * since Next.js doesn't fire popstate on client-side navigation.
+ */
+function subscribeToPathname(callback: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+
+  // Listen for popstate (browser back/forward)
+  window.addEventListener('popstate', callback)
+
+  // Use MutationObserver to detect client-side navigation
+  // Next.js updates the DOM on navigation, which we can detect
+  let lastPathname = window.location.pathname
+  const observer = new MutationObserver(() => {
+    if (window.location.pathname !== lastPathname) {
+      lastPathname = window.location.pathname
+      callback()
+    }
+  })
+
+  observer.observe(document.body, { childList: true, subtree: true })
+
+  return () => {
+    window.removeEventListener('popstate', callback)
+    observer.disconnect()
+  }
+}
+
+/**
+ * Hook to get current pathname without depending on Next.js router context.
+ * Works both inside and outside RouterProvider (e.g., in tests).
+ *
+ * Uses useSyncExternalStore for safe subscription to pathname changes.
+ */
+function usePathnameSafe(): string {
+  return useSyncExternalStore(
+    subscribeToPathname,
+    getPathnameSnapshot,
+    getServerPathnameSnapshot
+  )
+}
 
 /**
  * Check if running in safe mode from client-side env var.
@@ -142,7 +202,8 @@ export function DesignProvider({
   // Derive area synchronously from pathname on every render
   // This prevents flicker during client-side navigation by ensuring
   // tokens are computed before paint (no useState/useEffect delay)
-  const pathname = usePathname()
+  // Uses usePathnameSafe which doesn't require RouterProvider context
+  const pathname = usePathnameSafe()
 
   // Area is always derived fresh - initialArea prop overrides pathname detection
   // This is synchronous, so tokens update in the same render pass as navigation
@@ -176,11 +237,15 @@ export function DesignProvider({
 
   // Apply tokens for a specific area - now a no-op since area is derived from pathname
   // Kept for API compatibility; if explicit area override needed, pass initialArea prop
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const applyAreaTokens = (area: ShellArea): void => {
-    // No-op: area is now derived synchronously from pathname
-    // For explicit area overrides, pass initialArea prop to DesignProvider
-  }
+  // Memoized with useCallback to prevent context value from changing
+  const applyAreaTokens = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    (_area: ShellArea): void => {
+      // No-op: area is now derived synchronously from pathname
+      // For explicit area overrides, pass initialArea prop to DesignProvider
+    },
+    []
+  )
 
   // Apply CSS variables to document BEFORE paint using useLayoutEffect
   // This prevents visual flicker during client-side navigation
@@ -207,14 +272,18 @@ export function DesignProvider({
     }
   }, [themeTokens, design, currentArea, safeMode])
 
-  const value: DesignContextType = {
-    design: safeMode ? null : design,
-    themeTokens,
-    isLoaded,
-    isDefault: design === null || safeMode,
-    isSafeMode: safeMode,
-    applyAreaTokens,
-  }
+  // Memoize context value to prevent unnecessary re-renders of consumers
+  const value = useMemo<DesignContextType>(
+    () => ({
+      design: safeMode ? null : design,
+      themeTokens,
+      isLoaded,
+      isDefault: design === null || safeMode,
+      isSafeMode: safeMode,
+      applyAreaTokens,
+    }),
+    [design, themeTokens, isLoaded, safeMode, applyAreaTokens]
+  )
 
   return (
     <DesignContext.Provider value={value}>

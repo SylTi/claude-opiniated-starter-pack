@@ -21,9 +21,14 @@ export default function NotesLayout({
   const [isEnabling, setIsEnabling] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Extract user ID to prevent effect re-running when user object reference changes
+  // but the user hasn't actually changed (e.g., after unrelated state updates)
+  const userId = user?.id
+  const isAuthenticated = !!userId
+
   useEffect(() => {
     if (authLoading) return
-    if (!user) {
+    if (!isAuthenticated) {
       router.push("/login")
       return
     }
@@ -42,7 +47,7 @@ export default function NotesLayout({
     }
 
     checkPluginStatus()
-  }, [user, authLoading, router])
+  }, [isAuthenticated, authLoading, router])
 
   const handleEnablePlugin = async (): Promise<void> => {
     setIsEnabling(true)

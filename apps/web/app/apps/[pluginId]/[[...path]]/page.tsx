@@ -106,8 +106,8 @@ export default async function PluginPage({ params }: PluginPageProps): Promise<R
     notFound()
   }
 
-  // Only Tier A and B plugins can have UI
-  if (manifest.tier !== 'A' && manifest.tier !== 'B') {
+  // Only Tier A, B, and main-app plugins can have UI
+  if (manifest.tier !== 'A' && manifest.tier !== 'B' && manifest.tier !== 'main-app') {
     notFound()
   }
 

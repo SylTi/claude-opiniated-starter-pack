@@ -30,8 +30,12 @@ export function TenantSwitcher({
   const [isLoading, setIsLoading] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
 
+  // Extract user ID to avoid re-fetching when user object reference changes
+  // but the user hasn't actually changed
+  const userId = user?.id;
+
   const fetchTenants = useCallback(async (): Promise<void> => {
-    if (!user) return;
+    if (!userId) return;
 
     setIsLoading(true);
     try {
@@ -44,7 +48,7 @@ export function TenantSwitcher({
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [userId]);
 
   useEffect(() => {
     fetchTenants();

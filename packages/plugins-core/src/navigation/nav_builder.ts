@@ -76,9 +76,21 @@ function hasItemInSections(sections: NavSection[], itemId: string): boolean {
 
 /**
  * Log incident when mandatory items are restored.
+ * @param itemId - The item ID that was restored
+ * @param quiet - If true, suppress the log (used during validation)
  */
-function logMandatoryItemRestored(itemId: string): void {
-  console.warn(`[nav:incident] Mandatory item "${itemId}" was missing and has been restored.`)
+function logMandatoryItemRestored(itemId: string, quiet: boolean = false): void {
+  if (!quiet) {
+    console.warn(`[nav:incident] Mandatory item "${itemId}" was missing and has been restored.`)
+  }
+}
+
+/**
+ * Options for ensureMandatoryItems.
+ */
+export interface EnsureMandatoryItemsOptions {
+  /** If true, suppress "item restored" logs (used during validation) */
+  quiet?: boolean
 }
 
 /**
@@ -89,7 +101,12 @@ function logMandatoryItemRestored(itemId: string): void {
  * - core.profile: restored for authenticated users (optional mandatory)
  * - core.adminDashboard: restored if user has admin capability (optional mandatory)
  */
-export function ensureMandatoryItems(nav: NavModel, context: NavContext): NavModel {
+export function ensureMandatoryItems(
+  nav: NavModel,
+  context: NavContext,
+  options: EnsureMandatoryItemsOptions = {}
+): NavModel {
+  const { quiet = false } = options
   const userMenu = nav.userMenu.map((section) => ({
     ...section,
     items: [...section.items],
@@ -97,7 +114,7 @@ export function ensureMandatoryItems(nav: NavModel, context: NavContext): NavMod
 
   // 1. Ensure core.logout exists (always required)
   if (!hasItemInSections(userMenu, MANDATORY_ITEMS['core.logout'])) {
-    logMandatoryItemRestored(MANDATORY_ITEMS['core.logout'])
+    logMandatoryItemRestored(MANDATORY_ITEMS['core.logout'], quiet)
     const accountSection = findOrCreateAccountSection(userMenu)
     accountSection.items.push({
       id: MANDATORY_ITEMS['core.logout'],
@@ -111,7 +128,7 @@ export function ensureMandatoryItems(nav: NavModel, context: NavContext): NavMod
 
   // 2. Ensure core.switchTenant exists if user has multiple tenants
   if (context.hasMultipleTenants && !hasItemInSections(userMenu, MANDATORY_ITEMS['core.switchTenant'])) {
-    logMandatoryItemRestored(MANDATORY_ITEMS['core.switchTenant'])
+    logMandatoryItemRestored(MANDATORY_ITEMS['core.switchTenant'], quiet)
     const accountSection = findOrCreateAccountSection(userMenu)
     // Insert before logout
     const logoutIndex = accountSection.items.findIndex(
@@ -135,7 +152,7 @@ export function ensureMandatoryItems(nav: NavModel, context: NavContext): NavMod
   // 3. Ensure core.profile exists for authenticated users (optional mandatory per spec)
   if (context.userRole && context.userRole !== 'guest') {
     if (!hasItemInSections(userMenu, OPTIONAL_MANDATORY_ITEMS['core.profile'])) {
-      logMandatoryItemRestored(OPTIONAL_MANDATORY_ITEMS['core.profile'])
+      logMandatoryItemRestored(OPTIONAL_MANDATORY_ITEMS['core.profile'], quiet)
       const accountSection = findOrCreateAccountSection(userMenu)
       // Insert at the beginning of items
       accountSection.items.unshift({
@@ -154,7 +171,7 @@ export function ensureMandatoryItems(nav: NavModel, context: NavContext): NavMod
       // Check in admin area too
       const hasInAdmin = hasItemInSections(nav.admin, OPTIONAL_MANDATORY_ITEMS['core.adminDashboard'])
       if (!hasInAdmin) {
-        logMandatoryItemRestored(OPTIONAL_MANDATORY_ITEMS['core.adminDashboard'])
+        logMandatoryItemRestored(OPTIONAL_MANDATORY_ITEMS['core.adminDashboard'], quiet)
         // Add to user menu for quick access
         const accountSection = findOrCreateAccountSection(userMenu)
         accountSection.items.push({
@@ -310,6 +327,9 @@ export interface BuildNavModelOptions {
 
   /** Whether to skip validation */
   skipValidation?: boolean
+
+  /** Whether to suppress "mandatory item restored" logs (used during validation) */
+  quietMode?: boolean
 }
 
 /**
@@ -485,7 +505,7 @@ async function applyHooksToArea(
  * - Collision check before permission filter catches conflicts even when an item would later be hidden.
  */
 export async function buildNavModel(options: BuildNavModelOptions): Promise<NavModel> {
-  const { design, context, skipHooks = false, skipPermissionFilter = false, skipValidation = false } = options
+  const { design, context, skipHooks = false, skipPermissionFilter = false, skipValidation = false, quietMode = false } = options
 
   // 1. Get baseline from design (must be sync per spec)
   let nav = design.navBaseline(context)
@@ -500,7 +520,7 @@ export async function buildNavModel(options: BuildNavModelOptions): Promise<NavM
   }
 
   // 3. Ensure mandatory items are present
-  nav = ensureMandatoryItems(nav, context)
+  nav = ensureMandatoryItems(nav, context, { quiet: quietMode })
 
   // 4. Apply sorting
   nav = applySorting(nav)

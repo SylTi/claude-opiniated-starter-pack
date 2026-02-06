@@ -69,24 +69,24 @@ export default class PluginsVerify extends BaseCommand {
         }
       }
 
-      // 2. Validate capabilities for tier
+      // 2. Validate capabilities for tier (pass pluginId for plugin-specific capabilities)
       const capabilities = manifest.requestedCapabilities.map(
         (c: { capability: string; reason: string }) => c.capability
       ) as PluginCapability[]
-      const capResult = validateCapabilitiesForTier(manifest.tier, capabilities)
+      const capResult = validateCapabilitiesForTier(manifest.tier, capabilities, pluginId)
       if (!capResult.valid) {
         this.errors.push(
           `[${pluginId}] Invalid capabilities for Tier ${manifest.tier}: ${capResult.invalidCapabilities.join(', ')}`
         )
       }
 
-      // 3. Check schema version (for Tier B with migrations)
-      if (manifest.tier === 'B' && manifest.migrations) {
+      // 3. Check schema version (for Tier B or main-app with migrations)
+      if ((manifest.tier === 'B' || manifest.tier === 'main-app') && manifest.migrations) {
         await this.verifySchemaVersion(pluginId, manifest.migrations.schemaVersion)
       }
 
-      // 4. Verify RLS on plugin tables (for Tier B with tables)
-      if (manifest.tier === 'B' && manifest.tables) {
+      // 4. Verify RLS on plugin tables (for Tier B or main-app with tables)
+      if ((manifest.tier === 'B' || manifest.tier === 'main-app') && manifest.tables) {
         for (const table of manifest.tables) {
           await this.verifyTableRls(pluginId, table.name)
         }

@@ -120,7 +120,7 @@ export function validateCapabilitiesForTier(
     }
 
     // For Tier B and main-app, allow plugin-specific capabilities
-    // These are custom capabilities that start with the plugin's namespace (e.g., "myapp.core")
+    // These are custom capabilities that start with the plugin's namespace (e.g., "notarium.core")
     if ((tier === 'B' || tier === 'main-app') && pluginId) {
       const pluginPrefix = `${pluginId}.`
       if (cap.startsWith(pluginPrefix)) {
