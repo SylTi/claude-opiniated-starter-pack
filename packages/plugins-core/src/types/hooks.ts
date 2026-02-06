@@ -96,6 +96,9 @@ export type FilterHook = (typeof FILTER_HOOKS)[keyof typeof FILTER_HOOKS]
 
 /**
  * Built-in action hooks.
+ *
+ * Aligned with plugin spec (section 2.2) plus additions for analytics
+ * (DAU/MAU, MRR/ARR, Churn, LTV tracking).
  */
 export const ACTION_HOOKS = {
   // Lifecycle
@@ -103,13 +106,32 @@ export const ACTION_HOOKS = {
   'app:ready': 'app:ready',
   'app:shutdown': 'app:shutdown',
 
-  // User events
-  'user:login': 'user:login',
-  'user:logout': 'user:logout',
+  // Auth (spec: section 2.2)
+  'auth:registered': 'auth:registered',
+  'auth:logged_in': 'auth:logged_in',
+  'auth:logged_out': 'auth:logged_out',
+  'auth:mfa_verified': 'auth:mfa_verified',
+  'auth:password_reset': 'auth:password_reset',
 
-  // Tenant events
-  'tenant:switch': 'tenant:switch',
-  'tenant:create': 'tenant:create',
+  // Teams / Tenancy (spec: section 2.2 + additions)
+  'team:created': 'team:created',
+  'team:updated': 'team:updated',
+  'team:deleted': 'team:deleted',
+  'team:member_added': 'team:member_added',
+  'team:member_removed': 'team:member_removed',
+  'team:member_left': 'team:member_left',
+  'team:switched': 'team:switched',
+
+  // Billing (spec: section 2.2 + additions)
+  'billing:customer_created': 'billing:customer_created',
+  'billing:subscription_created': 'billing:subscription_created',
+  'billing:subscription_updated': 'billing:subscription_updated',
+  'billing:subscription_cancelled': 'billing:subscription_cancelled',
+  'billing:invoice_paid': 'billing:invoice_paid',
+  'billing:payment_failed': 'billing:payment_failed',
+
+  // Compliance & System (spec: section 2.2) — observe only
+  'audit:record': 'audit:record',
 } as const
 
 export type ActionHook = (typeof ACTION_HOOKS)[keyof typeof ACTION_HOOKS]

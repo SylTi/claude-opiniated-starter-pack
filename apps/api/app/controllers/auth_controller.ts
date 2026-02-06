@@ -22,6 +22,7 @@ import { TENANT_ROLES, type TenantRole } from '#constants/roles'
 import { AuditContext } from '#services/audit_context'
 import { AUDIT_EVENT_TYPES } from '#constants/audit_events'
 import { systemOps } from '#services/system_operation_service'
+import { hookRegistry } from '@saas/plugins-core'
 
 export default class AuthController {
   private authService = new AuthService()
@@ -268,6 +269,18 @@ export default class AuthController {
       .sendVerificationEmail(user.email, verificationToken, user.fullName ?? undefined)
       .catch((err) => logger.error({ err }, 'Failed to send verification email'))
 
+    // Emit plugin hooks for personal tenant creation and registration
+    hookRegistry
+      .doAction('team:created', { tenantId: personalTenant.id, ownerId: user.id, type: 'personal' })
+      .catch(() => {})
+    hookRegistry
+      .doAction('auth:registered', {
+        userId: user.id,
+        email: user.email,
+        tenantId: personalTenant.id,
+      })
+      .catch(() => {})
+
     // For new registrations with invitation, we can be more specific
     // since the invitation token already proves the user was invited
     if (joinedTenant) {
@@ -365,6 +378,9 @@ export default class AuthController {
         const mfaService = new MfaService()
 
         const isValidMfa = await mfaService.verifyUserMfa(user, mfaCode)
+        if (isValidMfa) {
+          hookRegistry.doAction('auth:mfa_verified', { userId: user.id }).catch(() => {})
+        }
         if (!isValidMfa) {
           await this.authService.recordLoginAttempt(
             user.id,
@@ -431,6 +447,15 @@ export default class AuthController {
         { type: 'user', id: user.id },
         { mfaUsed: requiresMfa }
       )
+
+      // Emit plugin hook for login
+      hookRegistry
+        .doAction('auth:logged_in', {
+          userId: user.id,
+          method: requiresMfa ? 'mfa' : 'password',
+          tenantId: user.currentTenantId,
+        })
+        .catch(() => {})
 
       response.ok({
         data: {
@@ -512,6 +537,7 @@ export default class AuthController {
         type: 'user',
         id: userId,
       })
+      hookRegistry.doAction('auth:logged_out', { userId }).catch(() => {})
     }
 
     response.ok({
@@ -620,6 +646,7 @@ export default class AuthController {
         type: 'user',
         id: user.id,
       })
+      hookRegistry.doAction('auth:password_reset', { userId: user.id }).catch(() => {})
     }
 
     response.ok({

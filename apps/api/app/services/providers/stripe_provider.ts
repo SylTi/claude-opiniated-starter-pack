@@ -20,6 +20,7 @@ import ProcessedWebhookEvent from '#models/processed_webhook_event'
 import { auditEventEmitter } from '#services/audit_event_emitter'
 import { AUDIT_EVENT_TYPES } from '#constants/audit_events'
 import { setRlsContext, setSystemRlsContext } from '#utils/rls_context'
+import { hookRegistry } from '@saas/plugins-core'
 
 export default class StripeProvider implements PaymentProvider {
   readonly name = 'stripe'
@@ -316,6 +317,26 @@ export default class StripeProvider implements PaymentProvider {
       resource: { type: 'subscription', id: newSubscription.id },
       meta: { tierId: price.product.tierId, stripeSubscriptionId: stripeSubscription.id },
     })
+
+    // Emit plugin hooks
+    hookRegistry
+      .doAction('billing:customer_created', {
+        tenantId,
+        customerId: session.customer as string,
+      })
+      .catch(() => {})
+
+    hookRegistry
+      .doAction('billing:subscription_created', {
+        tenantId,
+        subscriptionId: newSubscription.id,
+        tierId: price.product.tierId,
+        providerSubscriptionId: stripeSubscription.id,
+        amount: stripeSubscription.items.data[0]?.price.unit_amount,
+        currency: stripeSubscription.items.data[0]?.price.currency,
+        interval: stripeSubscription.items.data[0]?.price.recurring?.interval,
+      })
+      .catch(() => {})
   }
 
   /**
@@ -384,6 +405,20 @@ export default class StripeProvider implements PaymentProvider {
       resource: { type: 'subscription', id: subscription.id },
       meta: { status, stripeStatus: stripeSubscription.status },
     })
+
+    // Emit plugin hook
+    hookRegistry
+      .doAction('billing:subscription_updated', {
+        tenantId: subscription.tenantId,
+        subscriptionId: subscription.id,
+        status,
+        previousStatus: stripeSubscription.status,
+        tierId: subscription.tierId,
+        amount: stripeSubscription.items.data[0]?.price.unit_amount,
+        currency: stripeSubscription.items.data[0]?.price.currency,
+        interval: stripeSubscription.items.data[0]?.price.recurring?.interval,
+      })
+      .catch(() => {})
   }
 
   /**
@@ -424,6 +459,15 @@ export default class StripeProvider implements PaymentProvider {
       meta: { stripeSubscriptionId: stripeSubscription.id },
     })
 
+    // Emit plugin hook
+    hookRegistry
+      .doAction('billing:subscription_cancelled', {
+        tenantId: subscription.tenantId,
+        subscriptionId: subscription.id,
+        tierId: subscription.tierId,
+      })
+      .catch(() => {})
+
     // Downgrade tenant to free tier (pass transaction with RLS context)
     await Subscription.downgradeTenantToFree(subscription.tenantId, trx)
   }
@@ -463,6 +507,15 @@ export default class StripeProvider implements PaymentProvider {
       resource: subscriptionId ? { type: 'invoice', id: invoice.id ?? 'unknown' } : undefined,
       meta: { invoiceId: invoice.id, stripeSubscriptionId: subscriptionId },
     })
+
+    // Emit plugin hook
+    hookRegistry
+      .doAction('billing:payment_failed', {
+        tenantId,
+        subscriptionId,
+        invoiceId: invoice.id,
+      })
+      .catch(() => {})
   }
 
   /**
@@ -516,5 +569,16 @@ export default class StripeProvider implements PaymentProvider {
       resource: { type: 'subscription', id: subscription.id },
       meta: { invoiceId: invoice.id, amountPaid: invoice.amount_paid },
     })
+
+    // Emit plugin hook
+    hookRegistry
+      .doAction('billing:invoice_paid', {
+        tenantId: subscription.tenantId,
+        subscriptionId: subscription.id,
+        amountPaid: invoice.amount_paid,
+        currency: invoice.currency,
+        invoiceId: invoice.id,
+      })
+      .catch(() => {})
   }
 }

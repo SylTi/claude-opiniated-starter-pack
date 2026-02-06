@@ -28,6 +28,7 @@ import type { TenantRole } from '#constants/roles'
 import { AuditContext } from '#services/audit_context'
 import { AUDIT_EVENT_TYPES } from '#constants/audit_events'
 import { systemOps } from '#services/system_operation_service'
+import { hookRegistry } from '@saas/plugins-core'
 
 export default class TenantsController {
   private mailService = new MailService()
@@ -147,6 +148,11 @@ export default class TenantsController {
       id: tenant.id,
     })
 
+    // Emit plugin hook
+    hookRegistry
+      .doAction('team:created', { tenantId: tenant.id, ownerId: user.id, type: 'team' })
+      .catch(() => {})
+
     response.created({
       data: {
         id: tenant.id,
@@ -259,6 +265,11 @@ export default class TenantsController {
       { updatedFields: Object.keys(data) }
     )
 
+    // Emit plugin hook
+    hookRegistry
+      .doAction('team:updated', { tenantId: tenant.id, updatedFields: Object.keys(data) })
+      .catch(() => {})
+
     response.json({
       data: {
         id: tenant.id,
@@ -305,6 +316,11 @@ export default class TenantsController {
       { type: 'tenant', id: tenant.id },
       { previousTenantId }
     )
+
+    // Emit plugin hook
+    hookRegistry
+      .doAction('team:switched', { userId: user.id, tenantId: tenant.id, previousTenantId })
+      .catch(() => {})
 
     response.json({
       data: {
@@ -412,6 +428,15 @@ export default class TenantsController {
         { type: 'user', id: newMember.id },
         { role: role ?? TENANT_ROLES.MEMBER }
       )
+
+      // Emit plugin hook
+      hookRegistry
+        .doAction('team:member_added', {
+          tenantId: Number(tenantId),
+          userId: newMember.id,
+          role: role ?? TENANT_ROLES.MEMBER,
+        })
+        .catch(() => {})
 
       response.created({
         data: {
@@ -528,6 +553,15 @@ export default class TenantsController {
       { removedRole }
     )
 
+    // Emit plugin hook
+    hookRegistry
+      .doAction('team:member_removed', {
+        tenantId: Number(tenantId),
+        userId: Number(memberUserId),
+        role: removedRole,
+      })
+      .catch(() => {})
+
     response.json({
       message: 'Member removed successfully',
     })
@@ -577,6 +611,15 @@ export default class TenantsController {
       { type: 'tenant', id: Number(tenantId) },
       { previousRole: membership.role }
     )
+
+    // Emit plugin hook
+    hookRegistry
+      .doAction('team:member_left', {
+        tenantId: Number(tenantId),
+        userId: user.id,
+        role: membership.role,
+      })
+      .catch(() => {})
 
     response.json({
       message: 'Left tenant successfully',
@@ -628,6 +671,11 @@ export default class TenantsController {
       { type: 'tenant', id: Number(tenantId) },
       { tenantName: tenant.name }
     )
+
+    // Emit plugin hook before deletion
+    hookRegistry
+      .doAction('team:deleted', { tenantId: tenant.id, tenantName: tenant.name })
+      .catch(() => {})
 
     await tenant.delete()
 

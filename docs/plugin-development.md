@@ -303,6 +303,122 @@ export function register(context: { config?: unknown }): void {
 }
 ```
 
+## Server Action Hooks
+
+Action hooks let plugins react to core events (fire-and-forget, side effects only).
+
+### Subscribing to hooks
+
+**Programmatic (in `register()`):**
+
+```typescript
+import type { PluginContext } from '@saas/plugins-core'
+import { hookRegistry } from '@saas/plugins-core'
+
+export function register(context: PluginContext): void {
+  hookRegistry.addAction('auth:logged_in', context.pluginId, async (data) => {
+    // Track DAU/MAU
+    await recordActiveUser(data.userId, data.tenantId)
+  })
+
+  hookRegistry.addAction('billing:subscription_created', context.pluginId, async (data) => {
+    // Track MRR
+    await recordMrr(data.tenantId, data.amount, data.currency, data.interval)
+  })
+}
+```
+
+**Declarative (in `plugin.meta.json`):**
+
+```json
+{
+  "hooks": [
+    { "hook": "auth:logged_in", "handler": "onLogin", "priority": 50 },
+    { "hook": "billing:invoice_paid", "handler": "onInvoicePaid" }
+  ]
+}
+```
+
+### Available hooks
+
+#### Lifecycle
+
+| Hook | Payload | Notes |
+|------|---------|-------|
+| `app:boot` | `{ active: string[], quarantined: { pluginId, error }[] }` | Awaited. Fired after plugin boot completes. |
+| `app:ready` | `{}` | Awaited. App is ready to accept requests. |
+| `app:shutdown` | `{}` | Awaited. App is shutting down. |
+
+#### Auth
+
+| Hook | Payload | Notes |
+|------|---------|-------|
+| `auth:registered` | `{ userId, email, tenantId }` | New user registered. |
+| `auth:logged_in` | `{ userId, method, tenantId }` | User logged in. `method`: `'password'` \| `'mfa'` \| `'google'` \| `'github'` \| `'sso'`. |
+| `auth:logged_out` | `{ userId }` | User logged out. |
+| `auth:mfa_verified` | `{ userId }` | MFA code verified. |
+| `auth:password_reset` | `{ userId }` | Password reset completed. |
+
+#### Teams / Tenancy
+
+| Hook | Payload | Notes |
+|------|---------|-------|
+| `team:created` | `{ tenantId, ownerId, type }` | `type`: `'personal'` \| `'team'`. |
+| `team:updated` | `{ tenantId, updatedFields }` | `updatedFields`: array of changed field names. |
+| `team:deleted` | `{ tenantId, tenantName }` | Fired before deletion. |
+| `team:member_added` | `{ tenantId, userId, role }` | Member added to team. |
+| `team:member_removed` | `{ tenantId, userId, role }` | Member removed by admin. |
+| `team:member_left` | `{ tenantId, userId, role }` | Member voluntarily left. |
+| `team:switched` | `{ userId, tenantId, previousTenantId }` | User switched active tenant. |
+
+#### Billing
+
+| Hook | Payload | Notes |
+|------|---------|-------|
+| `billing:customer_created` | `{ tenantId, customerId }` | Stripe customer created for tenant. |
+| `billing:subscription_created` | `{ tenantId, subscriptionId, tierId, providerSubscriptionId, amount, currency, interval }` | `amount` in cents, `interval`: `'month'` \| `'year'`. |
+| `billing:subscription_updated` | `{ tenantId, subscriptionId, status, previousStatus, tierId, amount, currency, interval }` | Status or plan changed. |
+| `billing:subscription_cancelled` | `{ tenantId, subscriptionId, tierId }` | Subscription cancelled. |
+| `billing:invoice_paid` | `{ tenantId, subscriptionId, amountPaid, currency, invoiceId }` | Invoice payment succeeded. |
+| `billing:payment_failed` | `{ tenantId, subscriptionId, invoiceId }` | Invoice payment failed. |
+
+#### Compliance
+
+| Hook | Payload | Notes |
+|------|---------|-------|
+| `audit:record` | `{ type, tenantId, actor, resource, meta }` | Mirrors every audit event. Observe only. |
+
+### Example: Analytics plugin
+
+```typescript
+import { hookRegistry } from '@saas/plugins-core'
+
+export function register({ pluginId }: { pluginId: string }): void {
+  // DAU/MAU tracking
+  hookRegistry.addAction('auth:logged_in', pluginId, async ({ userId, tenantId }) => {
+    await db.query('INSERT INTO plugin_analytics_active_users ...')
+  })
+
+  // MRR tracking
+  hookRegistry.addAction('billing:subscription_created', pluginId, async (data) => {
+    const mrr = data.interval === 'year'
+      ? (data.amount ?? 0) / 12
+      : (data.amount ?? 0)
+    await db.query('INSERT INTO plugin_analytics_mrr ...')
+  })
+
+  // Churn tracking
+  hookRegistry.addAction('billing:subscription_cancelled', pluginId, async ({ tenantId }) => {
+    await db.query('UPDATE plugin_analytics_mrr SET churned_at = NOW() ...')
+  })
+
+  // LTV tracking
+  hookRegistry.addAction('billing:invoice_paid', pluginId, async ({ tenantId, amountPaid }) => {
+    await db.query('UPDATE plugin_analytics_ltv SET total = total + $1 ...')
+  })
+}
+```
+
 ## Registering Your Plugin
 
 Add your plugin to `packages/config/plugins.server.ts`:

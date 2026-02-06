@@ -101,30 +101,36 @@ Failure behavior:
 > Available in server runtime (Adonis).
 
 **Auth**
-- `auth:registered` (Payload: `user`)
-- `auth:logged_in` (Payload: `user, session`)
-- `auth:mfa_verified` (Payload: `user`)
-- `auth:password_reset` (Payload: `user`)
+- `auth:registered` (Payload: `{ userId, email, tenantId }`)
+- `auth:logged_in` (Payload: `{ userId, method, tenantId }`) — `method`: `'password'` | `'mfa'` | `'google'` | `'github'` | `'sso'`
+- `auth:logged_out` (Payload: `{ userId }`)
+- `auth:mfa_verified` (Payload: `{ userId }`)
+- `auth:password_reset` (Payload: `{ userId }`)
 
 **Teams / Tenancy (tenant == team conceptually)**
-- `team:created` (Payload: `team, owner`)
-- `team:updated` (Payload: `team`)
-- `team:member_added` (Payload: `team, user, role`)
-- `team:member_removed` (Payload: `team, user`)
+- `team:created` (Payload: `{ tenantId, ownerId, type }`) — `type`: `'personal'` | `'team'`
+- `team:updated` (Payload: `{ tenantId, updatedFields }`)
+- `team:deleted` (Payload: `{ tenantId, tenantName }`) — fired before deletion
+- `team:member_added` (Payload: `{ tenantId, userId, role }`)
+- `team:member_removed` (Payload: `{ tenantId, userId, role }`)
+- `team:member_left` (Payload: `{ tenantId, userId, role }`) — voluntary leave
+- `team:switched` (Payload: `{ userId, tenantId, previousTenantId }`)
 
-**Billing**
-- `billing:customer_created` (Payload: `user, customerId`)
-- `billing:subscription_created` (Payload: `subscription`)
-- `billing:subscription_updated` (Payload: `subscription, oldStatus`)
-- `billing:invoice_paid` (Payload: `invoice`)
+**Billing** (enriched payloads for MRR/ARR/LTV calculation)
+- `billing:customer_created` (Payload: `{ tenantId, customerId }`)
+- `billing:subscription_created` (Payload: `{ tenantId, subscriptionId, tierId, providerSubscriptionId, amount, currency, interval }`)
+- `billing:subscription_updated` (Payload: `{ tenantId, subscriptionId, status, previousStatus, tierId, amount, currency, interval }`)
+- `billing:subscription_cancelled` (Payload: `{ tenantId, subscriptionId, tierId }`)
+- `billing:invoice_paid` (Payload: `{ tenantId, subscriptionId, amountPaid, currency, invoiceId }`)
+- `billing:payment_failed` (Payload: `{ tenantId, subscriptionId, invoiceId }`)
 
 **Compliance & System**
-- `audit:record` (Payload: `{ actor, action, resource, meta }`)
+- `audit:record` (Payload: `{ type, tenantId, actor, resource, meta }`) — mirrors every audit event
 - `http:request` (Payload: `ctx`) — observe only (Tier A/B must not mutate global behavior)
 - `http:response` (Payload: `ctx, body`) — observe only (Tier A/B must not perform DLP here; core-owned)
 - `db:query` (Payload: `query, bindings`) — observe only (perf monitoring; do not rely on this for logic)
 - `app:capabilities:register` (Payload: `registry`) — register plugin capabilities (declared + approved)
-- `app:shutdown` (Payload: `app`)
+- `app:shutdown` (Payload: `{}`)
 
 ### 2.3 Client Filters (Data Transformation)
 > Available in client runtime (Browser).

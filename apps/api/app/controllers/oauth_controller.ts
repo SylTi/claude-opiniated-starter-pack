@@ -10,6 +10,7 @@ import AuthService from '#services/auth_service'
 import CookieSigningService from '#services/cookie_signing_service'
 import { USER_ROLES, TENANT_ROLES } from '#constants/roles'
 import { systemOps } from '#services/system_operation_service'
+import { hookRegistry } from '@saas/plugins-core'
 
 // Supported providers (must match ally config)
 type SupportedProvider = 'google' | 'github'
@@ -231,6 +232,25 @@ export default class OAuthController {
         // In dev, set domain to localhost for cross-port cookie sharing (Next.js on 3000, API on 3333)
         ...(process.env.NODE_ENV === 'production' ? {} : { domain: 'localhost' }),
       })
+
+      // Emit plugin hooks
+      hookRegistry
+        .doAction('auth:logged_in', {
+          userId: user.id,
+          method: provider,
+          tenantId: user.currentTenantId,
+        })
+        .catch(() => {})
+
+      if (isNewUser) {
+        hookRegistry
+          .doAction('auth:registered', {
+            userId: user.id,
+            email: user.email,
+            tenantId: user.currentTenantId,
+          })
+          .catch(() => {})
+      }
 
       // Redirect to frontend with success (callbackUrl already retrieved at start of method)
       const redirectUrl = new URL('/auth/callback', this.frontendUrl)
@@ -537,6 +557,15 @@ export default class OAuthController {
         },
         { client: trx }
       )
+
+      // Emit plugin hook for personal tenant creation (inside transaction closure for access to personalTenant)
+      hookRegistry
+        .doAction('team:created', {
+          tenantId: user.currentTenantId!,
+          ownerId: user.id,
+          type: 'personal',
+        })
+        .catch(() => {})
 
       return user
     })

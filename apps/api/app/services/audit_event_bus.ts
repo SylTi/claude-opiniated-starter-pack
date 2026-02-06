@@ -23,6 +23,7 @@
 import { EventEmitter } from 'node:events'
 import logger from '@adonisjs/core/services/logger'
 import type { AuditEvent, AuditEventType } from '@saas/shared'
+import { hookRegistry } from '@saas/plugins-core'
 
 /**
  * Handler function for audit events.
@@ -119,6 +120,17 @@ class AuditEventBus {
       // Emit to catch-all channel
       this.emitter.emit(ALL_EVENTS_CHANNEL, event)
     })
+
+    // Also emit to plugin hook system (fire-and-forget)
+    hookRegistry
+      .doAction('audit:record', {
+        type: event.type,
+        tenantId: event.tenantId,
+        actor: event.actor,
+        resource: event.resource,
+        meta: event.meta,
+      })
+      .catch(() => {})
   }
 
   /**

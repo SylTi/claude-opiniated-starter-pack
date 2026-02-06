@@ -1,4 +1,5 @@
 import type { ApplicationService, LoggerService } from '@adonisjs/core/types'
+import { hookRegistry } from '@saas/plugins-core'
 
 /**
  * Plugin Boot Provider
@@ -65,6 +66,12 @@ export default class PluginBootProvider {
         },
         'Plugin system boot completed'
       )
+
+      // Emit lifecycle hook (awaited — plugins may need to initialize)
+      await hookRegistry.doAction('app:boot', {
+        active: result.active,
+        quarantined: result.quarantined,
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
 
@@ -93,13 +100,13 @@ export default class PluginBootProvider {
    * Ready lifecycle hook - called when the application is ready to accept requests.
    */
   async ready(): Promise<void> {
-    // Nothing to do here
+    await hookRegistry.doAction('app:ready', {})
   }
 
   /**
    * Shutdown lifecycle hook - called when the application is shutting down.
    */
   async shutdown(): Promise<void> {
-    // Cleanup could go here (e.g., unregistering hooks)
+    await hookRegistry.doAction('app:shutdown', {})
   }
 }
