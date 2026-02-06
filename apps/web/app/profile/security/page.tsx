@@ -159,7 +159,7 @@ export default function SecurityPage(): React.ReactElement {
   return (
     <div>
       <h1 className="text-2xl font-bold">Security</h1>
-      <p className="text-gray-600 mt-1">Manage your security settings</p>
+      <p className="text-muted-foreground mt-1">Manage your security settings</p>
 
       <Separator className="my-6" />
 
@@ -187,7 +187,7 @@ export default function SecurityPage(): React.ReactElement {
                 <ShieldCheck className="h-5 w-5" />
                 <span>Two-factor authentication is enabled</span>
               </div>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 Backup codes remaining: {mfaStatus.backupCodesRemaining}
               </p>
 
@@ -206,7 +206,7 @@ export default function SecurityPage(): React.ReactElement {
                       className="mt-1"
                     />
                     {mfaErrors.code && (
-                      <p className="mt-1 text-sm text-red-600">{mfaErrors.code.message}</p>
+                      <p className="mt-1 text-sm text-destructive">{mfaErrors.code.message}</p>
                     )}
                   </div>
                   <div className="flex gap-2">
@@ -229,20 +229,20 @@ export default function SecurityPage(): React.ReactElement {
             <div className="space-y-6">
               <div>
                 <h3 className="font-medium mb-2">1. Scan QR Code</h3>
-                <p className="text-sm text-gray-600 mb-4">
+                <p className="text-sm text-muted-foreground mb-4">
                   Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
                 </p>
-                <div className="bg-white p-4 rounded-lg border inline-block">
+                <div className="bg-card p-4 rounded-lg border inline-block">
                   <Image src={setupData.qrCode} alt="MFA QR Code" className="w-48 h-48" />
                 </div>
               </div>
 
               <div>
                 <h3 className="font-medium mb-2">2. Save Backup Codes</h3>
-                <p className="text-sm text-gray-600 mb-4">
+                <p className="text-sm text-muted-foreground mb-4">
                   Save these backup codes in a safe place. You can use them to access your account if you lose your authenticator.
                 </p>
-                <div className="bg-gray-50 p-4 rounded-lg border">
+                <div className="bg-muted p-4 rounded-lg border">
                   <div className="grid grid-cols-2 gap-2 font-mono text-sm">
                     {setupData.backupCodes.map((code: string, i: number) => (
                       <div key={i}>{code}</div>
@@ -284,7 +284,7 @@ export default function SecurityPage(): React.ReactElement {
                     className="mt-1"
                   />
                   {mfaErrors.code && (
-                    <p className="mt-1 text-sm text-red-600">{mfaErrors.code.message}</p>
+                    <p className="mt-1 text-sm text-destructive">{mfaErrors.code.message}</p>
                   )}
                 </div>
                 <div className="flex gap-2">
@@ -345,7 +345,7 @@ export default function SecurityPage(): React.ReactElement {
                 className="mt-1"
               />
               {passwordErrors.currentPassword && (
-                <p className="mt-1 text-sm text-red-600">{passwordErrors.currentPassword.message}</p>
+                <p className="mt-1 text-sm text-destructive">{passwordErrors.currentPassword.message}</p>
               )}
             </div>
 
@@ -358,7 +358,7 @@ export default function SecurityPage(): React.ReactElement {
                 className="mt-1"
               />
               {passwordErrors.newPassword && (
-                <p className="mt-1 text-sm text-red-600">{passwordErrors.newPassword.message}</p>
+                <p className="mt-1 text-sm text-destructive">{passwordErrors.newPassword.message}</p>
               )}
             </div>
 
@@ -371,7 +371,7 @@ export default function SecurityPage(): React.ReactElement {
                 className="mt-1"
               />
               {passwordErrors.newPasswordConfirmation && (
-                <p className="mt-1 text-sm text-red-600">{passwordErrors.newPasswordConfirmation.message}</p>
+                <p className="mt-1 text-sm text-destructive">{passwordErrors.newPasswordConfirmation.message}</p>
               )}
             </div>
 

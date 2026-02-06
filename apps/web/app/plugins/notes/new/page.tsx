@@ -33,7 +33,7 @@ export default function NewNotePage(): React.ReactElement {
       await notesApi.create({ title: title.trim(), content: content.trim() || undefined })
       toast.success("Note created!")
       router.push("/plugins/notes")
-    } catch (err) {
+    } catch {
       toast.error("Failed to create note")
     } finally {
       setIsSubmitting(false)

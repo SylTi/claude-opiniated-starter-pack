@@ -89,6 +89,89 @@ describe('validatePluginManifest', () => {
     })
   })
 
+  describe('authTokens validation', () => {
+    it('accepts authTokens with valid kinds and scopes', () => {
+      const manifest = createBaseManifest({
+        authTokens: {
+          kinds: [
+            {
+              id: 'integration',
+              title: 'Integration tokens',
+              description: 'Tokens for external integrations',
+              scopes: [
+                { id: 'mcp:read', label: 'Read', defaultChecked: true },
+                { id: 'mcp:write', label: 'Write' },
+              ],
+            },
+          ],
+        },
+      })
+
+      const result = validatePluginManifest(manifest)
+
+      expect(result.valid).toBe(true)
+    })
+
+    it('rejects authTokens when kinds array is empty', () => {
+      const manifest = createBaseManifest({
+        authTokens: {
+          kinds: [],
+        },
+      })
+
+      const result = validatePluginManifest(manifest)
+
+      expect(result.valid).toBe(false)
+      expect(result.errors.some(e => e.includes('authTokens.kinds must be a non-empty array'))).toBe(true)
+    })
+
+    it('rejects duplicate auth token kind IDs', () => {
+      const manifest = createBaseManifest({
+        authTokens: {
+          kinds: [
+            {
+              id: 'integration',
+              title: 'Integration tokens',
+              scopes: [{ id: 'mcp:read', label: 'Read' }],
+            },
+            {
+              id: 'integration',
+              title: 'Duplicate',
+              scopes: [{ id: 'mcp:write', label: 'Write' }],
+            },
+          ],
+        },
+      })
+
+      const result = validatePluginManifest(manifest)
+
+      expect(result.valid).toBe(false)
+      expect(result.errors.some(e => e.includes('duplicate id "integration"'))).toBe(true)
+    })
+
+    it('rejects duplicate scope IDs within a kind', () => {
+      const manifest = createBaseManifest({
+        authTokens: {
+          kinds: [
+            {
+              id: 'integration',
+              title: 'Integration tokens',
+              scopes: [
+                { id: 'mcp:read', label: 'Read' },
+                { id: 'mcp:read', label: 'Read again' },
+              ],
+            },
+          ],
+        },
+      })
+
+      const result = validatePluginManifest(manifest)
+
+      expect(result.valid).toBe(false)
+      expect(result.errors.some(e => e.includes('duplicate id "mcp:read"'))).toBe(true)
+    })
+  })
+
   describe('tier A restrictions', () => {
     it('rejects routePrefix for tier A', () => {
       const manifest = createBaseManifest({
@@ -167,10 +250,11 @@ describe('validatePluginManifest', () => {
       expect(result.errors.some(e => e.includes('main-app tier cannot have routePrefix'))).toBe(true)
     })
 
-    it('rejects tables for main-app', () => {
+    it('accepts tables for main-app with correct prefix', () => {
       const manifest = createBaseManifest({
         tier: 'main-app',
-        tables: [{ name: 'plugin_main_data', hasTenantId: true }],
+        pluginId: 'notarium',
+        tables: [{ name: 'plugin_notarium_records', hasTenantId: true }],
         requestedCapabilities: [
           { capability: 'ui:design:global', reason: 'Theme' },
         ],
@@ -178,14 +262,14 @@ describe('validatePluginManifest', () => {
 
       const result = validatePluginManifest(manifest)
 
-      expect(result.valid).toBe(false)
-      expect(result.errors.some(e => e.includes('main-app tier cannot have database tables'))).toBe(true)
+      expect(result.valid).toBe(true)
     })
 
-    it('rejects migrations for main-app', () => {
+    it('rejects tables for main-app with wrong prefix', () => {
       const manifest = createBaseManifest({
         tier: 'main-app',
-        migrations: { dir: 'migrations', schemaVersion: 1 },
+        pluginId: 'notarium',
+        tables: [{ name: 'wrong_prefix_table', hasTenantId: true }],
         requestedCapabilities: [
           { capability: 'ui:design:global', reason: 'Theme' },
         ],
@@ -194,13 +278,13 @@ describe('validatePluginManifest', () => {
       const result = validatePluginManifest(manifest)
 
       expect(result.valid).toBe(false)
-      expect(result.errors.some(e => e.includes('main-app tier cannot have migrations'))).toBe(true)
+      expect(result.errors.some(e => e.includes('prefixed with "plugin_notarium_"'))).toBe(true)
     })
 
-    it('rejects authzNamespace for main-app', () => {
+    it('accepts migrations for main-app', () => {
       const manifest = createBaseManifest({
         tier: 'main-app',
-        authzNamespace: 'main.',
+        migrations: { dir: './migrations', schemaVersion: 1 },
         requestedCapabilities: [
           { capability: 'ui:design:global', reason: 'Theme' },
         ],
@@ -208,20 +292,60 @@ describe('validatePluginManifest', () => {
 
       const result = validatePluginManifest(manifest)
 
-      expect(result.valid).toBe(false)
-      expect(result.errors.some(e => e.includes('main-app tier cannot have authzNamespace'))).toBe(true)
+      expect(result.valid).toBe(true)
+    })
+
+    it('accepts authzNamespace for main-app', () => {
+      const manifest = createBaseManifest({
+        tier: 'main-app',
+        authzNamespace: 'notarium.',
+        requestedCapabilities: [
+          { capability: 'ui:design:global', reason: 'Theme' },
+        ],
+      })
+
+      const result = validatePluginManifest(manifest)
+
+      expect(result.valid).toBe(true)
     })
 
     it('accepts valid main-app manifest', () => {
       const manifest: PluginManifest = {
-        pluginId: 'main-app',
-        packageName: '@plugins/main-app',
+        pluginId: 'notarium',
+        packageName: '@plugins/notarium',
         version: '1.0.0',
         tier: 'main-app',
-        displayName: 'Main Application',
+        displayName: 'Notarium',
         requestedCapabilities: [
           { capability: 'ui:design:global', reason: 'Theme ownership' },
           { capability: 'ui:nav:baseline', reason: 'Baseline navigation' },
+        ],
+      }
+
+      const result = validatePluginManifest(manifest)
+
+      expect(result.valid).toBe(true)
+      expect(result.errors).toHaveLength(0)
+    })
+
+    it('accepts full main-app manifest with tables, migrations, and authzNamespace', () => {
+      const manifest: PluginManifest = {
+        pluginId: 'notarium',
+        packageName: '@plugins/notarium',
+        version: '1.0.0',
+        tier: 'main-app',
+        displayName: 'Notarium',
+        authzNamespace: 'notarium.',
+        migrations: { dir: './database/migrations', schemaVersion: 1 },
+        tables: [
+          { name: 'plugin_notarium_records', hasTenantId: true },
+          { name: 'plugin_notarium_record_types', hasTenantId: false },
+        ],
+        globalTables: ['plugin_notarium_record_types'],
+        requestedCapabilities: [
+          { capability: 'ui:design:global', reason: 'Theme ownership' },
+          { capability: 'ui:nav:baseline', reason: 'Baseline navigation' },
+          { capability: 'app:routes', reason: 'API routes' },
         ],
       }
 

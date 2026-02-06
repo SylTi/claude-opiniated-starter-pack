@@ -12,6 +12,8 @@ import type router from '@adonisjs/core/services/router'
 
 // Middleware collection type
 type MiddlewareCollection = Awaited<typeof import('#start/kernel')>['middleware']
+type MiddlewareEntry = ReturnType<MiddlewareCollection[keyof MiddlewareCollection]>
+type RouteMiddleware = MiddlewareEntry
 
 // Cache for lazily loaded middleware collection
 let cachedMiddleware: MiddlewareCollection | null = null
@@ -40,7 +42,7 @@ export interface RouteDefinition {
   method: 'get' | 'post' | 'put' | 'patch' | 'delete'
   path: string
   handler: RouteHandler
-  middleware?: string[]
+  middleware?: RouteMiddleware[]
 }
 
 /**
@@ -78,35 +80,35 @@ export class RoutesRegistrar {
   /**
    * Register a GET route.
    */
-  get(path: string, handler: RouteHandler, middleware?: string[]): Promise<void> {
+  get(path: string, handler: RouteHandler, middleware?: RouteMiddleware[]): Promise<void> {
     return this.registerRoute('get', path, handler, middleware)
   }
 
   /**
    * Register a POST route.
    */
-  post(path: string, handler: RouteHandler, middleware?: string[]): Promise<void> {
+  post(path: string, handler: RouteHandler, middleware?: RouteMiddleware[]): Promise<void> {
     return this.registerRoute('post', path, handler, middleware)
   }
 
   /**
    * Register a PUT route.
    */
-  put(path: string, handler: RouteHandler, middleware?: string[]): Promise<void> {
+  put(path: string, handler: RouteHandler, middleware?: RouteMiddleware[]): Promise<void> {
     return this.registerRoute('put', path, handler, middleware)
   }
 
   /**
    * Register a PATCH route.
    */
-  patch(path: string, handler: RouteHandler, middleware?: string[]): Promise<void> {
+  patch(path: string, handler: RouteHandler, middleware?: RouteMiddleware[]): Promise<void> {
     return this.registerRoute('patch', path, handler, middleware)
   }
 
   /**
    * Register a DELETE route.
    */
-  delete(path: string, handler: RouteHandler, middleware?: string[]): Promise<void> {
+  delete(path: string, handler: RouteHandler, middleware?: RouteMiddleware[]): Promise<void> {
     return this.registerRoute('delete', path, handler, middleware)
   }
 
@@ -133,7 +135,7 @@ export class RoutesRegistrar {
     method: 'get' | 'post' | 'put' | 'patch' | 'delete',
     path: string,
     handler: RouteHandler,
-    additionalMiddleware?: string[]
+    additionalMiddleware?: RouteMiddleware[]
   ): Promise<void> {
     // Ensure path starts with /
     const normalizedPath = path.startsWith('/') ? path : `/${path}`
@@ -154,14 +156,13 @@ export class RoutesRegistrar {
     // Apply default middleware (auth, tenant, plugin enforcement)
     // Use the middleware collection functions which properly resolve the middleware
     const pluginId = this.pluginId
-    const defaultMiddleware = [
+    const defaultMiddleware: RouteMiddleware[] = [
       middleware.auth(),
       middleware.tenant(),
       middleware.pluginEnforcement({ guards: [pluginId] }),
     ]
     const allMiddleware = [...defaultMiddleware, ...(additionalMiddleware || [])]
-
-    route.use(allMiddleware as any)
+    route.use(allMiddleware)
 
     // Track registered route
     this.registeredRoutes.push({

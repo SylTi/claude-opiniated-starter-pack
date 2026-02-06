@@ -9,6 +9,7 @@
       "types": "./main-app.d.ts",
       "default": "./main-app.js"
     },
+    "./main-app.css": "./main-app.css",
     "./main-app/client": {
       "types": "./main-app.client.d.ts",
       "default": "./main-app.client.js"
@@ -32,7 +33,7 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@plugins/main-app": "workspace:*",
+    "@plugins/notarium": "workspace:*",
     "@plugins/nav-links": "workspace:*",
     "@plugins/notes": "workspace:*",
     "@saas/plugins-core": "workspace:*"

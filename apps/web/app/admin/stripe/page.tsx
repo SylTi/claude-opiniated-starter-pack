@@ -311,11 +311,6 @@ export default function AdminStripePage(): React.ReactElement {
     }).format(amount / 100)
   }
 
-  const getTierName = (tierId: number): string => {
-    const tier = tiers.find((t) => t.id === tierId)
-    return tier?.name ?? "Unknown"
-  }
-
   const getProductName = (productId: number): string => {
     const product = products.find((p) => p.id === productId)
     return product?.tier?.name ?? "Unknown"
@@ -329,7 +324,7 @@ export default function AdminStripePage(): React.ReactElement {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }
@@ -338,11 +333,11 @@ export default function AdminStripePage(): React.ReactElement {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
           <CreditCard className="h-6 w-6" />
           Stripe Integration
         </h1>
-        <p className="text-gray-500 mt-1">
+        <p className="text-muted-foreground mt-1">
           Link your local subscription tiers to Stripe products and prices
         </p>
       </div>
@@ -359,7 +354,7 @@ export default function AdminStripePage(): React.ReactElement {
                 href="https://dashboard.stripe.com/products"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:underline inline-flex items-center gap-1"
+                className="text-primary hover:underline inline-flex items-center gap-1"
               >
                 Stripe Dashboard
                 <ExternalLink className="h-3 w-3" />

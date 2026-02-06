@@ -30,7 +30,7 @@ export default function NotesListPage(): React.ReactElement {
     try {
       const data = await notesApi.list()
       setNotes(data)
-    } catch (err) {
+    } catch {
       toast.error("Failed to load notes")
     } finally {
       setIsLoading(false)
@@ -49,7 +49,7 @@ export default function NotesListPage(): React.ReactElement {
       await notesApi.delete(deleteNote.id)
       setNotes((prev) => prev.filter((n) => n.id !== deleteNote.id))
       toast.success("Note deleted")
-    } catch (err) {
+    } catch {
       toast.error("Failed to delete note")
     } finally {
       setIsDeleting(false)

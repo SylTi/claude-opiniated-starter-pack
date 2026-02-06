@@ -44,8 +44,8 @@ export default function ForgotPasswordPage(): React.ReactElement {
     return (
       <>
         <div className="text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900">Check your email</h2>
-          <p className="mt-4 text-gray-600">
+          <h2 className="text-3xl font-bold tracking-tight text-foreground">Check your email</h2>
+          <p className="mt-4 text-muted-foreground">
             If an account exists with this email, you will receive a password reset link.
           </p>
           <Link href="/login">
@@ -62,8 +62,8 @@ export default function ForgotPasswordPage(): React.ReactElement {
   return (
     <>
       <div className="text-center">
-        <h2 className="text-3xl font-bold tracking-tight text-gray-900">Forgot password?</h2>
-        <p className="mt-2 text-sm text-gray-600">
+        <h2 className="text-3xl font-bold tracking-tight text-foreground">Forgot password?</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
           Enter your email address and we&apos;ll send you a link to reset your password.
         </p>
       </div>
@@ -85,7 +85,7 @@ export default function ForgotPasswordPage(): React.ReactElement {
             className="mt-1"
           />
           {errors.email && (
-            <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+            <p className="mt-1 text-sm text-destructive">{errors.email.message}</p>
           )}
         </div>
 
@@ -103,7 +103,7 @@ export default function ForgotPasswordPage(): React.ReactElement {
         <div className="text-center">
           <Link
             href="/login"
-            className="text-sm font-medium text-blue-600 hover:text-blue-500"
+            className="text-sm font-medium text-primary hover:text-primary/80"
           >
             <ArrowLeft className="inline-block mr-1 h-4 w-4" />
             Back to login

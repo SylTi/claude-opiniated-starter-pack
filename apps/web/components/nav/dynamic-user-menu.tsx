@@ -1,7 +1,7 @@
 'use client'
 
 import { Moon, Sun } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAuth } from '@/contexts/auth-context'
+import { useFramework } from '@/contexts/framework-context'
 import { useUserMenuNav } from '@/contexts/navigation-context'
 import { THEME_COOKIE_NAME } from '@/lib/theme-config'
 import { cn } from '@/lib/utils'
@@ -27,41 +28,66 @@ interface DynamicUserMenuProps {
 }
 
 const THEME_TOGGLE_ITEM_ID = 'app.theme.toggle'
-const NOTARIUM_THEME_COOKIE_NAME = 'notarium-theme'
+const DARK_THEME = 'dark'
+const LIGHT_THEME = 'light'
 
-type ThemeMode = 'light' | 'dark'
+type ThemeMode = string
 
 function readThemeFromDocument(): ThemeMode {
   if (typeof document === 'undefined') {
-    return 'light'
+    return LIGHT_THEME
   }
-  return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
-}
-
-function writeThemeCookie(cookieName: string, theme: ThemeMode): void {
-  document.cookie = `${cookieName}=${theme};path=/;max-age=31536000;SameSite=Lax`
+  return document.documentElement.getAttribute('data-theme') ??
+    (document.documentElement.classList.contains(DARK_THEME) ? DARK_THEME : LIGHT_THEME)
 }
 
 function applyTheme(theme: ThemeMode): void {
-  if (theme === 'dark') {
-    document.documentElement.classList.add('dark')
+  document.documentElement.setAttribute('data-theme', theme)
+  if (theme === DARK_THEME) {
+    document.documentElement.classList.add(DARK_THEME)
   } else {
-    document.documentElement.classList.remove('dark')
+    document.documentElement.classList.remove(DARK_THEME)
   }
+}
 
-  // Keep both skeleton and notarium theme cookies in sync.
-  writeThemeCookie(THEME_COOKIE_NAME, theme)
-  writeThemeCookie(NOTARIUM_THEME_COOKIE_NAME, theme)
+function writeThemeCookie(theme: ThemeMode): void {
+  document.cookie = `${THEME_COOKIE_NAME}=${encodeURIComponent(theme)};path=/;max-age=31536000;SameSite=Lax`
 }
 
 function ThemeToggleMenuItem(): React.ReactElement {
-  const [theme, setTheme] = useState<ThemeMode>(() => readThemeFromDocument())
-  const isDark = theme === 'dark'
+  const framework = useFramework()
+  const frameworkTheme = useSyncExternalStore(
+    (onStoreChange) => framework?.theme.subscribe(onStoreChange) ?? (() => {}),
+    () => framework?.theme.getTheme() ?? readThemeFromDocument(),
+    () => framework?.theme.getTheme() ?? LIGHT_THEME
+  )
+  const [localTheme, setLocalTheme] = useState<ThemeMode>(() => readThemeFromDocument())
+  const theme = framework ? frameworkTheme : localTheme
+  const isDark = theme === DARK_THEME
 
   const toggleTheme = (): void => {
-    setTheme((currentTheme) => {
-      const nextTheme = currentTheme === 'dark' ? 'light' : 'dark'
+    if (framework) {
+      if (framework.theme.toggleTheme) {
+        framework.theme.toggleTheme()
+        return
+      }
+
+      const availableThemes = framework.theme.listThemes?.() ?? [LIGHT_THEME, DARK_THEME]
+      if (availableThemes.length === 0) {
+        return
+      }
+
+      const currentTheme = framework.theme.getTheme()
+      const currentIndex = availableThemes.indexOf(currentTheme)
+      const nextTheme = availableThemes[(currentIndex + 1) % availableThemes.length] ?? availableThemes[0]
+      framework.theme.setTheme(nextTheme)
+      return
+    }
+
+    setLocalTheme((currentTheme) => {
+      const nextTheme = currentTheme === DARK_THEME ? LIGHT_THEME : DARK_THEME
       applyTheme(nextTheme)
+      writeThemeCookie(nextTheme)
       return nextTheme
     })
   }
@@ -77,7 +103,7 @@ function ThemeToggleMenuItem(): React.ReactElement {
           aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
           onClick={toggleTheme}
           className={cn(
-            'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border border-border bg-muted transition-colors',
+            'relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border border-border bg-muted transition-colors',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
           )}
         >
@@ -165,7 +191,7 @@ export function DynamicUserMenu({ sections }: DynamicUserMenuProps): React.React
       <DropdownMenuTrigger asChild>
         <button
           data-testid="user-menu"
-          className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          className="flex cursor-pointer items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
         >
           <Avatar className="h-8 w-8">
             <AvatarImage

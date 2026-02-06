@@ -9,7 +9,7 @@ import { FrameworkProvider } from '@/contexts/framework-context'
 import { ShellWrapper } from '@/components/shells/shell-wrapper'
 import { Header } from '@/components/header'
 import { clientDesign } from '@saas/config/main-app/client'
-import { type Theme, DEFAULT_THEME } from '@/lib/theme-config'
+import { type Theme } from '@/lib/theme-config'
 
 /**
  * Type for plugin's AppProviders component.
@@ -60,13 +60,13 @@ interface ProvidersProps {
  * - When enabled, AppProviders is skipped and design overrides are disabled
  * - Ensures app remains accessible if AppProviders breaks
  */
-export function Providers({
-  children,
-  initialHasUserInfoCookie = false,
-  initialUserRole = null,
-  serverSafeMode,
-  initialTheme = DEFAULT_THEME,
-}: ProvidersProps): React.ReactElement {
+export function Providers(props: ProvidersProps): React.ReactElement {
+  const {
+    children,
+    initialHasUserInfoCookie = false,
+    initialUserRole = null,
+    serverSafeMode,
+  } = props
   // Get plugin's AppProviders if available (cast from unknown to proper React type)
   const PluginAppProviders = !serverSafeMode && clientDesign.AppProviders
     ? (clientDesign.AppProviders as PluginAppProvidersComponent)

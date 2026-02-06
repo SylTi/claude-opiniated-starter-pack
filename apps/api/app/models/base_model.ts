@@ -4,6 +4,16 @@ import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import type { NormalizeConstructor } from '@adonisjs/core/types/helpers'
 import type { ModelAttributes } from '@adonisjs/lucid/types/model'
 
+type QueryWithClient = {
+  client?: {
+    isTransaction?: boolean
+  }
+}
+
+function hasTransactionClient(query: unknown): query is QueryWithClient {
+  return typeof query === 'object' && query !== null && 'client' in query
+}
+
 /**
  * Mixin that adds automatic RLS transaction binding to models.
  *
@@ -39,7 +49,7 @@ function withRlsContext<T extends NormalizeConstructor<typeof LucidBaseModel>>(s
       for (const event of queryEvents) {
         this.before(event, (query) => {
           // Don't override if already using a transaction
-          if ((query as any).client?.isTransaction) return
+          if (hasTransactionClient(query) && query.client?.isTransaction) return
 
           const trx = this.getRlsTransaction()
           if (trx) {

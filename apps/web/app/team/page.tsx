@@ -53,7 +53,6 @@ import {
   AlertCircle,
 } from "lucide-react";
 import {
-  type TenantMembershipDTO,
   type TenantInvitationDTO,
   type TenantWithMembersDTO,
 } from "@saas/shared";

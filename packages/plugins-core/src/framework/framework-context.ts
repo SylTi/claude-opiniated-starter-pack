@@ -51,6 +51,23 @@ export interface FrameworkImageProps {
 }
 
 /**
+ * Theme bridge interface.
+ * Lets the skeleton expose theme control to plugins in a framework-agnostic way.
+ */
+export interface ThemeBridge {
+  /** Get current theme identifier (e.g., 'light', 'dark', 'sepia'). */
+  getTheme: () => string
+  /** Set active theme identifier. */
+  setTheme: (theme: string) => void
+  /** Toggle theme when host supports a default cycle. */
+  toggleTheme?: () => void
+  /** Optional discovery of available theme identifiers. */
+  listThemes?: () => string[]
+  /** Subscribe to theme changes. Returns an unsubscribe function. */
+  subscribe: (listener: (theme: string) => void) => () => void
+}
+
+/**
  * Framework context value.
  * Provided by skeleton, consumed by plugins.
  */
@@ -61,6 +78,8 @@ export interface FrameworkContextValue {
   Link: ComponentType<FrameworkLinkProps>
   /** Image component adapter */
   Image: ComponentType<FrameworkImageProps>
+  /** Theme bridge adapter */
+  theme: ThemeBridge
 }
 
 /**

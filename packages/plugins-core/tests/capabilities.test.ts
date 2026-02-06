@@ -89,13 +89,16 @@ describe('capabilities', () => {
         expect(result.invalidCapabilities).toHaveLength(0)
       })
 
-      it('rejects tier B capabilities', () => {
+      it('allows tier B capabilities (per spec §1.3)', () => {
+        // Per spec §1.3: Main App may contain design module + optional Tier B server module
         const result = validateCapabilitiesForTier('main-app', [
           PLUGIN_CAPABILITIES['app:routes'],
+          PLUGIN_CAPABILITIES['app:db:read'],
+          PLUGIN_CAPABILITIES['app:db:write'],
         ])
 
-        expect(result.valid).toBe(false)
-        expect(result.invalidCapabilities).toContain(PLUGIN_CAPABILITIES['app:routes'])
+        expect(result.valid).toBe(true)
+        expect(result.invalidCapabilities).toHaveLength(0)
       })
     })
   })

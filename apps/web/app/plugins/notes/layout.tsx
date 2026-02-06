@@ -38,7 +38,7 @@ export default function NotesLayout({
         const status = await notesApi.getPluginStatus()
         setPluginStatus(status)
         setError(null)
-      } catch (err) {
+      } catch {
         // Plugin might not be registered or tenant not set
         setError("Unable to load plugin status. Make sure you have a tenant selected.")
       } finally {
@@ -56,7 +56,7 @@ export default function NotesLayout({
       const status = await notesApi.getPluginStatus()
       setPluginStatus(status)
       toast.success("Notes plugin enabled!")
-    } catch (err) {
+    } catch {
       toast.error("Failed to enable plugin")
     } finally {
       setIsEnabling(false)

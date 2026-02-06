@@ -104,6 +104,7 @@ export async function truncateAllTables(): Promise<void> {
     'products',
     'payment_customers',
     'subscriptions',
+    'auth_tokens',
     'tenant_invitations',
     'tenant_memberships',
     'email_verification_tokens',

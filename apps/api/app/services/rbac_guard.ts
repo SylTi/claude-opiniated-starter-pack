@@ -119,7 +119,7 @@ export class RbacGuard {
    * @param action - The action to check
    * @returns true if authorized
    */
-  can(action: TenantAction): boolean {
+  can(action: TenantAction | string): boolean {
     return can(this.role, action)
   }
 

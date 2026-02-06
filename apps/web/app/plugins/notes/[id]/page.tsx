@@ -30,7 +30,7 @@ export default function EditNotePage(): React.ReactElement {
       setNote(data)
       setTitle(data.title)
       setContent(data.content || "")
-    } catch (err) {
+    } catch {
       toast.error("Failed to load note")
       router.push("/plugins/notes")
     } finally {
@@ -61,7 +61,7 @@ export default function EditNotePage(): React.ReactElement {
       })
       toast.success("Note updated!")
       router.push("/plugins/notes")
-    } catch (err) {
+    } catch {
       toast.error("Failed to update note")
     } finally {
       setIsSubmitting(false)

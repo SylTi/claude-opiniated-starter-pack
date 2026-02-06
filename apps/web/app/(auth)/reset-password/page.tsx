@@ -57,8 +57,8 @@ function ResetPasswordForm(): React.ReactElement {
     return (
       <>
         <div className="text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900">Invalid link</h2>
-          <p className="mt-4 text-gray-600">
+          <h2 className="text-3xl font-bold tracking-tight text-foreground">Invalid link</h2>
+          <p className="mt-4 text-muted-foreground">
             This password reset link is invalid or has expired.
           </p>
           <Link href="/forgot-password">
@@ -73,10 +73,10 @@ function ResetPasswordForm(): React.ReactElement {
     return (
       <>
         <div className="text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900">
+          <h2 className="text-3xl font-bold tracking-tight text-foreground">
             Password reset successful
           </h2>
-          <p className="mt-4 text-gray-600">
+          <p className="mt-4 text-muted-foreground">
             Your password has been reset successfully. You can now sign in with your new password.
           </p>
           <Button className="mt-6" onClick={() => router.push('/login')}>
@@ -90,8 +90,8 @@ function ResetPasswordForm(): React.ReactElement {
   return (
     <>
       <div className="text-center">
-        <h2 className="text-3xl font-bold tracking-tight text-gray-900">Reset your password</h2>
-        <p className="mt-2 text-sm text-gray-600">
+        <h2 className="text-3xl font-bold tracking-tight text-foreground">Reset your password</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
           Enter your new password below.
         </p>
       </div>
@@ -114,7 +114,7 @@ function ResetPasswordForm(): React.ReactElement {
               className="mt-1"
             />
             {errors.password && (
-              <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
+              <p className="mt-1 text-sm text-destructive">{errors.password.message}</p>
             )}
           </div>
 
@@ -128,7 +128,7 @@ function ResetPasswordForm(): React.ReactElement {
               className="mt-1"
             />
             {errors.passwordConfirmation && (
-              <p className="mt-1 text-sm text-red-600">{errors.passwordConfirmation.message}</p>
+              <p className="mt-1 text-sm text-destructive">{errors.passwordConfirmation.message}</p>
             )}
           </div>
         </div>
@@ -147,7 +147,7 @@ function ResetPasswordForm(): React.ReactElement {
         <div className="text-center">
           <Link
             href="/login"
-            className="text-sm font-medium text-blue-600 hover:text-blue-500"
+            className="text-sm font-medium text-primary hover:text-primary/80"
           >
             <ArrowLeft className="inline-block mr-1 h-4 w-4" />
             Back to login

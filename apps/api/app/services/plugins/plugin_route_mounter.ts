@@ -12,6 +12,11 @@ import { serverPluginLoaders } from '@saas/config/plugins/server'
 import { RoutesRegistrar, createRoutesRegistrar } from './routes_registrar.js'
 import { pluginCapabilityService } from './plugin_capability_service.js'
 import { auditEventEmitter } from '#services/audit_event_emitter'
+import {
+  authTokenService,
+  type AuthTokenRecordDTO,
+  type ValidateAuthTokenResult,
+} from '#services/auth_tokens/auth_token_service'
 import { AUDIT_EVENT_TYPES } from '@saas/shared'
 
 /**
@@ -78,6 +83,68 @@ function createAuditAdapter(pluginId: string) {
           action: event.action,
           ...(event.metadata ?? {}),
         },
+      })
+    },
+  }
+}
+
+/**
+ * Create auth-token adapter for a plugin.
+ * Plugins receive a plugin-scoped contract, never direct DB access to token internals.
+ */
+function createAuthTokensAdapter(pluginId: string) {
+  return {
+    listTokens: (input: {
+      tenantId: number
+      kind?: string
+      userId?: number
+    }): Promise<AuthTokenRecordDTO[]> => {
+      return authTokenService.listTokens({
+        tenantId: input.tenantId,
+        pluginId,
+        kind: input.kind,
+        userId: input.userId,
+      })
+    },
+    createToken: (input: {
+      tenantId: number
+      userId: number
+      kind: string
+      name: string
+      scopes: string[]
+      expiresAt?: string | null
+      metadata?: Record<string, unknown> | null
+    }) => {
+      return authTokenService.createToken({
+        tenantId: input.tenantId,
+        userId: input.userId,
+        pluginId,
+        kind: input.kind,
+        name: input.name,
+        scopes: input.scopes,
+        expiresAt: input.expiresAt,
+        metadata: input.metadata,
+      })
+    },
+    revokeToken: (input: { tenantId: number; tokenId: string; kind?: string; userId?: number }) => {
+      return authTokenService.revokeToken({
+        tenantId: input.tenantId,
+        pluginId,
+        tokenId: input.tokenId,
+        kind: input.kind,
+        userId: input.userId,
+      })
+    },
+    validateToken: (input: {
+      tokenValue: string
+      kind?: string
+      requiredScopes?: string[]
+    }): Promise<ValidateAuthTokenResult> => {
+      return authTokenService.validateToken({
+        pluginId,
+        tokenValue: input.tokenValue,
+        kind: input.kind,
+        requiredScopes: input.requiredScopes,
       })
     },
   }
@@ -185,12 +252,14 @@ export default class PluginRouteMounter {
         const hooks = createHooksAdapter(pluginId)
         const entitlements = createEntitlementsAdapter(pluginId)
         const audit = createAuditAdapter(pluginId)
+        const authTokens = createAuthTokensAdapter(pluginId)
 
         await pluginModule.register({
           routes: registrar,
           hooks,
           entitlements,
           audit,
+          authTokens,
           pluginId,
           manifest,
         })

@@ -158,8 +158,8 @@ export default function AdminUsersPage(): React.ReactElement {
   if (isLoading) {
     return (
       <div className="animate-pulse space-y-4">
-        <div className="h-8 w-64 bg-gray-200 rounded" />
-        <div className="h-64 bg-gray-200 rounded" />
+        <div className="h-8 w-64 bg-muted rounded" />
+        <div className="h-64 bg-muted rounded" />
       </div>
     );
   }
@@ -231,7 +231,7 @@ export default function AdminUsersPage(): React.ReactElement {
                     </TableCell>
                     <TableCell>
                       {u.emailVerified ? (
-                        <Badge variant="default" className="bg-green-600">
+                        <Badge variant="default">
                           Verified
                         </Badge>
                       ) : (
@@ -240,7 +240,7 @@ export default function AdminUsersPage(): React.ReactElement {
                     </TableCell>
                     <TableCell>
                       {u.mfaEnabled ? (
-                        <Badge variant="default" className="bg-blue-600">
+                        <Badge variant="default">
                           Enabled
                         </Badge>
                       ) : (

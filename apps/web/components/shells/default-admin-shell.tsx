@@ -24,17 +24,17 @@ export function DefaultAdminShell({
   children,
 }: DefaultAdminShellProps): React.ReactElement {
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-gray-50">
+    <div className="min-h-[calc(100vh-4rem)] bg-background">
       <div className="container mx-auto py-8 px-4">
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Sidebar */}
           <aside className="w-full lg:w-64 shrink-0">
-            <nav className="bg-white rounded-lg shadow p-4">
+            <nav className="bg-card text-card-foreground rounded-lg border p-4">
               <div className="mb-4 px-3">
-                <h2 className="text-lg font-semibold text-gray-900">
+                <h2 className="text-lg font-semibold text-foreground">
                   Admin Panel
                 </h2>
-                <p className="text-sm text-gray-500">Manage your application</p>
+                <p className="text-sm text-muted-foreground">Manage your application</p>
               </div>
 
               <div className="space-y-4">

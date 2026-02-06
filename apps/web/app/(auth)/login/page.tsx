@@ -134,14 +134,14 @@ export default function LoginPage(): React.ReactElement {
   return (
     <>
       <div className="text-center">
-        <h2 className="text-3xl font-bold tracking-tight text-gray-900">
+        <h2 className="text-3xl font-bold tracking-tight text-foreground">
           Sign in to your account
         </h2>
-        <p className="mt-2 text-sm text-gray-600">
+        <p className="mt-2 text-sm text-muted-foreground">
           Or{" "}
           <Link
             href="/register"
-            className="font-medium text-blue-600 hover:text-blue-500"
+            className="font-medium text-primary hover:text-primary/80"
           >
             create a new account
           </Link>
@@ -168,7 +168,7 @@ export default function LoginPage(): React.ReactElement {
               className="mt-1"
             />
             {errors.email && (
-              <p className="mt-1 text-sm text-red-600">
+              <p className="mt-1 text-sm text-destructive">
                 {errors.email.message}
               </p>
             )}
@@ -184,7 +184,7 @@ export default function LoginPage(): React.ReactElement {
               className="mt-1"
             />
             {errors.password && (
-              <p className="mt-1 text-sm text-red-600">
+              <p className="mt-1 text-sm text-destructive">
                 {errors.password.message}
               </p>
             )}
@@ -205,7 +205,7 @@ export default function LoginPage(): React.ReactElement {
                 className="mt-1"
               />
               {errors.mfaCode && (
-                <p className="mt-1 text-sm text-red-600">
+                <p className="mt-1 text-sm text-destructive">
                   {errors.mfaCode.message}
                 </p>
               )}
@@ -217,7 +217,7 @@ export default function LoginPage(): React.ReactElement {
           <div className="text-sm">
             <Link
               href="/forgot-password"
-              className="font-medium text-blue-600 hover:text-blue-500"
+              className="font-medium text-primary hover:text-primary/80"
             >
               Forgot your password?
             </Link>
@@ -240,7 +240,7 @@ export default function LoginPage(): React.ReactElement {
             <Separator className="w-full" />
           </div>
           <div className="relative flex justify-center text-sm">
-            <span className="bg-gray-50 px-2 text-gray-500">
+            <span className="bg-background px-2 text-muted-foreground">
               Or continue with
             </span>
           </div>

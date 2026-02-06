@@ -100,19 +100,26 @@ export class CapabilityEnforcer {
     for (const req of manifest.requestedCapabilities) {
       const capability = req.capability
 
-      // Check if capability is valid
-      if (!isValidCapability(capability)) {
+      // Check if capability is valid (either in PLUGIN_CAPABILITIES or plugin-specific)
+      const isKnownCapability = isValidCapability(capability)
+      const isPluginSpecific =
+        (manifest.tier === 'B' || manifest.tier === 'main-app') &&
+        capability.startsWith(`${manifest.pluginId}.`)
+
+      if (!isKnownCapability && !isPluginSpecific) {
         denied.push(capability)
         reasons[capability] = 'Unknown capability'
         continue
       }
 
-      // Check if capability is valid for tier
-      const tierValidation = validateCapabilitiesForTier(manifest.tier, [capability as PluginCapability])
-      if (!tierValidation.valid) {
-        denied.push(capability)
-        reasons[capability] = `Not allowed for Tier ${manifest.tier} plugins`
-        continue
+      // For known capabilities, check if valid for tier
+      if (isKnownCapability) {
+        const tierValidation = validateCapabilitiesForTier(manifest.tier, [capability as PluginCapability])
+        if (!tierValidation.valid) {
+          denied.push(capability)
+          reasons[capability] = `Not allowed for Tier ${manifest.tier} plugins`
+          continue
+        }
       }
 
       // Capability is valid and appropriate for tier

@@ -30,6 +30,7 @@ const WebhookController = () => import('#controllers/webhook_controller')
 const DiscountCodesController = () => import('#controllers/discount_codes_controller')
 const CouponsController = () => import('#controllers/coupons_controller')
 const NavigationController = () => import('#controllers/navigation_controller')
+const AuthTokensController = () => import('#controllers/auth_tokens_controller')
 
 router.get('/', async () => {
   return {
@@ -171,6 +172,16 @@ router
       })
       .prefix('/navigation')
       .use([middleware.auth(), middleware.authContext(), apiThrottle])
+
+    // Auth Tokens - Protected tenant-scoped routes (user profile integrations)
+    router
+      .group(() => {
+        router.get('/', [AuthTokensController, 'index'])
+        router.post('/', [AuthTokensController, 'store'])
+        router.delete('/:id', [AuthTokensController, 'destroy'])
+      })
+      .prefix('/auth-tokens')
+      .use([middleware.auth(), middleware.tenant(), apiThrottle])
 
     // Users - Protected routes (any logged-in user)
     // SECURITY: Users can only access their own data. Admin listing is via /admin/users

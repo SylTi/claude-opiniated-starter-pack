@@ -1,12 +1,12 @@
 'use client'
 
-import { type ReactNode, useMemo } from 'react'
+import { type ReactNode, useContext, useMemo } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { User, Shield, Settings, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/auth-context'
-import { useUserMenuNav } from '@/contexts/navigation-context'
+import { NavigationContext } from '@/contexts/navigation-context'
 import type { NavItemWithIcon, NavSectionWithIcons } from '@/lib/nav/types'
 
 /**
@@ -50,34 +50,34 @@ function getPluginSettingsItems(userMenuSections: NavSectionWithIcons[]): NavIte
 export default function ProfileLayout({ children }: { children: ReactNode }): React.ReactElement {
   const pathname = usePathname()
   const { user, isLoading } = useAuth()
-  const userMenuSections = useUserMenuNav()
+  const navigation = useContext(NavigationContext)
 
   // Get plugin-provided settings items
   const pluginItems = useMemo(
-    () => getPluginSettingsItems(userMenuSections),
-    [userMenuSections]
+    () => getPluginSettingsItems(navigation?.nav.userMenu ?? []),
+    [navigation?.nav.userMenu]
   )
 
   // Show loading state while auth context initializes
   if (isLoading || !user) {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-gray-50">
+    <div className="min-h-[calc(100vh-4rem)] bg-background">
       <div className="container mx-auto py-8 px-4">
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Sidebar */}
           <aside className="w-full lg:w-64 shrink-0">
-            <nav className="bg-white rounded-lg shadow p-4">
+            <nav className="bg-card text-card-foreground rounded-lg border p-4">
               {/* Core navigation items (skeleton-owned) */}
               <ul className="space-y-1">
                 {coreNavigation.map((item) => {
-                  const isActive = pathname === item.href
+                  const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
                   return (
                     <li key={item.id}>
                       <Link
@@ -85,8 +85,8 @@ export default function ProfileLayout({ children }: { children: ReactNode }): Re
                         className={cn(
                           'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
                           isActive
-                            ? 'bg-blue-50 text-blue-700'
-                            : 'text-gray-700 hover:bg-gray-100'
+                            ? 'bg-accent text-accent-foreground'
+                            : 'text-foreground/80 hover:bg-accent'
                         )}
                       >
                         <item.icon className="h-5 w-5" />
@@ -100,13 +100,13 @@ export default function ProfileLayout({ children }: { children: ReactNode }): Re
               {/* Plugin-provided settings items */}
               {pluginItems.length > 0 && (
                 <>
-                  <div className="my-3 border-t border-gray-200" />
-                  <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <div className="my-3 border-t border-border" />
+                  <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     App Settings
                   </div>
                   <ul className="space-y-1">
                     {pluginItems.map((item) => {
-                      const isActive = pathname === item.href
+                      const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
                       const Icon = item.icon
                       return (
                         <li key={item.id}>
@@ -115,8 +115,8 @@ export default function ProfileLayout({ children }: { children: ReactNode }): Re
                             className={cn(
                               'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
                               isActive
-                                ? 'bg-blue-50 text-blue-700'
-                                : 'text-gray-700 hover:bg-gray-100'
+                                ? 'bg-accent text-accent-foreground'
+                                : 'text-foreground/80 hover:bg-accent'
                             )}
                           >
                             {Icon && <Icon className="h-5 w-5" />}
@@ -133,7 +133,7 @@ export default function ProfileLayout({ children }: { children: ReactNode }): Re
 
           {/* Main content */}
           <div className="flex-1">
-            <div className="bg-white rounded-lg shadow p-6">{children}</div>
+            <div className="bg-card text-card-foreground rounded-lg border p-6">{children}</div>
           </div>
         </div>
       </div>

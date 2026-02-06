@@ -197,17 +197,17 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-card text-card-foreground rounded-lg border p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Discount Codes</h1>
-          <p className="text-gray-500">
+          <h1 className="text-2xl font-bold text-foreground">Discount Codes</h1>
+          <p className="text-muted-foreground">
             Manage discount codes for subscriptions
           </p>
         </div>
@@ -235,7 +235,7 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
                 <div>
                   <span className="font-mono font-semibold">{code.code}</span>
                   {code.description && (
-                    <p className="text-sm text-gray-500">{code.description}</p>
+                    <p className="text-sm text-muted-foreground">{code.description}</p>
                   )}
                 </div>
               </TableCell>
@@ -282,7 +282,7 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
                     onClick={() => handleDelete(code.id)}
                     disabled={actionLoading === code.id}
                   >
-                    <Trash2 className="h-4 w-4 text-red-500" />
+                    <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 </div>
               </TableCell>
@@ -290,7 +290,7 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
           ))}
           {discountCodes.length === 0 && (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-gray-500">
+              <TableCell colSpan={6} className="text-center text-muted-foreground">
                 No discount codes found
               </TableCell>
             </TableRow>

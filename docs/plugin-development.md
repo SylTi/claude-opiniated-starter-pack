@@ -70,6 +70,62 @@ This is the most important file - it declares your plugin's metadata and capabil
 }
 ```
 
+### Auth Tokens (Integrations)
+
+If your plugin needs user-generated integration tokens (e.g., MCP, browser extensions),
+declare them in `plugin.meta.json`. The core `/api/v1/auth-tokens` endpoints will enforce
+these allowlists for `kind` and `scopes`.
+
+```json
+{
+  "authTokens": {
+    "kinds": [
+      {
+        "id": "integration",
+        "title": "Integration tokens",
+        "description": "Tokens for external clients",
+        "createTitle": "Create integration token",
+        "createDescription": "Generate a token for external tools.",
+        "emptyMessage": "No integration tokens created yet.",
+        "revokeMessage": "This immediately disconnects clients using this token.",
+        "scopes": [
+          { "id": "my-plugin:read", "label": "Read", "defaultChecked": true },
+          { "id": "my-plugin:write", "label": "Write" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Consuming tokens in your plugin (server-side):**
+
+```typescript
+import type { PluginContext } from '@saas/plugins-core'
+
+export function register({ routes, authTokens }: PluginContext): void {
+  routes.post('/mcp/search', async (ctx) => {
+    const token = ctx.request.header('authorization')?.replace('Bearer ', '')
+    if (!token || !authTokens) {
+      return ctx.response.status(401).send({ error: 'Unauthorized', message: 'Missing token' })
+    }
+
+    const result = await authTokens.validateToken({
+      tokenValue: token,
+      kind: 'integration',
+      requiredScopes: ['my-plugin:read'],
+    })
+
+    if (!result.valid) {
+      return ctx.response.status(401).send({ error: 'Unauthorized', message: result.error })
+    }
+
+    // result.tenantId / result.userId are available here
+    // ...
+  })
+}
+```
+
 ## Plugin Capabilities
 
 ### Tier A Capabilities (UI Only)

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Loader2, Link as LinkIcon, Unlink } from "lucide-react";
 import { toast } from "sonner";
 import { GoogleIcon, GitHubIcon } from "@/components/oauth-icons";
@@ -93,7 +94,7 @@ export default function SettingsPage(): React.ReactElement {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -101,7 +102,7 @@ export default function SettingsPage(): React.ReactElement {
   return (
     <div>
       <h1 className="text-2xl font-bold">Settings</h1>
-      <p className="text-gray-600 mt-1">
+      <p className="text-muted-foreground mt-1">
         Manage your linked accounts and preferences
       </p>
 
@@ -112,6 +113,21 @@ export default function SettingsPage(): React.ReactElement {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
+
+      {/* Integrations */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Integrations</CardTitle>
+          <CardDescription>
+            Manage API tokens for MCP and browser extension access.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild>
+            <Link href="/profile/settings/integrations">Open integration tokens</Link>
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Linked Accounts */}
       <Card className="mb-6">
@@ -137,7 +153,7 @@ export default function SettingsPage(): React.ReactElement {
                   <div>
                     <p className="font-medium">{provider.name}</p>
                     {linked && account?.email && (
-                      <p className="text-sm text-gray-500">{account.email}</p>
+                      <p className="text-sm text-muted-foreground">{account.email}</p>
                     )}
                   </div>
                 </div>
@@ -181,7 +197,7 @@ export default function SettingsPage(): React.ReactElement {
         </CardHeader>
         <CardContent>
           {loginHistory.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">
+            <p className="text-muted-foreground text-center py-4">
               No login history available
             </p>
           ) : (
@@ -197,7 +213,7 @@ export default function SettingsPage(): React.ReactElement {
                         ? "Password + 2FA"
                         : entry.loginMethod}
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-muted-foreground">
                       {entry.ipAddress || "Unknown IP"} •{" "}
                       {new Date(entry.createdAt).toLocaleString()}
                     </p>

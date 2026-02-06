@@ -3,15 +3,7 @@
  *
  * This is the SINGLE FILE to edit when switching main-app plugins.
  *
- * DEPLOYMENT OVERRIDE (e.g., to use notarium instead of main-app):
- * 1. git update-index --skip-worktree packages/config/plugins.config.ts
- * 2. Change MAIN_APP_PLUGIN config (lines ~33-39)
- * 3. Change the re-exports at the bottom (design and clientDesign imports)
- *
- * Example for notarium:
- *   MAIN_APP_PLUGIN.packageName = '@plugins/notarium'
- *   export { design } from '@plugins/notarium'
- *   export { clientDesign } from '@plugins/notarium/client'
+ * Currently configured for: @plugins/main-app
  */
 
 import type { PluginManifest } from '@saas/plugins-core'
@@ -20,11 +12,23 @@ import type { PluginManifest } from '@saas/plugins-core'
 // TYPE DEFINITIONS
 // =============================================================================
 
+export type PluginServerModule = {
+  [key: string]: unknown
+  default?: unknown
+  register?(context: unknown): void | Promise<void>
+}
+
+export type PluginClientModule = {
+  [key: string]: unknown
+  default?: unknown
+  register?(context: unknown): void | Promise<void>
+}
+
 export type PluginConfig = {
   id: string
   packageName: string
-  serverImport: () => Promise<unknown>
-  clientImport: () => Promise<unknown>
+  serverImport: () => Promise<PluginServerModule>
+  clientImport: () => Promise<PluginClientModule>
   manifestImport: () => Promise<unknown>
 }
 
@@ -82,7 +86,6 @@ export function getMainAppPluginId(): string {
 
 /**
  * Helper to extract manifest from import result.
- * JSON imports have the manifest as both default export and spread on module.
  */
 export function extractManifest(imported: unknown): PluginManifest {
   const mod = imported as { default?: PluginManifest } & PluginManifest
@@ -92,8 +95,6 @@ export function extractManifest(imported: unknown): PluginManifest {
 // =============================================================================
 // MAIN-APP DESIGN RE-EXPORTS
 // =============================================================================
-// These must match MAIN_APP_PLUGIN above. When switching main-app plugins,
-// update both the MAIN_APP_PLUGIN config AND these imports.
 
 /** Server-side design export */
 export { design } from '@plugins/main-app'

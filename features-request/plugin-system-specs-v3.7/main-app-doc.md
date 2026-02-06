@@ -65,6 +65,39 @@ You must provide:
 
 ---
 
+## 3.1 Integration tokens (optional)
+If your app needs external integrations (MCP, browser extensions, etc.), declare
+token kinds + scopes in `plugin.meta.json` under `authTokens`. The core
+`/api/v1/auth-tokens` endpoints enforce these allowlists and handle issuance.
+
+To consume a token in your server routes, use the `authTokens` adapter from
+the plugin context:
+
+~~~ts
+export function register({ routes, authTokens }: PluginContext): void {
+  routes.post('/mcp/search', async (ctx) => {
+    const token = ctx.request.header('authorization')?.replace('Bearer ', '')
+    if (!token || !authTokens) {
+      return ctx.response.status(401).send({ error: 'Unauthorized', message: 'Missing token' })
+    }
+
+    const result = await authTokens.validateToken({
+      tokenValue: token,
+      kind: 'integration',
+      requiredScopes: ['my-app:read'],
+    })
+
+    if (!result.valid) {
+      return ctx.response.status(401).send({ error: 'Unauthorized', message: result.error })
+    }
+
+    // result.tenantId / result.userId available here
+  })
+}
+~~~
+
+---
+
 ## 4) Required exports and file layout
 
 ### 4.1 Package identity
@@ -179,9 +212,16 @@ export const design: AppDesign = {
       ],
       admin: [],
       userMenu: [
-        { id: 'core.profile', label: 'Profile', href: '/settings/profile', order: 10 },
-        { id: 'core.switchTenant', label: 'Switch Tenant', href: '/tenants', order: 9000 },
-        { id: 'core.logout', label: 'Logout', href: '/auth/logout', order: 9999 },
+        {
+          id: 'core.account',
+          label: 'Account',
+          order: 10,
+          items: [
+            { id: 'core.profile', label: 'Profile', href: '/settings/profile', order: 10 },
+            { id: 'core.switchTenant', label: 'Switch Tenant', href: '/tenants', order: 9000 },
+            { id: 'core.logout', label: 'Logout', href: '/auth/logout', order: 9999 },
+          ],
+        },
       ],
     }
   },
@@ -202,12 +242,13 @@ function MyComponent() {
     return null
   }
 
-  const { router, Link, Image } = framework
+  const { router, Link, Image, theme } = framework
 
   return (
     <div>
       <Link href="/dashboard">Go to Dashboard</Link>
       <button onClick={() => router.push('/settings')}>Settings</button>
+      <button onClick={() => theme.toggleTheme?.()}>Toggle theme</button>
     </div>
   )
 }
@@ -217,6 +258,7 @@ The `FrameworkContext` provides:
 - `router` - Navigation methods (push, replace, back, refresh) and current state (pathname, searchParams)
 - `Link` - Framework-specific link component
 - `Image` - Framework-specific optimized image component
+- `theme` - Theme bridge (`getTheme`, `setTheme`, optional `toggleTheme`/`listThemes`, `subscribe`)
 
 **Import paths:**
 - Types (server-safe): `import type { ... } from '@saas/plugins-core/types'`
@@ -319,6 +361,61 @@ export const design: AppDesign = {
 
 If `headerOverride` throws, skeleton logs an incident and falls back to default header.
 
+Alternative (declarative) mode:
+~~~tsx
+headerOverride: {
+  layout: ({ isAuthenticated }) => ({
+    left: ['brand'],
+    center: isAuthenticated ? ['mainNavigation'] : [],
+    right: isAuthenticated ? ['tenantSwitcher', 'userMenu'] : ['authActions'],
+  }),
+}
+~~~
+
+Notes:
+- If both `Header` and `layout` are defined, `layout` takes precedence.
+- Responsive/mobile behavior should be handled with CSS/Tailwind in skeleton rendering.
+
+### 5.1.4 Tailwind sources contract (required for utility classes)
+The skeleton compiles Tailwind **only** from the sources it knows about. Since main-app
+plugin UI lives outside `apps/web`, you must expose your Tailwind sources as a **package
+contract** and have the skeleton import that contract (no hardcoded repo paths).
+
+**Plugin side (inside your package):**
+1. Create a sources file:
+
+~~~css
+/* plugins/<appId>/tailwind.sources.css */
+@source "./src/client/**/*.{ts,tsx,js,jsx,mdx}";
+~~~
+
+2. Export it in `package.json`:
+
+~~~json
+{
+  "exports": {
+    "./tailwind.sources.css": "./tailwind.sources.css"
+  }
+}
+~~~
+
+**Skeleton side (config + globals):**
+1. Add a config CSS entry that points to the current main-app plugin:
+
+~~~css
+/* packages/config/main-app.css */
+@import "@plugins/<appId>/tailwind.sources.css";
+~~~
+
+2. Import it once in `apps/web/app/globals.css`:
+
+~~~css
+@import "@saas/config/main-app.css";
+~~~
+
+When switching main-app plugins, only update `packages/config/main-app.css`
+to import the new plugin’s `tailwind.sources.css`.
+
 When NOT to use `AppProviders`:
 - Providers only needed in the content area → use `AppShell` instead
 - Page-specific providers → wrap in individual pages
@@ -343,7 +440,7 @@ Provider hierarchy:
 Your nav must be in the `NavModel` format:
 - `main: NavSection[]`
 - `admin: NavSection[]`
-- `userMenu: NavItem[]`
+- `userMenu: NavSection[]`
 
 Rules:
 - IDs must be globally unique (`section.id`, `item.id`)
@@ -473,7 +570,62 @@ Do not log secrets.
 
 ---
 
-## 9) Migrations and plugin schema upgrades (if you use DB tables)
+## 9) Auth tokens: integrate + consume (optional)
+Use core token primitives from the host instead of implementing token storage in the plugin.
+
+Model:
+- host owns mint/list/revoke/validate internals (tenant-scoped, hashed storage)
+- plugin owns token semantics (`kind`, `scopes`) and route authorization behavior
+- plugin receives a scoped adapter as `ctx.authTokens`
+
+Use cases:
+- issue token from plugin route or host profile integrations UI
+- validate token on plugin API endpoints (MCP/browser extension/webhook-style calls)
+
+Example consume flow in plugin route:
+~~~ts
+const authHeader = ctx.request.header('authorization')
+const tokenValue = authHeader?.replace(/^Bearer\s+/i, '').trim()
+
+if (!tokenValue) {
+  ctx.response.status(401).json({ error: 'missing_token', message: 'Token is required' })
+  return
+}
+
+const result = await ctx.authTokens?.validateToken({
+  tokenValue,
+  kind: 'integration',
+  requiredScopes: ['mcp:read'],
+})
+
+if (!result?.valid) {
+  ctx.response.status(401).json({ error: 'invalid_token', message: result?.error ?? 'Unauthorized' })
+  return
+}
+
+if (result.tenantId !== ctx.tenant?.id) {
+  ctx.response.status(403).json({ error: 'tenant_mismatch', message: 'Token tenant mismatch' })
+  return
+}
+~~~
+
+Guidelines:
+- keep scope names plugin-owned and stable (`mcp:*`, `browser:*`, etc.)
+- always enforce required scopes server-side on each token-protected endpoint
+- audit token creation/revocation and privileged token-backed actions
+- fail safe if `ctx.authTokens` is unavailable
+
+Quick checklist (plugin author):
+- [ ] choose stable `kind` values (for example `integration`, `browser_ext`)
+- [ ] define and document allowed scopes per kind
+- [ ] validate token with `ctx.authTokens.validateToken(...)` on every token-protected route
+- [ ] enforce tenant binding (`validatedToken.tenantId === currentTenantId`)
+- [ ] enforce required scopes per endpoint (least privilege)
+- [ ] emit audit events for token lifecycle and sensitive token-backed mutations
+
+---
+
+## 10) Migrations and plugin schema upgrades (if you use DB tables)
 If you need tables:
 - include migrations in `database/migrations`
 - bump `schemaVersion` in `plugin.meta.json`
@@ -484,7 +636,7 @@ No runtime auto-migrations in production.
 
 ---
 
-## 10) What you must not do
+## 11) What you must not do
 - Do not register routes under skeleton reserved prefixes (auth/admin/enterprise)
 - Do not remove skeleton mandatory nav items
 - Do not “shadow” core security (auth, tenant enforcement, RLS)
@@ -494,7 +646,7 @@ No runtime auto-migrations in production.
 
 ---
 
-## 11) Debugging and safe mode
+## 12) Debugging and safe mode
 If your design override crashes:
 - skeleton falls back to default admin/auth theme
 - you should be able to recover by:
@@ -508,7 +660,7 @@ As a plugin author:
 
 ---
 
-## 12) Minimal checklist before shipping
+## 13) Minimal checklist before shipping
 - [ ] `plugin.meta.json` present and valid
 - [ ] `design` implements `AppDesign`
 - [ ] `AppProviders` (if used) doesn't break when `useFramework()` returns null

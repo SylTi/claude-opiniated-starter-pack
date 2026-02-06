@@ -188,11 +188,36 @@ export interface HeaderOverrideProps {
 }
 
 /**
+ * Named slots available for declarative header layout.
+ */
+export type HeaderLayoutSlot =
+  | 'brand'
+  | 'mainNavigation'
+  | 'tenantSwitcher'
+  | 'userMenu'
+  | 'pendingNavigation'
+  | 'authActions'
+  | 'themeToggle'
+
+/**
+ * Declarative header layout model.
+ * Responsive behavior is handled by skeleton CSS.
+ */
+export interface HeaderLayoutModel {
+  left: HeaderLayoutSlot[]
+  center?: HeaderLayoutSlot[]
+  right: HeaderLayoutSlot[]
+}
+
+/**
  * Header override configuration.
  * Allows main-app plugins to control header layout while reusing skeleton slots.
  */
 export interface HeaderOverride {
-  Header: (props: HeaderOverrideProps) => unknown
+  /** Full component override (maximum flexibility). */
+  Header?: (props: HeaderOverrideProps) => unknown
+  /** Declarative layout override (preferred when sufficient). */
+  layout?: (ctx: { isAuthenticated: boolean; isPendingUser: boolean }) => HeaderLayoutModel
 }
 
 /**

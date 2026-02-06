@@ -20,6 +20,7 @@
 import { notFound } from 'next/navigation'
 import { loadClientPluginManifest, hasClientEntrypoint, clientPluginLoaders } from '@saas/config/plugins/client'
 import Link from 'next/link'
+import { Suspense } from 'react'
 
 interface PluginPageProps {
   params: Promise<{
@@ -42,8 +43,14 @@ function isSafeMode(): boolean {
  */
 type PluginLoadResult =
   | { status: 'success'; component: React.ComponentType<{ path: string }> }
+  | { status: 'success-matcher'; matchPage: (pathname: string) => PageMatch | null }
   | { status: 'no-component' }
   | { status: 'error'; errorId: string }
+
+interface PageMatch {
+  component: React.ComponentType<{ params: Record<string, string> }>
+  params: Record<string, string>
+}
 
 /**
  * Attempt to load a plugin module and extract its component.
@@ -63,6 +70,12 @@ async function loadPluginModule(pluginId: string): Promise<PluginLoadResult> {
 
     if (PluginApp && typeof PluginApp === 'function') {
       return { status: 'success', component: PluginApp }
+    }
+
+    // Page registry / dispatcher contract (main-app plugins)
+    const matchPage = (pluginModule as { matchPage?: (pathname: string) => PageMatch | null }).matchPage
+    if (matchPage && typeof matchPage === 'function') {
+      return { status: 'success-matcher', matchPage }
     }
 
     return { status: 'no-component' }
@@ -148,6 +161,20 @@ export default async function PluginPage({ params }: PluginPageProps): Promise<R
   if (loadResult.status === 'success') {
     const PluginApp = loadResult.component
     return <PluginApp path={fullPath} />
+  }
+
+  if (loadResult.status === 'success-matcher') {
+    const pageMatch = loadResult.matchPage(fullPath)
+    if (!pageMatch) {
+      notFound()
+    }
+
+    const MatchedPage = pageMatch.component
+    return (
+      <Suspense fallback={<div className="container mx-auto py-8">Loading...</div>}>
+        <MatchedPage params={pageMatch.params} />
+      </Suspense>
+    )
   }
 
   if (loadResult.status === 'no-component') {

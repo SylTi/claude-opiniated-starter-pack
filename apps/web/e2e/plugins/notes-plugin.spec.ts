@@ -273,7 +273,7 @@ test.describe('Notes Plugin - Tenant Isolation', () => {
   // This test requires two different tenant users
   // Skipped by default as it requires specific test data setup
 
-  test.skip('tenant 1 cannot see tenant 2 notes', async ({ request: _request }) => {
+  test.skip('tenant 1 cannot see tenant 2 notes', async () => {
     // TODO: Implement when multi-tenant test users are available
     // 1. Login as tenant 1 user
     // 2. Create a note

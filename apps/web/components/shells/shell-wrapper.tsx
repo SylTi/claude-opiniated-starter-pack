@@ -15,6 +15,7 @@ import { usePathname } from 'next/navigation'
 import { useDesign } from '@/contexts/design-context'
 import { useNavigation } from '@/contexts/navigation-context'
 import { getShellForArea } from '@/lib/theme/get-shell-for-area'
+import { detectShellArea } from '@/lib/routing/area'
 import { DefaultAppShell } from './default-app-shell'
 import { DefaultAdminShell } from './default-admin-shell'
 import { DefaultAuthShell } from './default-auth-shell'
@@ -29,44 +30,6 @@ interface ShellWrapperProps {
   children: ReactNode
   /** The area to render shell for */
   area?: ShellArea
-}
-
-/**
- * Auth route prefixes.
- * All routes under (auth) group should be detected as auth area.
- */
-const AUTH_ROUTE_PREFIXES = [
-  '/login',
-  '/register',
-  '/forgot-password',
-  '/reset-password',
-  '/verify-email',
-]
-
-/**
- * Check if pathname matches a route prefix with proper boundary.
- * Matches exact path or path followed by / (subpath).
- * Prevents /admin from matching /administer.
- */
-function matchesRoutePrefix(pathname: string, prefix: string): boolean {
-  return pathname === prefix || pathname.startsWith(prefix + '/')
-}
-
-/**
- * Detect area from pathname.
- *
- * Uses proper boundary matching to prevent:
- * - /administer from matching admin area
- * - /login-help from matching auth area
- */
-function detectArea(pathname: string): ShellArea {
-  if (matchesRoutePrefix(pathname, '/admin')) {
-    return 'admin'
-  }
-  if (AUTH_ROUTE_PREFIXES.some((prefix) => matchesRoutePrefix(pathname, prefix))) {
-    return 'auth'
-  }
-  return 'app'
 }
 
 /**
@@ -123,7 +86,7 @@ export function ShellWrapper({
   // Determine area from explicit prop or pathname
   // Area tokens are now applied synchronously in DesignProvider
   // based on pathname, eliminating flicker on client-side navigation
-  const area = explicitArea ?? detectArea(pathname)
+  const area = explicitArea ?? detectShellArea(pathname)
 
   // Render the default shell for safe mode/loading states
   // Using explicit conditionals instead of dynamic component reference
@@ -143,8 +106,14 @@ export function ShellWrapper({
 
   // Use memoized shell to prevent unnecessary re-renders
   const shell = useMemo(() => {
-    // In safe mode or while loading, use area-appropriate default shell
-    if (isSafeMode || isLoading) {
+    // Safe mode always bypasses plugin shells.
+    if (isSafeMode) {
+      return renderDefaultShell(children)
+    }
+
+    // During navigation bootstrap, keep plugin AppShell for app area so
+    // plugin context providers remain available (e.g. notarium RecordsProvider).
+    if (isLoading && area !== 'app') {
       return renderDefaultShell(children)
     }
 

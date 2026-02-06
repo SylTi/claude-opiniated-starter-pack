@@ -33,6 +33,49 @@ export interface PluginAccessControl {
 }
 
 /**
+ * Auth token scope declaration for plugin integrations.
+ */
+export interface PluginAuthTokenScope {
+  /** Unique scope identifier (e.g., "mcp:read") */
+  id: string
+  /** Human-readable label */
+  label: string
+  /** Optional description for UI */
+  description?: string
+  /** Whether this scope is checked by default */
+  defaultChecked?: boolean
+}
+
+/**
+ * Auth token kind declaration for plugin integrations.
+ */
+export interface PluginAuthTokenKind {
+  /** Unique kind identifier (e.g., "integration", "browser_ext") */
+  id: string
+  /** Human-readable title */
+  title: string
+  /** Optional description for UI */
+  description?: string
+  /** Optional create dialog title */
+  createTitle?: string
+  /** Optional create dialog description */
+  createDescription?: string
+  /** Optional empty state message */
+  emptyMessage?: string
+  /** Optional revoke confirmation message */
+  revokeMessage?: string
+  /** Allowed scopes for this token kind */
+  scopes: PluginAuthTokenScope[]
+}
+
+/**
+ * Auth token configuration for plugin integrations.
+ */
+export interface PluginAuthTokensConfig {
+  kinds: PluginAuthTokenKind[]
+}
+
+/**
  * Plugin tiers define access levels:
  * - A: UI plugins (unprivileged) - filters/slots only, no server routes, no DB
  * - B: App plugins (moderately privileged) - routes, own tables, background jobs
@@ -134,6 +177,13 @@ export interface PluginManifest {
    * If not specified, any authenticated user can access.
    */
   accessControl?: PluginAccessControl
+
+  /**
+   * Auth token configuration for integrations.
+   * When provided, the core /api/v1/auth-tokens endpoint enforces
+   * allowed token kinds and scopes based on this configuration.
+   */
+  authTokens?: PluginAuthTokensConfig
 }
 
 /**
@@ -164,6 +214,84 @@ export function validatePluginManifest(manifest: PluginManifest): {
 
   if (!Array.isArray(manifest.requestedCapabilities)) {
     errors.push('requestedCapabilities must be an array')
+  }
+
+  // Auth token configuration validation
+  if (manifest.authTokens !== undefined) {
+    const authTokens = manifest.authTokens
+    if (!authTokens || !Array.isArray(authTokens.kinds) || authTokens.kinds.length === 0) {
+      errors.push('authTokens.kinds must be a non-empty array')
+    } else {
+      const kindIds = new Set<string>()
+
+      for (const kind of authTokens.kinds) {
+        if (!kind || typeof kind !== 'object') {
+          errors.push('authTokens.kinds entries must be objects')
+          continue
+        }
+
+        if (!kind.id || typeof kind.id !== 'string') {
+          errors.push('authTokens.kinds[].id is required and must be a string')
+        } else if (kindIds.has(kind.id)) {
+          errors.push(`authTokens.kinds contains duplicate id "${kind.id}"`)
+        } else {
+          kindIds.add(kind.id)
+        }
+
+        if (!kind.title || typeof kind.title !== 'string') {
+          errors.push('authTokens.kinds[].title is required and must be a string')
+        }
+
+        const optionalFields: Array<[keyof PluginAuthTokenKind, string]> = [
+          ['description', 'description'],
+          ['createTitle', 'createTitle'],
+          ['createDescription', 'createDescription'],
+          ['emptyMessage', 'emptyMessage'],
+          ['revokeMessage', 'revokeMessage'],
+        ]
+        for (const [fieldKey, fieldName] of optionalFields) {
+          const value = kind[fieldKey]
+          if (value !== undefined && typeof value !== 'string') {
+            errors.push(`authTokens.kinds[].${fieldName} must be a string if provided`)
+          }
+        }
+
+        if (!Array.isArray(kind.scopes) || kind.scopes.length === 0) {
+          errors.push(`authTokens.kinds["${kind.id ?? 'unknown'}"].scopes must be a non-empty array`)
+          continue
+        }
+
+        const scopeIds = new Set<string>()
+        for (const scope of kind.scopes) {
+          if (!scope || typeof scope !== 'object') {
+            errors.push(`authTokens.kinds["${kind.id ?? 'unknown'}"].scopes entries must be objects`)
+            continue
+          }
+
+          if (!scope.id || typeof scope.id !== 'string') {
+            errors.push('authTokens.kinds[].scopes[].id is required and must be a string')
+          } else if (scopeIds.has(scope.id)) {
+            errors.push(
+              `authTokens.kinds["${kind.id ?? 'unknown'}"].scopes contains duplicate id "${scope.id}"`
+            )
+          } else {
+            scopeIds.add(scope.id)
+          }
+
+          if (!scope.label || typeof scope.label !== 'string') {
+            errors.push('authTokens.kinds[].scopes[].label is required and must be a string')
+          }
+
+          if (scope.description !== undefined && typeof scope.description !== 'string') {
+            errors.push('authTokens.kinds[].scopes[].description must be a string if provided')
+          }
+
+          if (scope.defaultChecked !== undefined && typeof scope.defaultChecked !== 'boolean') {
+            errors.push('authTokens.kinds[].scopes[].defaultChecked must be a boolean if provided')
+          }
+        }
+      }
+    }
   }
 
   // Tier B specific validations

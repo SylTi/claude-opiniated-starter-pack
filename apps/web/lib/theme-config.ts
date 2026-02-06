@@ -7,8 +7,9 @@
 
 /**
  * Theme mode type.
+ * Plugins can supply custom theme names beyond light/dark.
  */
-export type Theme = 'light' | 'dark'
+export type Theme = string
 
 /**
  * Cookie name for storing theme preference.

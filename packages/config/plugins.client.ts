@@ -2,14 +2,11 @@
  * Client Plugin Loader Maps
  *
  * Static loader maps for client-side plugin discovery.
- * NO fs.readdir at runtime - all plugins must be listed here.
- *
- * To add a new plugin:
- * 1. Add its manifest loader to clientPluginManifests
- * 2. Add its client entrypoint loader to clientPluginLoaders
+ * NO fs.readdir at runtime - all plugins come from plugins.config.ts.
  */
 
 import type { PluginManifest } from '@saas/plugins-core'
+import { ALL_PLUGINS, extractManifest } from './plugins.config.js'
 
 /**
  * Type for manifest loader function.
@@ -31,42 +28,37 @@ export type ClientPluginLoader = () => Promise<{
  * Keys are plugin IDs, values are package names (e.g., '@plugins/notes').
  * This MUST stay in sync with clientPluginManifests.
  *
- * NOTE: Main-app plugin is loaded via @saas/config/main-app/client
  */
-export const clientPluginPackages: Record<string, string> = {
-  'nav-links': '@plugins/nav-links',
-  notes: '@plugins/notes',
-}
+export const clientPluginPackages: Record<string, string> = Object.fromEntries(
+  Object.entries(ALL_PLUGINS).map(([id, config]) => [id, config.packageName])
+)
 
 /**
  * Static map of plugin manifests for the client.
  * Keys are plugin IDs, values are dynamic imports of plugin.meta.json.
  *
- * NOTE: Main-app plugin is loaded via @saas/config/main-app
  */
-export const clientPluginManifests: Record<string, ManifestLoader> = {
-  'nav-links': async () => {
-    const mod = await import('@plugins/nav-links/plugin.meta.json')
-    return mod.default as PluginManifest
-  },
-  notes: async () => {
-    const mod = await import('@plugins/notes/plugin.meta.json')
-    return mod.default as PluginManifest
-  },
-}
+export const clientPluginManifests: Record<string, ManifestLoader> = Object.fromEntries(
+  Object.entries(ALL_PLUGINS).map(([id, config]) => [
+    id,
+    async () => {
+      const imported = await config.manifestImport()
+      return extractManifest(imported)
+    },
+  ])
+)
 
 /**
  * Static map of plugin client entrypoints.
  * Keys are plugin IDs, values are dynamic imports of client.js.
  *
- * NOTE: Main-app plugin is loaded via @saas/config/main-app/client
  */
-export const clientPluginLoaders: Record<string, ClientPluginLoader> = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  'nav-links': () => import('@plugins/nav-links') as any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  notes: () => import('@plugins/notes/client') as any,
-}
+export const clientPluginLoaders: Record<string, ClientPluginLoader> = Object.fromEntries(
+  Object.entries(ALL_PLUGINS).map(([id, config]) => [
+    id,
+    config.clientImport,
+  ])
+)
 
 /**
  * Get all registered plugin IDs for the client.

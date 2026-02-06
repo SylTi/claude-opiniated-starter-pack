@@ -74,8 +74,7 @@ export const serverPluginManifests: Record<string, ManifestLoader> = Object.from
 export const serverPluginLoaders: Record<string, ServerPluginLoader> = Object.fromEntries(
   Object.entries(ALL_PLUGINS).map(([id, config]) => [
     id,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    config.serverImport as any,
+    config.serverImport,
   ])
 )
 

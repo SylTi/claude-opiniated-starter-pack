@@ -855,3 +855,61 @@ export const adminCouponsApi = {
     await api.delete(`/api/v1/admin/coupons/${id}`)
   },
 }
+
+export interface AuthTokenDTO {
+  id: string;
+  kind: string;
+  name: string;
+  scopes: string[];
+  metadata: Record<string, unknown> | null;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export interface CreateAuthTokenInput {
+  pluginId: string;
+  kind: string;
+  name: string;
+  scopes: string[];
+  expiresAt?: string;
+}
+
+export const authTokensApi = {
+  async list(params: { pluginId: string; kind?: string }): Promise<AuthTokenDTO[]> {
+    const search = new URLSearchParams({ pluginId: params.pluginId });
+    if (params.kind) {
+      search.set("kind", params.kind);
+    }
+
+    const response = await api.get<AuthTokenDTO[]>(
+      `/api/v1/auth-tokens?${search.toString()}`,
+    );
+    return response.data || [];
+  },
+
+  async create(input: CreateAuthTokenInput): Promise<{
+    token: AuthTokenDTO;
+    tokenValue: string;
+  }> {
+    const response = await api.post<{ token: AuthTokenDTO; tokenValue: string }>(
+      "/api/v1/auth-tokens",
+      input,
+    );
+    if (!response.data) {
+      throw new Error("Failed to create token");
+    }
+    return response.data;
+  },
+
+  async revoke(
+    id: string,
+    params: { pluginId: string; kind?: string },
+  ): Promise<void> {
+    const search = new URLSearchParams({ pluginId: params.pluginId });
+    if (params.kind) {
+      search.set("kind", params.kind);
+    }
+    await api.delete(`/api/v1/auth-tokens/${id}?${search.toString()}`);
+  },
+}

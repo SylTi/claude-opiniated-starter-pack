@@ -41,11 +41,11 @@ function VerifyEmailContent(): React.ReactElement {
   if (state === 'loading') {
     return (
       <div className="text-center">
-        <Loader2 className="mx-auto h-12 w-12 animate-spin text-blue-600" />
-        <h2 className="mt-4 text-2xl font-bold tracking-tight text-gray-900">
+        <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
+        <h2 className="mt-4 text-2xl font-bold tracking-tight text-foreground">
           Verifying your email...
         </h2>
-        <p className="mt-2 text-gray-600">Please wait while we verify your email address.</p>
+        <p className="mt-2 text-muted-foreground">Please wait while we verify your email address.</p>
       </div>
     )
   }
@@ -53,9 +53,9 @@ function VerifyEmailContent(): React.ReactElement {
   if (state === 'no-token') {
     return (
       <div className="text-center">
-        <XCircle className="mx-auto h-12 w-12 text-red-500" />
-        <h2 className="mt-4 text-2xl font-bold tracking-tight text-gray-900">Invalid link</h2>
-        <p className="mt-2 text-gray-600">
+        <XCircle className="mx-auto h-12 w-12 text-destructive" />
+        <h2 className="mt-4 text-2xl font-bold tracking-tight text-foreground">Invalid link</h2>
+        <p className="mt-2 text-muted-foreground">
           This verification link is invalid. Please check your email for the correct link.
         </p>
         <Link href="/login">
@@ -68,11 +68,11 @@ function VerifyEmailContent(): React.ReactElement {
   if (state === 'error') {
     return (
       <div className="text-center">
-        <XCircle className="mx-auto h-12 w-12 text-red-500" />
-        <h2 className="mt-4 text-2xl font-bold tracking-tight text-gray-900">
+        <XCircle className="mx-auto h-12 w-12 text-destructive" />
+        <h2 className="mt-4 text-2xl font-bold tracking-tight text-foreground">
           Verification failed
         </h2>
-        <p className="mt-2 text-gray-600">
+        <p className="mt-2 text-muted-foreground">
           {error || 'This verification link may have expired or already been used.'}
         </p>
         <div className="mt-6 space-x-4">
@@ -86,9 +86,9 @@ function VerifyEmailContent(): React.ReactElement {
 
   return (
     <div className="text-center">
-      <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
-      <h2 className="mt-4 text-2xl font-bold tracking-tight text-gray-900">Email verified!</h2>
-      <p className="mt-2 text-gray-600">
+      <CheckCircle className="mx-auto h-12 w-12 text-primary" />
+      <h2 className="mt-4 text-2xl font-bold tracking-tight text-foreground">Email verified!</h2>
+      <p className="mt-2 text-muted-foreground">
         Your email address has been successfully verified. You can now access all features.
       </p>
       <Link href="/login">
@@ -103,8 +103,8 @@ export default function VerifyEmailPage(): React.ReactElement {
     <Suspense
       fallback={
         <div className="text-center">
-          <Loader2 className="mx-auto h-12 w-12 animate-spin text-blue-600" />
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
+          <p className="mt-4 text-muted-foreground">Loading...</p>
         </div>
       }
     >

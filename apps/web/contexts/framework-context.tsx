@@ -13,20 +13,62 @@
  * the same context object without a direct dependency on the SaaS app.
  */
 
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useRef, useCallback, type ReactNode } from 'react'
 import { useRouter as useNextRouter, usePathname, useSearchParams } from 'next/navigation'
 import NextLink from 'next/link'
 import NextImage from 'next/image'
 import {
   FrameworkContext,
+  type ThemeBridge,
   type FrameworkContextValue,
   type FrameworkLinkProps,
   type FrameworkImageProps,
 } from '@saas/plugins-core/framework'
+import { THEME_COOKIE_NAME } from '@/lib/theme-config'
 
 // Re-export types and hooks from plugins-core/framework for convenience
 export type { RouterAdapter, FrameworkLinkProps, FrameworkImageProps, FrameworkContextValue } from '@saas/plugins-core/framework'
 export { useFramework, useFrameworkRequired } from '@saas/plugins-core/framework'
+
+const DEFAULT_THEME = 'light'
+const DARK_THEME = 'dark'
+
+function readThemeFromDocument(): string {
+  if (typeof document === 'undefined') {
+    return DEFAULT_THEME
+  }
+
+  const cookieValue = document.cookie
+    .split('; ')
+    .find((row) => row.startsWith(`${THEME_COOKIE_NAME}=`))
+    ?.split('=')[1]
+
+  if (cookieValue) {
+    return decodeURIComponent(cookieValue)
+  }
+
+  const dataTheme = document.documentElement.getAttribute('data-theme')
+  if (dataTheme) {
+    return dataTheme
+  }
+
+  return document.documentElement.classList.contains(DARK_THEME) ? DARK_THEME : DEFAULT_THEME
+}
+
+function writeThemeCookie(theme: string): void {
+  document.cookie = `${THEME_COOKIE_NAME}=${encodeURIComponent(theme)};path=/;max-age=31536000;SameSite=Lax`
+}
+
+function applyThemeToDocument(theme: string): void {
+  const root = document.documentElement
+
+  root.setAttribute('data-theme', theme)
+  if (theme === DARK_THEME) {
+    root.classList.add(DARK_THEME)
+  } else {
+    root.classList.remove(DARK_THEME)
+  }
+}
 
 /**
  * Next.js Link adapter component.
@@ -90,6 +132,33 @@ export function FrameworkProvider({ children }: FrameworkProviderProps): React.R
   const nextRouter = useNextRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const currentThemeRef = useRef<string>(readThemeFromDocument())
+  const themeListenersRef = useRef(new Set<(theme: string) => void>())
+
+  const setTheme = useCallback((theme: string) => {
+    const normalizedTheme = theme.trim() || DEFAULT_THEME
+    currentThemeRef.current = normalizedTheme
+    applyThemeToDocument(normalizedTheme)
+    writeThemeCookie(normalizedTheme)
+    for (const listener of themeListenersRef.current) {
+      listener(normalizedTheme)
+    }
+  }, [])
+
+  const themeBridge = useMemo<ThemeBridge>(() => ({
+    getTheme: () => currentThemeRef.current,
+    setTheme,
+    toggleTheme: () => {
+      setTheme(currentThemeRef.current === DARK_THEME ? DEFAULT_THEME : DARK_THEME)
+    },
+    listThemes: () => [DEFAULT_THEME, DARK_THEME],
+    subscribe: (listener: (theme: string) => void) => {
+      themeListenersRef.current.add(listener)
+      return () => {
+        themeListenersRef.current.delete(listener)
+      }
+    },
+  }), [setTheme])
 
   const value = useMemo<FrameworkContextValue>(() => ({
     router: {
@@ -102,7 +171,8 @@ export function FrameworkProvider({ children }: FrameworkProviderProps): React.R
     },
     Link: NextLinkAdapter,
     Image: NextImageAdapter,
-  }), [nextRouter, pathname, searchParams])
+    theme: themeBridge,
+  }), [nextRouter, pathname, searchParams, themeBridge])
 
   return (
     <FrameworkContext.Provider value={value}>

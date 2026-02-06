@@ -197,17 +197,17 @@ export default function AdminCouponsPage(): React.ReactElement {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-card text-card-foreground rounded-lg border p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Coupons</h1>
-          <p className="text-gray-500">Manage single-use coupons for cash credits</p>
+          <h1 className="text-2xl font-bold text-foreground">Coupons</h1>
+          <p className="text-muted-foreground">Manage single-use coupons for cash credits</p>
         </div>
         <Button onClick={openCreateDialog}>
           <Plus className="h-4 w-4 mr-2" />
@@ -235,7 +235,7 @@ export default function AdminCouponsPage(): React.ReactElement {
                   <div>
                     <span className="font-mono font-semibold">{coupon.code}</span>
                     {coupon.description && (
-                      <p className="text-sm text-gray-500">{coupon.description}</p>
+                      <p className="text-sm text-muted-foreground">{coupon.description}</p>
                     )}
                   </div>
                 </TableCell>
@@ -252,7 +252,7 @@ export default function AdminCouponsPage(): React.ReactElement {
                   {coupon.redeemedByUserEmail ? (
                     <div className="text-sm">
                       <p>{coupon.redeemedByUserEmail}</p>
-                      <p className="text-gray-500">{formatDate(coupon.redeemedAt)}</p>
+                      <p className="text-muted-foreground">{formatDate(coupon.redeemedAt)}</p>
                     </div>
                   ) : (
                     "-"
@@ -290,7 +290,7 @@ export default function AdminCouponsPage(): React.ReactElement {
                       onClick={() => handleDelete(coupon.id)}
                       disabled={actionLoading === coupon.id}
                     >
-                      <Trash2 className="h-4 w-4 text-red-500" />
+                      <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
                 </TableCell>
@@ -299,7 +299,7 @@ export default function AdminCouponsPage(): React.ReactElement {
           })}
           {coupons.length === 0 && (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-gray-500">
+              <TableCell colSpan={6} className="text-center text-muted-foreground">
                 No coupons found
               </TableCell>
             </TableRow>

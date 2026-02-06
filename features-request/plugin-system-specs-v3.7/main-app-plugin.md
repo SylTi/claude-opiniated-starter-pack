@@ -53,6 +53,13 @@ Security boundary:
 - The **design module is UI-only** and is not subject to Tier B server restrictions.
 - The **server module is Tier B** and MUST follow all Tier B rules (no raw db/router/bouncer/drive).
 
+### 1.4 Integration tokens allowlist (manifest)
+- Main App plugins may declare integration tokens in `plugin.meta.json` under `authTokens`.
+- Core `/api/v1/auth-tokens` enforces allowed `kind` + `scopes` from this allowlist.
+- Tokens are tenant-scoped:
+  - owners/admins can list/revoke all tokens in a tenant
+  - members can list/revoke only their own tokens
+
 ---
 
 ## 2) Design ownership contract (AppDesign)
@@ -129,6 +136,14 @@ export type ShellOverride = {
   Shell: React.ComponentType<ShellProps>
 }
 
+export type ThemeBridge = {
+  getTheme: () => string
+  setTheme: (theme: string) => void
+  toggleTheme?: () => void
+  listThemes?: () => string[]
+  subscribe: (listener: (theme: string) => void) => () => void
+}
+
 export type AppProvidersProps = {
   children: React.ReactNode
 }
@@ -143,6 +158,21 @@ export type HeaderOverrideProps = {
   authActions: React.ReactNode
   isAuthenticated: boolean
   isPendingUser: boolean
+}
+
+export type HeaderLayoutSlot =
+  | 'brand'
+  | 'mainNavigation'
+  | 'tenantSwitcher'
+  | 'userMenu'
+  | 'pendingNavigation'
+  | 'authActions'
+  | 'themeToggle'
+
+export type HeaderLayoutModel = {
+  left: HeaderLayoutSlot[]
+  center?: HeaderLayoutSlot[]
+  right: HeaderLayoutSlot[]
 }
 
 export interface AppDesign {
@@ -182,7 +212,18 @@ export interface AppDesign {
    * The plugin owns placement/layout.
    */
   headerOverride?: {
-    Header: React.ComponentType<HeaderOverrideProps>
+    /**
+     * Full component override (maximum flexibility).
+     * Use when you need fully custom header markup.
+     */
+    Header?: React.ComponentType<HeaderOverrideProps>
+
+    /**
+     * Declarative layout override (preferred when possible).
+     * Skeleton renders slots according to this layout.
+     * If both Header and layout are provided, layout takes precedence.
+     */
+    layout?: (ctx: { isAuthenticated: boolean; isPendingUser: boolean }) => HeaderLayoutModel
   }
 
   /**
@@ -220,6 +261,7 @@ For `headerOverride`:
 - skeleton logs an incident
 - skeleton falls back to the default header layout
 - tenant switch/user menu behavior remains skeleton-owned
+- declarative layout errors follow the same fallback behavior
 
 ### 2.4 NavContext notes
 - `tenantId` is nullable because UI includes auth pages, tenant picker, and onboarding.
@@ -249,6 +291,8 @@ export interface FrameworkContextValue {
   Link: React.ComponentType<LinkProps>
   /** Image component adapter */
   Image: React.ComponentType<ImageProps>
+  /** Theme bridge adapter */
+  theme: ThemeBridge
 }
 ```
 
@@ -258,7 +302,7 @@ import { useFramework } from '@saas/plugins-core/framework'
 
 const framework = useFramework()
 if (framework) {
-  // Use framework.router, framework.Link, framework.Image
+  // Use framework.router, framework.Link, framework.Image, framework.theme
 }
 ```
 
@@ -266,6 +310,12 @@ This enables plugins to:
 - Stay framework-agnostic (not import Next.js directly)
 - Work with the skeleton's router, Link, and Image components
 - Set up their own routing abstractions using these primitives
+- Read/set theme through a plugin-agnostic bridge
+
+Theme bridge rules:
+- `theme` values are host-defined strings (not limited to light/dark).
+- Plugin UIs must use `framework.theme` for theme changes.
+- Do not rely on custom `window` events for cross-layer theme sync.
 
 **Note:** The framework context uses React hooks and must only be imported in client components.
 Do NOT import from `@saas/plugins-core` main entry in server components - use the `/framework` subpath.
@@ -328,6 +378,44 @@ Do NOT use `AppProviders` for:
 - `AppProviders` must handle `useFramework()` returning null gracefully
 - Don't assume `AppProviders` will always run - app should work without it
 - Test your app with `SAFE_MODE=1` to verify fallback behavior
+
+### 2.8 Auth token integration contract (optional, server-side)
+Auth token lifecycle is host-owned and tenant-scoped.  
+Main App plugins can integrate with it through a plugin-scoped adapter.
+
+Rules:
+- Skeleton owns token storage, hashing, expiry, and revocation primitives.
+- Plugins define token semantics (`kind`, `scopes`) and enforce route behavior.
+- Plugins must not access token storage directly.
+- Token usage must enforce tenant matching and required scopes server-side.
+
+Registration-time adapter:
+```ts
+export interface AuthTokensService {
+  listTokens(input: { tenantId: number; kind?: string }): Promise<AuthTokenRecord[]>
+  createToken(input: {
+    tenantId: number
+    userId: number
+    kind: string
+    name: string
+    scopes: string[]
+    expiresAt?: string | null
+    metadata?: Record<string, unknown> | null
+  }): Promise<{ token: AuthTokenRecord; tokenValue: string }>
+  revokeToken(input: { tenantId: number; tokenId: string; kind?: string }): Promise<boolean>
+  validateToken(input: {
+    tokenValue: string
+    kind?: string
+    requiredScopes?: string[]
+  }): Promise<
+    | { valid: true; token: AuthTokenRecord; tenantId: number; userId: number }
+    | { valid: false; error: string }
+  >
+}
+```
+
+`PluginContext` may provide `authTokens?: AuthTokensService`.  
+If unavailable (safe mode or host config), plugin routes must fail safe.
 
 ---
 
@@ -583,6 +671,40 @@ export const design = {
 }
 ```
 
+#### 8.1.1 Tailwind sources contract (required for plugin UI)
+Tailwind only generates utilities for sources it knows about. Since main‑app plugin
+UI lives outside `apps/web`, the plugin must expose its Tailwind sources via a
+package‑level CSS contract, and the skeleton must import that contract (no hardcoded
+repo paths).
+
+**Plugin package (required):**
+```css
+/* plugins/<appId>/tailwind.sources.css */
+@source "./src/client/**/*.{ts,tsx,js,jsx,mdx}";
+```
+
+```json
+{
+  "exports": {
+    "./tailwind.sources.css": "./tailwind.sources.css"
+  }
+}
+```
+
+**Skeleton (config + globals):**
+```css
+/* packages/config/main-app.css */
+@import "@plugins/<appId>/tailwind.sources.css";
+```
+
+```css
+/* apps/web/app/globals.css */
+@import "@saas/config/main-app.css";
+```
+
+When switching main‑app plugins, update `packages/config/main-app.css` to point at
+the new plugin’s `tailwind.sources.css`.
+
 ### 8.2 Skeleton: build final nav model
 `apps/web/lib/nav/buildNavModel.ts`
 
@@ -787,6 +909,14 @@ export function renderHeader({
   defaultHeader: React.ReactNode
 }) {
   try {
+    if (design?.headerOverride?.layout) {
+      const layout = design.headerOverride.layout({
+        isAuthenticated: slots.isAuthenticated,
+        isPendingUser: slots.isPendingUser,
+      })
+      return <RenderHeaderFromLayout layout={layout} slots={slots} />
+    }
+
     if (design?.headerOverride?.Header) {
       const Header = design.headerOverride.Header
       return <Header {...slots} />

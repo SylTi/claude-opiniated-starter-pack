@@ -19,6 +19,7 @@ import {
 import type { AppDesign, ThemeTokens, ShellArea } from '@saas/plugins-core'
 import { applyThemeTokens, getDefaultThemeTokens } from '@/lib/theme/apply-theme-tokens'
 import { getTokensForArea } from '@/lib/theme/get-shell-for-area'
+import { detectShellArea } from '@/lib/routing/area'
 
 /**
  * Get pathname from window.location (client-side only).
@@ -92,44 +93,6 @@ function usePathnameSafe(): string {
 function isClientSafeMode(): boolean {
   if (typeof window === 'undefined') return false
   return process.env.NEXT_PUBLIC_SAFE_MODE === '1' || process.env.NEXT_PUBLIC_SAFE_MODE === 'true'
-}
-
-/**
- * Auth route prefixes for area detection.
- */
-const AUTH_ROUTE_PREFIXES = [
-  '/login',
-  '/register',
-  '/forgot-password',
-  '/reset-password',
-  '/verify-email',
-]
-
-/**
- * Check if pathname matches a route prefix with proper boundary.
- * Matches exact path or path followed by / (subpath).
- * Prevents /admin from matching /administer.
- */
-function matchesRoutePrefix(pathname: string, prefix: string): boolean {
-  return pathname === prefix || pathname.startsWith(prefix + '/')
-}
-
-/**
- * Detect area from pathname.
- * Used to initialize correct area tokens on first render (no flicker).
- *
- * Uses proper boundary matching to prevent:
- * - /administer from matching admin area
- * - /login-help from matching auth area
- */
-function detectAreaFromPathname(pathname: string): ShellArea {
-  if (matchesRoutePrefix(pathname, '/admin')) {
-    return 'admin'
-  }
-  if (AUTH_ROUTE_PREFIXES.some((prefix) => matchesRoutePrefix(pathname, prefix))) {
-    return 'auth'
-  }
-  return 'app'
 }
 
 /**
@@ -207,7 +170,7 @@ export function DesignProvider({
 
   // Area is always derived fresh - initialArea prop overrides pathname detection
   // This is synchronous, so tokens update in the same render pass as navigation
-  const currentArea = initialArea ?? detectAreaFromPathname(pathname)
+  const currentArea = initialArea ?? detectShellArea(pathname)
 
   // isLoaded is now always true since tokens are computed synchronously via useMemo.
   // CSS vars are applied before paint via useLayoutEffect, so no loading delay.

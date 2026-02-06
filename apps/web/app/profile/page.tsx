@@ -67,7 +67,7 @@ export default function ProfilePage(): React.ReactElement {
   return (
     <div>
       <h1 className="text-2xl font-bold">Profile</h1>
-      <p className="text-gray-600 mt-1">Manage your account information</p>
+      <p className="text-muted-foreground mt-1">Manage your account information</p>
 
       <Separator className="my-6" />
 
@@ -86,7 +86,7 @@ export default function ProfilePage(): React.ReactElement {
           </Avatar>
           <div>
             <p className="font-medium">{user.fullName || 'No name set'}</p>
-            <p className="text-sm text-gray-500">{user.email}</p>
+            <p className="text-sm text-muted-foreground">{user.email}</p>
             {!user.emailVerified && (
               <p className="text-sm text-amber-600">Email not verified</p>
             )}
@@ -102,7 +102,7 @@ export default function ProfilePage(): React.ReactElement {
             className="mt-1"
           />
           {errors.fullName && (
-            <p className="mt-1 text-sm text-red-600">{errors.fullName.message}</p>
+            <p className="mt-1 text-sm text-destructive">{errors.fullName.message}</p>
           )}
         </div>
 
@@ -113,9 +113,9 @@ export default function ProfilePage(): React.ReactElement {
             type="email"
             value={user.email}
             disabled
-            className="mt-1 bg-gray-50"
+            className="mt-1 bg-muted"
           />
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             Email cannot be changed
           </p>
         </div>
@@ -130,7 +130,7 @@ export default function ProfilePage(): React.ReactElement {
             className="mt-1"
           />
           {errors.avatarUrl && (
-            <p className="mt-1 text-sm text-red-600">{errors.avatarUrl.message}</p>
+            <p className="mt-1 text-sm text-destructive">{errors.avatarUrl.message}</p>
           )}
         </div>
 
