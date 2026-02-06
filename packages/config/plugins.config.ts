@@ -38,6 +38,7 @@ export type PluginConfig = {
 
 /**
  * Main-app plugin configuration.
+ * Currently using @plugins/main-app as the main-app plugin.
  */
 export const MAIN_APP_PLUGIN: PluginConfig = {
   id: 'main-app',
