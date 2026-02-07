@@ -70,3 +70,10 @@ plugins/notarium/
 apps/web/components/notarium/
 apps/web/public/plugins/
 apps/web/app/app/
+
+# Marketplace plugins (developed in separate repo, not committed here)
+plugins/analytics/
+
+# Custom main-app plugins (local development only)
+# To use a custom main-app, edit packages/config/plugins.config.ts (single file)
+# Use: git update-index --skip-worktree packages/config/plugins.config.ts

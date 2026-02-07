@@ -108,6 +108,11 @@ export class ApiError extends Error {
 }
 
 async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
+  // 204 No Content has no body — return empty response
+  if (response.status === 204) {
+    return {} as ApiResponse<T>
+  }
+
   const data = await response.json()
 
   if (!response.ok) {

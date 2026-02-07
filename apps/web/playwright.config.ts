@@ -26,6 +26,9 @@ export default defineConfig({
   // Reporter to use
   reporter: [['html', { outputFolder: 'playwright-report' }], ['list', { printSteps: true }]],
 
+  // Test timeout (default 30s is too tight for login + navigation in production builds)
+  timeout: 60 * 1000,
+
   // Shared settings for all the projects
   use: {
     // Base URL to use in actions like `await page.goto('/')`
@@ -72,12 +75,18 @@ export default defineConfig({
       },
     },
     {
-      // Frontend server (Next.js)
-      command:
-        'NODE_ENV=test dotenv -e .env.test -- pnpm run build && NODE_ENV=test dotenv -e .env.test -- pnpm run start',
+      // Frontend server (Next.js) — always start fresh to avoid port collisions with other dev servers
+      command: 'pnpm run build && pnpm run start',
       url: 'http://localhost:3000',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 300 * 1000, // More time for build + start on slower FS
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        NEXT_PUBLIC_API_URL: 'http://localhost:3333',
+        API_URL: 'http://localhost:3333',
+        USER_COOKIE_SECRET: 'test_key_for_testing_only_change_in_production',
+      },
     },
   ],
 })

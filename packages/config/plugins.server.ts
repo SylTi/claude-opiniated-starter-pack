@@ -39,12 +39,34 @@ function loadJsonManifest(pluginId: string): PluginManifest {
 export type ManifestLoader = () => Promise<PluginManifest>
 
 /**
+ * Type for plugin server module.
+ */
+export type PluginServerModule = {
+  [key: string]: unknown
+  default?: unknown
+  register?(context: unknown): void | Promise<void>
+}
+
+/**
  * Type for plugin server entrypoint loader.
  */
-export type ServerPluginLoader = () => Promise<{
-  default?: unknown
-  register?: (context: unknown) => void | Promise<void>
-}>
+export type ServerPluginLoader = () => Promise<PluginServerModule>
+
+/**
+ * Server import map.
+ *
+ * These dynamic imports are defined HERE (not in plugins.config.ts) to keep
+ * server-only modules (e.g., @adonisjs/lucid) out of the client bundle.
+ * Turbopack statically traces dynamic imports even inside lambdas, so any
+ * server-only import in plugins.config.ts would break the Next.js build.
+ *
+ * MUST stay in sync with ALL_PLUGINS in plugins.config.ts.
+ */
+const SERVER_IMPORTS: Record<string, ServerPluginLoader> = {
+  'main-app': () => import('@plugins/main-app'),
+  'nav-links': () => import('@plugins/nav-links/server'),
+  notes: () => import('@plugins/notes'),
+}
 
 /**
  * Static map of plugin package names.
@@ -72,10 +94,10 @@ export const serverPluginManifests: Record<string, ManifestLoader> = Object.from
  * Keys are plugin IDs, values are dynamic imports of server.js.
  */
 export const serverPluginLoaders: Record<string, ServerPluginLoader> = Object.fromEntries(
-  Object.entries(ALL_PLUGINS).map(([id, config]) => [
+  Object.entries(ALL_PLUGINS).map(([id]) => [
     id,
-    config.serverImport,
-  ])
+    SERVER_IMPORTS[id],
+  ]).filter(([, loader]) => loader !== undefined)
 )
 
 /**

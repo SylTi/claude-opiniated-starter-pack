@@ -7,6 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **⚠️ CRITICAL: The following rule files MUST ALWAYS be followed without exception:**
 **ALWAYS read and follow all rules in `.claude/rules/*.md` before making changes.**
 
+DO NOT UNDER ANY CIRCUNSTANCES DELETE FILES OR REVERT CHANGES WITHOUT GETTING EXPLICIT PERMISSION
+
 - [Coding Rules](.claude/rules/coding.md) - Best practices, principles (DRY, SOLID, KISS, YAGNI), testing requirements
 - [Infrastructure Rules](.claude/rules/infrastructure.md) - Docker database usage, documentation maintenance
 - [Migration Rules](.claude/rules/migrations.md) - Database migrations, seed data, never run migrations directly

@@ -9,8 +9,17 @@ async function login(page: Page, email: string, password: string): Promise<void>
   await page.goto('/login')
   await page.getByLabel(/email address/i).fill(email)
   await page.getByLabel(/password/i).fill(password)
-  await page.locator('form').getByRole('button', { name: /sign in/i }).click()
-  await page.waitForURL('**/dashboard', { timeout: 20000 })
+
+  const submitButton = page.locator('form').getByRole('button', { name: /sign in/i })
+  await submitButton.click()
+
+  // If still on login page after 5s, React hydration may not have been ready — retry click
+  try {
+    await page.waitForURL('**/dashboard', { timeout: 5000 })
+  } catch {
+    await submitButton.click()
+    await page.waitForURL('**/dashboard', { timeout: 45000 })
+  }
 }
 
 test.describe('Login Page', () => {

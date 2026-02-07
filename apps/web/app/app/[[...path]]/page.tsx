@@ -7,8 +7,7 @@
 
 import { notFound, redirect } from 'next/navigation'
 import { Suspense } from 'react'
-import { getMainAppPluginId } from '@saas/config/plugins/server'
-import { loadClientPluginManifest, hasClientEntrypoint, clientPluginLoaders } from '@saas/config/plugins/client'
+import { getMainAppPluginId, loadClientPluginManifest, hasClientEntrypoint, clientPluginLoaders } from '@saas/config/plugins/client'
 import { verifyUserFromApi } from '@/lib/server/auth'
 
 interface MainAppDispatcherPageProps {

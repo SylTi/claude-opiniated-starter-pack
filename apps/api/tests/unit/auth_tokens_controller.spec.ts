@@ -2,7 +2,8 @@ import { test } from '@japa/runner'
 import sinon from 'sinon'
 import AuthTokensController from '#controllers/auth_tokens_controller'
 import { authTokenService } from '#services/auth_tokens/auth_token_service'
-import * as pluginConfig from '@saas/config/plugins/server'
+import { serverPluginManifests } from '@saas/config/plugins/server'
+import type { ManifestLoader } from '@saas/config/plugins/server'
 import type { PluginManifest } from '@saas/plugins-core'
 
 test.group('AuthTokensController', (group) => {
@@ -29,12 +30,22 @@ test.group('AuthTokensController', (group) => {
     },
   }
 
+  let originalManifestLoader: ManifestLoader | undefined
+
   group.each.setup(() => {
-    sandbox.stub(pluginConfig, 'loadPluginManifest').resolves(manifest)
+    // ESM exports are read-only, so we inject the test manifest into the
+    // mutable serverPluginManifests record that loadPluginManifest reads from.
+    originalManifestLoader = serverPluginManifests['notarium']
+    serverPluginManifests['notarium'] = async () => manifest
   })
 
   group.each.teardown(() => {
     sandbox.restore()
+    if (originalManifestLoader !== undefined) {
+      serverPluginManifests['notarium'] = originalManifestLoader
+    } else {
+      delete serverPluginManifests['notarium']
+    }
   })
 
   function createMockContext(options?: {

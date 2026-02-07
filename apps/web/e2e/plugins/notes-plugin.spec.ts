@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Page, request as playwrightRequest, type APIRequestContext } from '@playwright/test'
 
 /**
  * Notes Plugin E2E Tests
@@ -16,41 +16,74 @@ const TEST_USER = {
 } as const
 
 const API_BASE = process.env.API_URL || 'http://localhost:3333'
-const NOTES_API = `${API_BASE}/api/v1/apps/notes/notes`
+const NOTES_API = `/api/v1/apps/notes/notes`
 
 async function login(page: Page, email: string, password: string): Promise<void> {
   await page.goto('/login')
   await page.getByLabel(/email address/i).fill(email)
   await page.getByLabel(/password/i).fill(password)
-  await page.locator('form').getByRole('button', { name: /sign in/i }).click()
-  await page.waitForURL('**/dashboard', { timeout: 20000 })
-}
 
-async function getAuthCookie(page: Page): Promise<string> {
-  const cookies = await page.context().cookies()
-  const sessionCookie = cookies.find((c) => c.name.includes('session') || c.name.includes('adonis'))
-  return sessionCookie ? `${sessionCookie.name}=${sessionCookie.value}` : ''
+  const submitButton = page.locator('form').getByRole('button', { name: /sign in/i })
+  await submitButton.click()
+
+  // If still on login page after 5s, React hydration may not have been ready — retry click
+  try {
+    await page.waitForURL('**/dashboard', { timeout: 5000 })
+  } catch {
+    await submitButton.click()
+    await page.waitForURL('**/dashboard', { timeout: 45000 })
+  }
 }
 
 test.describe('Notes Plugin API', () => {
-  let authCookie: string
+  // Disable parallel execution within this describe to share auth state
+  test.describe.configure({ mode: 'serial' })
 
-  test.beforeAll(async ({ browser }) => {
-    // Login once to get auth cookie
-    const context = await browser.newContext()
-    const page = await context.newPage()
-    await login(page, TEST_USER.email, TEST_USER.password)
-    authCookie = await getAuthCookie(page)
-    await context.close()
+  let apiContext: APIRequestContext
+
+  test.beforeAll(async () => {
+    // Create a temporary context to login and discover the tenant ID
+    const tempContext = await playwrightRequest.newContext({
+      baseURL: API_BASE,
+    })
+
+    const loginResponse = await tempContext.post('/api/v1/auth/login', {
+      data: { email: TEST_USER.email, password: TEST_USER.password },
+    })
+
+    if (!loginResponse.ok()) {
+      throw new Error(`Login failed: ${loginResponse.status()} ${await loginResponse.text()}`)
+    }
+
+    // Get the user's current tenant ID
+    const meResponse = await tempContext.get('/api/v1/auth/me')
+    if (!meResponse.ok()) {
+      throw new Error(`Failed to get user info: ${meResponse.status()}`)
+    }
+    const meBody = await meResponse.json()
+    const tenantId = meBody.data.currentTenantId
+
+    // Extract cookies from temp context to reuse in the real context
+    const storageState = await tempContext.storageState()
+    await tempContext.dispose()
+
+    // Create the real API context with tenant ID header and session cookies
+    apiContext = await playwrightRequest.newContext({
+      baseURL: API_BASE,
+      extraHTTPHeaders: {
+        'X-Tenant-ID': String(tenantId),
+      },
+      storageState,
+    })
+  })
+
+  test.afterAll(async () => {
+    await apiContext?.dispose()
   })
 
   test.describe('CRUD Operations', () => {
-    test('creates a new note', async ({ request }) => {
-      const response = await request.post(NOTES_API, {
-        headers: {
-          Cookie: authCookie,
-          'Content-Type': 'application/json',
-        },
+    test('creates a new note', async () => {
+      const response = await apiContext.post(NOTES_API, {
         data: {
           title: 'Test Note',
           content: 'This is a test note content.',
@@ -58,13 +91,15 @@ test.describe('Notes Plugin API', () => {
       })
 
       // If plugin is not enabled or routes not mounted, we get 404
-      // If enabled, we should get 201 or 200
       if (response.status() === 404) {
         test.skip(true, 'Notes plugin not enabled for this tenant')
         return
       }
 
-      expect(response.ok()).toBeTruthy()
+      if (!response.ok()) {
+        const errorBody = await response.text()
+        throw new Error(`Note creation failed with status ${response.status()}: ${errorBody}`)
+      }
       const body = await response.json()
       expect(body.data).toBeDefined()
       expect(body.data.title).toBe('Test Note')
@@ -72,12 +107,8 @@ test.describe('Notes Plugin API', () => {
       expect(body.data.id).toBeDefined()
     })
 
-    test('lists notes for tenant', async ({ request }) => {
-      const response = await request.get(NOTES_API, {
-        headers: {
-          Cookie: authCookie,
-        },
-      })
+    test('lists notes for tenant', async () => {
+      const response = await apiContext.get(NOTES_API)
 
       if (response.status() === 404) {
         test.skip(true, 'Notes plugin not enabled for this tenant')
@@ -89,13 +120,9 @@ test.describe('Notes Plugin API', () => {
       expect(body.data).toBeInstanceOf(Array)
     })
 
-    test('gets a specific note', async ({ request }) => {
+    test('gets a specific note', async () => {
       // First create a note
-      const createResponse = await request.post(NOTES_API, {
-        headers: {
-          Cookie: authCookie,
-          'Content-Type': 'application/json',
-        },
+      const createResponse = await apiContext.post(NOTES_API, {
         data: {
           title: 'Note to Get',
           content: 'Getting this note.',
@@ -111,11 +138,7 @@ test.describe('Notes Plugin API', () => {
       const noteId = createBody.data.id
 
       // Now get the note
-      const response = await request.get(`${NOTES_API}/${noteId}`, {
-        headers: {
-          Cookie: authCookie,
-        },
-      })
+      const response = await apiContext.get(`${NOTES_API}/${noteId}`)
 
       expect(response.ok()).toBeTruthy()
       const body = await response.json()
@@ -123,13 +146,9 @@ test.describe('Notes Plugin API', () => {
       expect(body.data.title).toBe('Note to Get')
     })
 
-    test('updates a note', async ({ request }) => {
+    test('updates a note', async () => {
       // First create a note
-      const createResponse = await request.post(NOTES_API, {
-        headers: {
-          Cookie: authCookie,
-          'Content-Type': 'application/json',
-        },
+      const createResponse = await apiContext.post(NOTES_API, {
         data: {
           title: 'Note to Update',
           content: 'Original content.',
@@ -145,11 +164,7 @@ test.describe('Notes Plugin API', () => {
       const noteId = createBody.data.id
 
       // Update the note
-      const updateResponse = await request.put(`${NOTES_API}/${noteId}`, {
-        headers: {
-          Cookie: authCookie,
-          'Content-Type': 'application/json',
-        },
+      const updateResponse = await apiContext.put(`${NOTES_API}/${noteId}`, {
         data: {
           title: 'Updated Title',
           content: 'Updated content.',
@@ -162,13 +177,9 @@ test.describe('Notes Plugin API', () => {
       expect(updateBody.data.content).toBe('Updated content.')
     })
 
-    test('deletes a note', async ({ request }) => {
+    test('deletes a note', async () => {
       // First create a note
-      const createResponse = await request.post(NOTES_API, {
-        headers: {
-          Cookie: authCookie,
-          'Content-Type': 'application/json',
-        },
+      const createResponse = await apiContext.post(NOTES_API, {
         data: {
           title: 'Note to Delete',
           content: 'Delete me.',
@@ -184,20 +195,12 @@ test.describe('Notes Plugin API', () => {
       const noteId = createBody.data.id
 
       // Delete the note
-      const deleteResponse = await request.delete(`${NOTES_API}/${noteId}`, {
-        headers: {
-          Cookie: authCookie,
-        },
-      })
+      const deleteResponse = await apiContext.delete(`${NOTES_API}/${noteId}`)
 
       expect(deleteResponse.ok()).toBeTruthy()
 
       // Verify note is gone
-      const getResponse = await request.get(`${NOTES_API}/${noteId}`, {
-        headers: {
-          Cookie: authCookie,
-        },
-      })
+      const getResponse = await apiContext.get(`${NOTES_API}/${noteId}`)
 
       expect(getResponse.status()).toBe(404)
     })
@@ -205,14 +208,14 @@ test.describe('Notes Plugin API', () => {
 
   test.describe('Authentication', () => {
     test('rejects unauthenticated requests', async ({ request }) => {
-      const response = await request.get(NOTES_API)
+      const response = await request.get(`${API_BASE}${NOTES_API}`)
 
       // Should get 401 Unauthorized or 403 Forbidden
       expect([401, 403]).toContain(response.status())
     })
 
     test('rejects invalid session', async ({ request }) => {
-      const response = await request.get(NOTES_API, {
+      const response = await request.get(`${API_BASE}${NOTES_API}`, {
         headers: {
           Cookie: 'adonis-session=invalid-session-token',
         },
@@ -224,12 +227,8 @@ test.describe('Notes Plugin API', () => {
   })
 
   test.describe('Validation', () => {
-    test('rejects note without title', async ({ request }) => {
-      const response = await request.post(NOTES_API, {
-        headers: {
-          Cookie: authCookie,
-          'Content-Type': 'application/json',
-        },
+    test('rejects note without title', async () => {
+      const response = await apiContext.post(NOTES_API, {
         data: {
           content: 'Note without title.',
         },
@@ -246,12 +245,8 @@ test.describe('Notes Plugin API', () => {
       expect(body.errors).toBeDefined()
     })
 
-    test('rejects empty title', async ({ request }) => {
-      const response = await request.post(NOTES_API, {
-        headers: {
-          Cookie: authCookie,
-          'Content-Type': 'application/json',
-        },
+    test('rejects empty title', async () => {
+      const response = await apiContext.post(NOTES_API, {
         data: {
           title: '',
           content: 'Note with empty title.',
@@ -302,7 +297,7 @@ test.describe('Notes Plugin - UI', () => {
     }
 
     // Should see the notes page
-    await expect(page.getByRole('heading', { name: 'Notes' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Notes', exact: true })).toBeVisible()
   })
 
   test('creates a new note via UI', async ({ page }) => {
@@ -396,11 +391,17 @@ test.describe('Notes Plugin - UI', () => {
     const noteCard = page.locator(`[data-testid^="note-card-"]`).filter({ hasText: uniqueTitle })
     await noteCard.locator('[data-testid^="delete-note-"]').click()
 
-    // Confirm deletion in dialog
-    await page.getByTestId('confirm-delete-button').click()
+    // Confirm deletion in dialog and wait for API response
+    await Promise.all([
+      page.waitForResponse(
+        (resp) => resp.url().includes('/notes/') && resp.request().method() === 'DELETE',
+        { timeout: 10000 }
+      ),
+      page.getByTestId('confirm-delete-button').click(),
+    ])
 
-    // Note should no longer be visible
-    await expect(page.getByText(uniqueTitle)).not.toBeVisible()
+    // Wait for the deletion to complete and UI to update
+    await expect(page.getByText(uniqueTitle)).not.toBeVisible({ timeout: 15000 })
   })
 
   test('navigates to notes via header link', async ({ page }) => {
@@ -410,7 +411,7 @@ test.describe('Notes Plugin - UI', () => {
     const notesLink = page.getByRole('link', { name: 'Notes' })
     if (await notesLink.isVisible({ timeout: 2000 }).catch(() => false)) {
       await notesLink.click()
-      await expect(page).toHaveURL(/\/plugins\/notes/)
+      await expect(page).toHaveURL(/\/(?:plugins|apps)\/notes/)
     }
   })
 

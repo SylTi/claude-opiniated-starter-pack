@@ -6,7 +6,7 @@
  */
 
 import type { PluginManifest } from '@saas/plugins-core'
-import { ALL_PLUGINS, extractManifest } from './plugins.config.js'
+import { ALL_PLUGINS, extractManifest, getMainAppPluginId } from './plugins.config.js'
 
 /**
  * Type for manifest loader function.
@@ -70,6 +70,8 @@ export function getRegisteredClientPluginIds(): string[] {
 /**
  * Check if a plugin has a client entrypoint.
  */
+export { getMainAppPluginId }
+
 export function hasClientEntrypoint(pluginId: string): boolean {
   return pluginId in clientPluginLoaders
 }

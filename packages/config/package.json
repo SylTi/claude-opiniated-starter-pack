@@ -33,7 +33,6 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@plugins/notarium": "workspace:*",
     "@plugins/nav-links": "workspace:*",
     "@plugins/notes": "workspace:*",
     "@saas/plugins-core": "workspace:*"

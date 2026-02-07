@@ -12,12 +12,6 @@ import type { PluginManifest } from '@saas/plugins-core'
 // TYPE DEFINITIONS
 // =============================================================================
 
-export type PluginServerModule = {
-  [key: string]: unknown
-  default?: unknown
-  register?(context: unknown): void | Promise<void>
-}
-
 export type PluginClientModule = {
   [key: string]: unknown
   default?: unknown
@@ -27,7 +21,6 @@ export type PluginClientModule = {
 export type PluginConfig = {
   id: string
   packageName: string
-  serverImport: () => Promise<PluginServerModule>
   clientImport: () => Promise<PluginClientModule>
   manifestImport: () => Promise<unknown>
 }
@@ -43,7 +36,6 @@ export type PluginConfig = {
 export const MAIN_APP_PLUGIN: PluginConfig = {
   id: 'main-app',
   packageName: '@plugins/main-app',
-  serverImport: () => import('@plugins/main-app'),
   clientImport: () => import('@plugins/main-app/client'),
   manifestImport: () => import('@plugins/main-app/plugin.meta.json'),
 }
@@ -59,14 +51,12 @@ export const ADDITIONAL_PLUGINS: Record<string, PluginConfig> = {
   'nav-links': {
     id: 'nav-links',
     packageName: '@plugins/nav-links',
-    serverImport: () => import('@plugins/nav-links/server'),
     clientImport: () => import('@plugins/nav-links'),
     manifestImport: () => import('@plugins/nav-links/plugin.meta.json'),
   },
   notes: {
     id: 'notes',
     packageName: '@plugins/notes',
-    serverImport: () => import('@plugins/notes'),
     clientImport: () => import('@plugins/notes/client'),
     manifestImport: () => import('@plugins/notes/plugin.meta.json'),
   },
