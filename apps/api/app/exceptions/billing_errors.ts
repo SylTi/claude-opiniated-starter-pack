@@ -53,3 +53,47 @@ export function isDiscountCodeLimitReachedError(
 ): error is DiscountCodeLimitReachedError {
   return error instanceof DiscountCodeLimitReachedError
 }
+
+/**
+ * Thrown when a payment provider is not properly configured (missing env vars)
+ */
+export class PaymentProviderConfigError extends Error {
+  readonly code = 'PAYMENT_PROVIDER_CONFIG_ERROR' as const
+  readonly provider: string
+  readonly missingVar: string
+
+  constructor(provider: string, missingVar: string) {
+    super(`Payment provider "${provider}" is not configured: missing ${missingVar}`)
+    this.name = 'PaymentProviderConfigError'
+    this.provider = provider
+    this.missingVar = missingVar
+  }
+}
+
+/**
+ * Type guard to check if error is PaymentProviderConfigError
+ */
+export function isPaymentProviderConfigError(error: unknown): error is PaymentProviderConfigError {
+  return error instanceof PaymentProviderConfigError
+}
+
+/**
+ * Thrown when a webhook signature verification fails
+ */
+export class WebhookVerificationError extends Error {
+  readonly code = 'WEBHOOK_VERIFICATION_ERROR' as const
+  readonly provider: string
+
+  constructor(provider: string, detail?: string) {
+    super(`Webhook signature verification failed for "${provider}"${detail ? `: ${detail}` : ''}`)
+    this.name = 'WebhookVerificationError'
+    this.provider = provider
+  }
+}
+
+/**
+ * Type guard to check if error is WebhookVerificationError
+ */
+export function isWebhookVerificationError(error: unknown): error is WebhookVerificationError {
+  return error instanceof WebhookVerificationError
+}

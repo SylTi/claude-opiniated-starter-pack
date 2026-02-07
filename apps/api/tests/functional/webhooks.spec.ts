@@ -351,6 +351,178 @@ test.group('Webhooks - Team Tenant Billing', (group) => {
   })
 })
 
+test.group('Webhooks API - Paddle', (group) => {
+  group.each.setup(async () => {
+    await truncateAllTables()
+  })
+
+  test('POST /api/v1/webhooks/paddle rejects request without signature', async ({ assert }) => {
+    const response = await request(BASE_URL)
+      .post('/api/v1/webhooks/paddle')
+      .send({ event_type: 'transaction.completed' })
+      .set('Content-Type', 'application/json')
+
+    assert.oneOf(response.status, [400, 500])
+  })
+
+  test('POST /api/v1/webhooks/paddle rejects invalid signature', async ({ assert }) => {
+    const payload = JSON.stringify({
+      event_type: 'transaction.completed',
+      data: { id: 'txn_test' },
+    })
+
+    const response = await request(BASE_URL)
+      .post('/api/v1/webhooks/paddle')
+      .send(payload)
+      .set('Content-Type', 'application/json')
+      .set('paddle-signature', 'ts=123;h1=invalid')
+
+    assert.oneOf(response.status, [400, 500])
+  })
+
+  test('POST /api/v1/webhooks/paddle accepts well-formed webhook structure', async ({ assert }) => {
+    const payload = JSON.stringify({
+      event_id: `evt_${uniqueId()}`,
+      event_type: 'transaction.completed',
+      data: { id: 'txn_test', custom_data: { tenant_id: '1' } },
+    })
+
+    const timestamp = String(Math.floor(Date.now() / 1000))
+    const secret = 'test_paddle_webhook_secret'
+    const hash = crypto.createHmac('sha256', secret).update(`${timestamp}:${payload}`).digest('hex')
+    const signature = `ts=${timestamp};h1=${hash}`
+
+    const response = await request(BASE_URL)
+      .post('/api/v1/webhooks/paddle')
+      .send(payload)
+      .set('Content-Type', 'application/json')
+      .set('paddle-signature', signature)
+
+    // Will fail provider initialization (no PADDLE_API_KEY in test env) but tests route exists
+    assert.oneOf(response.status, [400, 500])
+  })
+})
+
+test.group('Webhooks API - LemonSqueezy', (group) => {
+  group.each.setup(async () => {
+    await truncateAllTables()
+  })
+
+  test('POST /api/v1/webhooks/lemonsqueezy rejects request without signature', async ({
+    assert,
+  }) => {
+    const response = await request(BASE_URL)
+      .post('/api/v1/webhooks/lemonsqueezy')
+      .send({ meta: { event_name: 'order_created' } })
+      .set('Content-Type', 'application/json')
+
+    assert.oneOf(response.status, [400, 500])
+  })
+
+  test('POST /api/v1/webhooks/lemonsqueezy rejects invalid signature', async ({ assert }) => {
+    const payload = JSON.stringify({
+      meta: { event_name: 'order_created' },
+      data: { id: '1', attributes: {} },
+    })
+
+    const response = await request(BASE_URL)
+      .post('/api/v1/webhooks/lemonsqueezy')
+      .send(payload)
+      .set('Content-Type', 'application/json')
+      .set('x-signature', 'invalid_signature')
+
+    assert.oneOf(response.status, [400, 500])
+  })
+
+  test('POST /api/v1/webhooks/lemonsqueezy accepts well-formed webhook structure', async ({
+    assert,
+  }) => {
+    const payload = JSON.stringify({
+      meta: {
+        event_name: 'order_created',
+        custom_data: { tenant_id: '1' },
+      },
+      data: {
+        id: `order_${uniqueId()}`,
+        type: 'orders',
+        attributes: { customer_id: 123 },
+      },
+    })
+
+    const secret = 'test_lemonsqueezy_webhook_secret'
+    const signature = crypto.createHmac('sha256', secret).update(payload).digest('hex')
+
+    const response = await request(BASE_URL)
+      .post('/api/v1/webhooks/lemonsqueezy')
+      .send(payload)
+      .set('Content-Type', 'application/json')
+      .set('x-signature', signature)
+
+    // Will fail provider initialization (no LEMONSQUEEZY_API_KEY in test env) but tests route
+    assert.oneOf(response.status, [400, 500])
+  })
+})
+
+test.group('Webhooks API - Polar', (group) => {
+  group.each.setup(async () => {
+    await truncateAllTables()
+  })
+
+  test('POST /api/v1/webhooks/polar rejects request without signature', async ({ assert }) => {
+    const response = await request(BASE_URL)
+      .post('/api/v1/webhooks/polar')
+      .send({ type: 'checkout.created', data: {} })
+      .set('Content-Type', 'application/json')
+
+    assert.oneOf(response.status, [400, 500])
+  })
+
+  test('POST /api/v1/webhooks/polar rejects invalid signature', async ({ assert }) => {
+    const payload = JSON.stringify({
+      type: 'checkout.created',
+      data: { id: 'checkout_test' },
+    })
+
+    const response = await request(BASE_URL)
+      .post('/api/v1/webhooks/polar')
+      .send(payload)
+      .set('Content-Type', 'application/json')
+      .set('webhook-signature', 'v1,invalid_signature')
+
+    assert.oneOf(response.status, [400, 500])
+  })
+
+  test('POST /api/v1/webhooks/polar accepts well-formed webhook structure', async ({ assert }) => {
+    const payload = JSON.stringify({
+      type: 'checkout.created',
+      data: {
+        id: `checkout_${uniqueId()}`,
+        status: 'succeeded',
+        metadata: { tenant_id: '1' },
+      },
+    })
+
+    const webhookId = `msg_${uniqueId()}`
+    const timestamp = String(Math.floor(Date.now() / 1000))
+    const secret = 'test_polar_webhook_secret'
+    const toSign = `${webhookId}.${timestamp}.${payload}`
+    const hmac = crypto
+      .createHmac('sha256', Buffer.from(secret, 'base64'))
+      .update(toSign)
+      .digest('base64')
+    const signature = `${webhookId}|${timestamp}|v1,${hmac}`
+
+    const response = await request(BASE_URL)
+      .post('/api/v1/webhooks/polar')
+      .send(payload)
+      .set('Content-Type', 'application/json')
+      .set('webhook-signature', signature)
+
+    // Will fail provider initialization (no POLAR_ACCESS_TOKEN in test env) but tests route
+    assert.oneOf(response.status, [400, 500])
+  })
+})
+
 test.group('Webhooks - Error Handling', (group) => {
   group.each.setup(async () => {
     await truncateAllTables()

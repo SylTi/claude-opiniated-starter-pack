@@ -5,7 +5,7 @@ import type {
   WebhookResult,
   TenantInfo,
 } from '#services/types/payment_provider'
-import StripeProvider from '#services/providers/stripe_provider'
+import { createPaymentProvider } from '#services/providers/payment_provider_factory'
 import Tenant from '#models/tenant'
 import Price from '#models/price'
 import Product from '#models/product'
@@ -16,8 +16,17 @@ import { systemOps } from '#services/system_operation_service'
 export default class PaymentService {
   private provider: PaymentProvider
 
-  constructor(provider?: PaymentProvider) {
-    this.provider = provider ?? new StripeProvider()
+  constructor(provider: PaymentProvider) {
+    this.provider = provider
+  }
+
+  /**
+   * Create a PaymentService with the configured provider from env.
+   * Uses dynamic import so only the active SDK is loaded.
+   */
+  static async create(provider?: PaymentProvider): Promise<PaymentService> {
+    const resolved = provider ?? (await createPaymentProvider())
+    return new PaymentService(resolved)
   }
 
   /**

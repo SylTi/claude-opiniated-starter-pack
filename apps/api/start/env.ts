@@ -86,12 +86,54 @@ export default await Env.create(new URL('../', import.meta.url), {
 
   /*
   |----------------------------------------------------------
+  | Payment provider selection
+  |----------------------------------------------------------
+  | Which payment provider to use: stripe, paddle, lemonsqueezy, polar
+  | Default: stripe
+  */
+  PAYMENT_PROVIDER: Env.schema.enum.optional([
+    'stripe',
+    'paddle',
+    'lemonsqueezy',
+    'polar',
+  ] as const),
+
+  /*
+  |----------------------------------------------------------
   | Variables for Stripe payment provider
   |----------------------------------------------------------
   */
   STRIPE_SECRET_KEY: Env.schema.string.optional(),
   STRIPE_WEBHOOK_SECRET: Env.schema.string.optional(),
   STRIPE_PUBLISHABLE_KEY: Env.schema.string.optional(),
+
+  /*
+  |----------------------------------------------------------
+  | Variables for Paddle payment provider
+  |----------------------------------------------------------
+  */
+  PADDLE_API_KEY: Env.schema.string.optional(),
+  PADDLE_WEBHOOK_SECRET: Env.schema.string.optional(),
+  PADDLE_CLIENT_TOKEN: Env.schema.string.optional(),
+  PADDLE_ENVIRONMENT: Env.schema.enum.optional(['sandbox', 'production'] as const),
+
+  /*
+  |----------------------------------------------------------
+  | Variables for LemonSqueezy payment provider
+  |----------------------------------------------------------
+  */
+  LEMONSQUEEZY_API_KEY: Env.schema.string.optional(),
+  LEMONSQUEEZY_WEBHOOK_SECRET: Env.schema.string.optional(),
+  LEMONSQUEEZY_STORE_ID: Env.schema.string.optional(),
+
+  /*
+  |----------------------------------------------------------
+  | Variables for Polar payment provider
+  |----------------------------------------------------------
+  */
+  POLAR_ACCESS_TOKEN: Env.schema.string.optional(),
+  POLAR_WEBHOOK_SECRET: Env.schema.string.optional(),
+  POLAR_ORGANIZATION_ID: Env.schema.string.optional(),
 
   /*
   |----------------------------------------------------------

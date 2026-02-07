@@ -31,7 +31,7 @@ export default class PaymentController {
    * GET /api/v1/billing/tiers
    */
   async getTiers({ response }: HttpContext): Promise<void> {
-    const paymentService = new PaymentService()
+    const paymentService = await PaymentService.create()
     const provider = paymentService.providerName
     const tiers = await SubscriptionTier.getActiveTiers()
     const products = await Product.getProductsWithPrices(provider)
@@ -115,7 +115,7 @@ export default class PaymentController {
     const cancelUrl = `${frontendUrl}/billing/cancel`
 
     try {
-      const paymentService = new PaymentService()
+      const paymentService = await PaymentService.create()
       const result = await paymentService.createCheckoutSession(
         tenantId,
         priceId,
@@ -188,7 +188,7 @@ export default class PaymentController {
       returnUrl && isValidReturnUrl(returnUrl, allowedHost) ? returnUrl : `${frontendUrl}/billing`
 
     try {
-      const paymentService = new PaymentService()
+      const paymentService = await PaymentService.create()
       const result = await paymentService.createCustomerPortalSession(tenantId, finalReturnUrl)
 
       response.json({
@@ -222,7 +222,7 @@ export default class PaymentController {
     // Membership already verified by tenant middleware
     const isAdmin = tenant.membership.role === 'owner' || tenant.membership.role === 'admin'
 
-    const paymentService = new PaymentService()
+    const paymentService = await PaymentService.create()
     const subscription = await paymentService.getCurrentSubscription(tenantId)
     const canManage = isAdmin && (await paymentService.canManageBilling(tenantId))
 
@@ -285,7 +285,7 @@ export default class PaymentController {
       })
     }
 
-    const paymentService = new PaymentService()
+    const paymentService = await PaymentService.create()
     const subscription = await paymentService.getCurrentSubscription(tenantId)
 
     if (!subscription) {

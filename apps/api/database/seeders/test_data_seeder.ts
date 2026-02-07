@@ -219,6 +219,20 @@ export default class extends BaseSeeder {
   }
 
   private async seedProductsAndPrices(): Promise<void> {
+    // Read provider from env (default: stripe)
+    const provider = (process.env.PAYMENT_PROVIDER ?? 'stripe') as string
+    const isMoR = provider === 'paddle' || provider === 'lemonsqueezy' || provider === 'polar'
+    const taxBehavior = isMoR ? 'inclusive' : 'exclusive'
+
+    // Provider-prefixed test IDs
+    const prefixMap: Record<string, string> = {
+      stripe: '',
+      paddle: 'pdl_',
+      lemonsqueezy: 'ls_',
+      polar: 'pol_',
+    }
+    const prefix = prefixMap[provider] ?? ''
+
     const tierConfigs: Array<{
       slug: string
       providerProductId: string
@@ -226,18 +240,34 @@ export default class extends BaseSeeder {
     }> = [
       {
         slug: 'tier1',
-        providerProductId: 'prod_test_tier1',
+        providerProductId: `${prefix}prod_test_tier1`,
         prices: [
-          { providerPriceId: 'price_test_tier1_month', interval: 'month', unitAmount: 1999 },
-          { providerPriceId: 'price_test_tier1_year', interval: 'year', unitAmount: 19990 },
+          {
+            providerPriceId: `${prefix}price_test_tier1_month`,
+            interval: 'month',
+            unitAmount: 1999,
+          },
+          {
+            providerPriceId: `${prefix}price_test_tier1_year`,
+            interval: 'year',
+            unitAmount: 19990,
+          },
         ],
       },
       {
         slug: 'tier2',
-        providerProductId: 'prod_test_tier2',
+        providerProductId: `${prefix}prod_test_tier2`,
         prices: [
-          { providerPriceId: 'price_test_tier2_month', interval: 'month', unitAmount: 4999 },
-          { providerPriceId: 'price_test_tier2_year', interval: 'year', unitAmount: 49990 },
+          {
+            providerPriceId: `${prefix}price_test_tier2_month`,
+            interval: 'month',
+            unitAmount: 4999,
+          },
+          {
+            providerPriceId: `${prefix}price_test_tier2_year`,
+            interval: 'year',
+            unitAmount: 49990,
+          },
         ],
       },
     ]
@@ -249,19 +279,19 @@ export default class extends BaseSeeder {
         continue
       }
 
-      let product = await Product.findByTierAndProvider(tier.id, 'stripe')
+      let product = await Product.findByTierAndProvider(tier.id, provider)
       if (!product) {
         product = await Product.create({
           tierId: tier.id,
-          provider: 'stripe',
+          provider,
           providerProductId: config.providerProductId,
         })
-        console.log(`  Created product for tier: ${config.slug}`)
+        console.log(`  Created product for tier: ${config.slug} (provider: ${provider})`)
       }
 
       const existingPrices = await Price.query()
         .where('productId', product.id)
-        .where('provider', 'stripe')
+        .where('provider', provider)
 
       if (existingPrices.length > 0) {
         continue
@@ -270,16 +300,16 @@ export default class extends BaseSeeder {
       for (const price of config.prices) {
         await Price.create({
           productId: product.id,
-          provider: 'stripe',
+          provider,
           providerPriceId: price.providerPriceId,
           interval: price.interval,
           currency: 'usd',
           unitAmount: price.unitAmount,
-          taxBehavior: 'exclusive',
+          taxBehavior: taxBehavior as 'inclusive' | 'exclusive',
           isActive: true,
         })
       }
-      console.log(`  Created prices for tier: ${config.slug}`)
+      console.log(`  Created prices for tier: ${config.slug} (provider: ${provider})`)
     }
   }
 

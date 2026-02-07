@@ -4,6 +4,8 @@ export type SubscriptionStatus =
   | "cancelled"
   | "past_due";
 
+export type PaymentProviderName = "stripe" | "paddle" | "lemonsqueezy" | "polar";
+
 // Tier slug type for convenience
 export type SubscriptionTier = "free" | "tier1" | "tier2";
 

@@ -813,6 +813,16 @@ DELETE /api/v1/admin/prices/:id
 
 ---
 
+## Payment Provider Configuration
+
+The application supports multiple payment providers. Only one provider is active at a time, configured via the `PAYMENT_PROVIDER` environment variable.
+
+**Supported providers:** `stripe` (default), `paddle`, `lemonsqueezy`, `polar`
+
+The `provider` field on Products and Prices records identifies which provider owns that record. All four webhook endpoints remain active regardless of the selected provider to handle in-flight events during migration.
+
+---
+
 ## Webhooks
 
 ### Handle Stripe Webhook
@@ -838,17 +848,81 @@ POST /api/v1/webhooks/stripe
 **Response:**
 ```json
 {
-  "received": true
+  "data": { "received": true, "processed": true, "eventType": "checkout.session.completed" }
 }
 ```
 
 **Error Response (400):**
 ```json
 {
-  "error": "Webhook Error",
-  "message": "Invalid signature"
+  "error": "WebhookError",
+  "message": "Webhook processing failed"
 }
 ```
+
+### Handle Paddle Webhook
+
+Receives and processes Paddle webhook events.
+
+```
+POST /api/v1/webhooks/paddle
+```
+
+**Authentication:** Paddle signature verification (no user auth)
+
+**Headers:**
+- `paddle-signature`: Paddle webhook signature (`ts=TIMESTAMP;h1=HMAC_SHA256`)
+
+**Supported Events:**
+- `transaction.completed` - Creates subscription after successful checkout
+- `subscription.updated` - Handles subscription changes
+- `subscription.canceled` - Handles subscription cancellation
+- `transaction.payment_failed` - Logs payment failures
+
+**Response:** Same format as Stripe webhook.
+
+### Handle LemonSqueezy Webhook
+
+Receives and processes LemonSqueezy webhook events.
+
+```
+POST /api/v1/webhooks/lemonsqueezy
+```
+
+**Authentication:** LemonSqueezy signature verification (no user auth)
+
+**Headers:**
+- `x-signature`: HMAC-SHA256 hex digest of the raw body
+
+**Supported Events:**
+- `order_created` - Creates subscription after successful checkout
+- `subscription_updated` - Handles subscription changes
+- `subscription_cancelled` - Handles subscription cancellation
+- `subscription_payment_failed` - Logs payment failures
+- `subscription_payment_success` - Updates subscription expiration
+
+**Response:** Same format as Stripe webhook.
+
+### Handle Polar Webhook
+
+Receives and processes Polar webhook events.
+
+```
+POST /api/v1/webhooks/polar
+```
+
+**Authentication:** Polar/Standard Webhooks signature verification (no user auth)
+
+**Headers:**
+- `webhook-signature`: Standard Webhooks signature (`v1,BASE64_HMAC`)
+
+**Supported Events:**
+- `checkout.created` (status: succeeded) - Creates subscription after successful checkout
+- `subscription.updated` - Handles subscription changes
+- `subscription.revoked` / `subscription.canceled` - Handles subscription cancellation
+- `order.created` - Updates subscription expiration on payment success
+
+**Response:** Same format as Stripe webhook.
 
 ---
 
@@ -1415,3 +1489,196 @@ DELETE /api/v1/apps/notes/notes/:id
 **Authentication:** Required
 **Headers:**
 - `X-Tenant-ID`: Required tenant ID
+
+---
+
+## Plugin: Notarium (Token APIs)
+
+Notarium uses the core `/api/v1/auth-tokens` endpoints for profile-managed tokens.
+Plugin-namespaced token routes (if present) are considered legacy and are not recommended for new integrations.
+
+**Base URL:** `/api/v1/apps/notarium`
+
+### List MCP Integration Tokens
+
+```
+GET /api/v1/apps/notarium/integration-tokens
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+### Create MCP Integration Token
+
+```
+POST /api/v1/apps/notarium/integration-tokens
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+**Request Body:**
+```json
+{
+  "name": "Claude Desktop",
+  "scopes": ["mcp:read", "mcp:bookmark_write"],
+  "expiresAt": "2026-12-31T00:00:00.000Z",
+  "rateLimits": {
+    "bookmarksPerHour": 30,
+    "draftsPerDay": 10
+  }
+}
+```
+
+### Revoke MCP Integration Token
+
+```
+DELETE /api/v1/apps/notarium/integration-tokens/:id
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+### List Browser Extension Tokens
+
+```
+GET /api/v1/apps/notarium/browser-ext-tokens
+```
+
+### Create Browser Extension Token
+
+```
+POST /api/v1/apps/notarium/browser-ext-tokens
+```
+
+### Revoke Browser Extension Token
+
+```
+DELETE /api/v1/apps/notarium/browser-ext-tokens/:id
+```
+
+---
+
+## Plugin: Analytics
+
+SaaS KPI tracking plugin. Subscribes to auth and billing hooks to track DAU/MAU, MRR/ARR, Churn, LTV, and ARPU.
+
+**Base URL:** `/api/v1/apps/analytics`
+
+**Note:** This plugin requires the tenant to have it enabled first via `POST /api/v1/plugins/analytics/enable`.
+
+### Overview
+
+```
+GET /api/v1/apps/analytics/overview
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+**Response:**
+```json
+{
+  "data": {
+    "dau": 42,
+    "mau": 350,
+    "mrr": 499900,
+    "arr": 5998800,
+    "churnRate": 2.5,
+    "ltv": 1200000,
+    "arpu": 14283,
+    "currency": "usd",
+    "asOf": "2026-02-06T12:00:00.000Z"
+  }
+}
+```
+
+All monetary values are in cents (e.g., 499900 = $4,999.00).
+
+### Active Users
+
+```
+GET /api/v1/apps/analytics/active-users?from=2026-01-01&to=2026-01-31
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+**Query Parameters:**
+- `from` (optional): Start date (YYYY-MM-DD). Defaults to 30 days ago.
+- `to` (optional): End date (YYYY-MM-DD). Defaults to today.
+
+**Response:**
+```json
+{
+  "data": [
+    { "date": "2026-01-01", "count": 42 },
+    { "date": "2026-01-02", "count": 38 }
+  ]
+}
+```
+
+### MRR
+
+```
+GET /api/v1/apps/analytics/mrr?from=2026-01-01&to=2026-01-31
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+**Query Parameters:**
+- `from` (optional): Start date (YYYY-MM-DD). Defaults to 30 days ago.
+- `to` (optional): End date (YYYY-MM-DD). Defaults to today.
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "date": "2026-01-01",
+      "mrr": 499900,
+      "arr": 5998800,
+      "currency": "usd",
+      "newSubscriptions": 3,
+      "cancellations": 1
+    }
+  ]
+}
+```
+
+### Revenue
+
+```
+GET /api/v1/apps/analytics/revenue?from=2026-01-01&to=2026-01-31
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+**Query Parameters:**
+- `from` (optional): Start date (YYYY-MM-DD). Defaults to 30 days ago.
+- `to` (optional): End date (YYYY-MM-DD). Defaults to today.
+
+**Response:**
+```json
+{
+  "data": {
+    "totalRevenue": 1500000,
+    "currency": "usd",
+    "ltv": 750000,
+    "invoiceCount": 25,
+    "period": {
+      "from": "2026-01-01",
+      "to": "2026-01-31"
+    }
+  }
+}
+```

@@ -252,6 +252,9 @@ router
     router
       .group(() => {
         router.post('/stripe', [WebhookController, 'handleStripe'])
+        router.post('/paddle', [WebhookController, 'handlePaddle'])
+        router.post('/lemonsqueezy', [WebhookController, 'handleLemonSqueezy'])
+        router.post('/polar', [WebhookController, 'handlePolar'])
       })
       .prefix('/webhooks')
   })
