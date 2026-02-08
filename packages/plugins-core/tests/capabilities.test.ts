@@ -4,6 +4,7 @@ import {
   isValidCapability,
   TIER_A_CAPABILITIES,
   TIER_B_CAPABILITIES,
+  TIER_C_CAPABILITIES,
   MAIN_APP_CAPABILITIES,
   PLUGIN_CAPABILITIES,
 } from '../src/types/capabilities.js'
@@ -101,12 +102,38 @@ describe('capabilities', () => {
         expect(result.invalidCapabilities).toHaveLength(0)
       })
     })
+
+    describe('tier C', () => {
+      it('allows tier B capabilities', () => {
+        const result = validateCapabilitiesForTier('C', [
+          PLUGIN_CAPABILITIES['app:routes'],
+          PLUGIN_CAPABILITIES['app:db:read'],
+        ])
+
+        expect(result.valid).toBe(true)
+      })
+
+      it('allows core platform capabilities', () => {
+        const result = validateCapabilitiesForTier('C', [
+          PLUGIN_CAPABILITIES['core:service:users:read'],
+          PLUGIN_CAPABILITIES['core:service:resources:read'],
+          PLUGIN_CAPABILITIES['core:service:permissions:manage'],
+          PLUGIN_CAPABILITIES['core:service:notifications:send'],
+          PLUGIN_CAPABILITIES['core:hooks:define'],
+          PLUGIN_CAPABILITIES['core:entity:fk:users'],
+        ])
+
+        expect(result.valid).toBe(true)
+        expect(result.invalidCapabilities).toHaveLength(0)
+      })
+    })
   })
 
   describe('isValidCapability', () => {
     it('returns true for valid capabilities', () => {
       expect(isValidCapability('ui:filter:nav')).toBe(true)
       expect(isValidCapability('app:routes')).toBe(true)
+      expect(isValidCapability('core:service:users:read')).toBe(true)
       expect(isValidCapability('ui:design:global')).toBe(true)
       expect(isValidCapability('ui:nav:baseline')).toBe(true)
     })
@@ -134,6 +161,12 @@ describe('capabilities', () => {
     it('MAIN_APP_CAPABILITIES contains design and nav baseline', () => {
       expect(MAIN_APP_CAPABILITIES).toContain('ui:design:global')
       expect(MAIN_APP_CAPABILITIES).toContain('ui:nav:baseline')
+    })
+
+    it('TIER_C_CAPABILITIES contains only core capabilities', () => {
+      for (const cap of TIER_C_CAPABILITIES) {
+        expect(cap.startsWith('core:')).toBe(true)
+      }
     })
   })
 })

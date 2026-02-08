@@ -80,13 +80,19 @@ export default class PluginsVerify extends BaseCommand {
         )
       }
 
-      // 3. Check schema version (for Tier B or main-app with migrations)
-      if ((manifest.tier === 'B' || manifest.tier === 'main-app') && manifest.migrations) {
+      // 3. Check schema version (for Tier B/C/main-app with migrations)
+      if (
+        (manifest.tier === 'B' || manifest.tier === 'C' || manifest.tier === 'main-app') &&
+        manifest.migrations
+      ) {
         await this.verifySchemaVersion(pluginId, manifest.migrations.schemaVersion)
       }
 
-      // 4. Verify RLS on plugin tables (for Tier B or main-app with tables)
-      if ((manifest.tier === 'B' || manifest.tier === 'main-app') && manifest.tables) {
+      // 4. Verify RLS on plugin tables (for Tier B/C/main-app with tables)
+      if (
+        (manifest.tier === 'B' || manifest.tier === 'C' || manifest.tier === 'main-app') &&
+        manifest.tables
+      ) {
         for (const table of manifest.tables) {
           await this.verifyTableRls(pluginId, table.name)
         }

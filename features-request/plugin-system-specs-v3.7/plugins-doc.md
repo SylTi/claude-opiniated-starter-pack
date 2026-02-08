@@ -61,7 +61,7 @@ Tier A cannot:
 ### Tier B — App Plugin (moderately privileged)
 Tier B can build “full-blown app experiences” inside Notarium:
 - provide pages under `/apps/{pluginId}/...` (Next.js host route)
-- register API routes under `/apps/{pluginId}/...` (Adonis)
+- register API routes under `/api/v1/apps/{pluginId}/...` (Adonis)
 - define its own DB tables (tenant-scoped + RLS enforced)
 - register jobs/workers (tenant-scoped execution)
 
@@ -322,14 +322,14 @@ Everything Tier A can do, plus:
 - provide internal navigation for your app area
 
 **Backend**
-- register API routes under `/apps/{pluginId}/...`
+- register API routes under `/api/v1/apps/{pluginId}/...`
 - create tenant-scoped tables + models
 - register tenant-scoped jobs
 
 ### 8.2 Routing rules (hard)
 - You may only mount under your namespace:
   - Web: `/apps/{pluginId}/...`
-  - API: `/apps/{pluginId}/...`
+  - API: `/api/v1/apps/{pluginId}/...`
 - You may not register or override core routes.
 
 ### 8.3 Data rules
@@ -389,7 +389,8 @@ Do not implement “own permission checks” with ad-hoc logic.
 Use core authorization facilities.
 
 ### 10.4 No “open context”
-You will receive controlled facades, not raw `db/router/drive/bouncer`.
+You will receive controlled facades and scoped registrars, not raw/unscoped core `db/router/drive/bouncer`.
+Tenant-scoped DB access for plugin-owned tables is allowed where the contract provides it.
 Do not attempt to bypass them.
 
 ---

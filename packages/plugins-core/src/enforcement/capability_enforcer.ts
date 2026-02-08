@@ -103,7 +103,7 @@ export class CapabilityEnforcer {
       // Check if capability is valid (either in PLUGIN_CAPABILITIES or plugin-specific)
       const isKnownCapability = isValidCapability(capability)
       const isPluginSpecific =
-        (manifest.tier === 'B' || manifest.tier === 'main-app') &&
+        (manifest.tier === 'B' || manifest.tier === 'C' || manifest.tier === 'main-app') &&
         capability.startsWith(`${manifest.pluginId}.`)
 
       if (!isKnownCapability && !isPluginSpecific) {
@@ -190,6 +190,12 @@ export class CapabilityEnforcer {
     const caps: string[] = []
 
     if (tier === 'B') {
+      if (features.routes) caps.push('app:routes')
+      if (features.db) caps.push('app:db:read', 'app:db:write')
+      if (features.authz) caps.push('app:authz')
+    }
+
+    if (tier === 'C') {
       if (features.routes) caps.push('app:routes')
       if (features.db) caps.push('app:db:read', 'app:db:write')
       if (features.authz) caps.push('app:authz')

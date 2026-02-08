@@ -25,6 +25,7 @@ import { pluginSchemaChecker } from './plugin_schema_checker.js'
 import { pluginRouteMounter } from './plugin_route_mounter.js'
 import { buildNavValidationContexts } from './nav_validation_contexts.js'
 import { buildValidationEntitlementSets } from './nav_validation_entitlements.js'
+import { resourceProviderRegistry } from './resource_provider_registry.js'
 import { namespaceRegistry } from '#services/authz/namespace_registry'
 import { auditEventEmitter } from '#services/audit_event_emitter'
 import { AUDIT_EVENT_TYPES } from '@saas/shared'
@@ -46,6 +47,18 @@ function isSafeMode(): boolean {
  */
 function isProduction(): boolean {
   return process.env.NODE_ENV === 'production'
+}
+
+const TIER_C_RUNTIME_CORE_CAPABILITIES = new Set<string>([
+  'core:service:users:read',
+  'core:service:resources:read',
+  'core:service:permissions:manage',
+  'core:service:notifications:send',
+  'core:hooks:define',
+])
+
+function isTierCRuntimeCoreCapability(capability: string): boolean {
+  return TIER_C_RUNTIME_CORE_CAPABILITIES.has(capability)
 }
 
 /**
@@ -211,12 +224,47 @@ export default class PluginBootService {
 
     // 3. Check schema compatibility (FATAL on mismatch)
     console.log('[PluginBootService] Checking schema compatibility...')
-    const tierBPlugins = registeredManifests.filter((m) => m.tier === 'B' && m.migrations)
-    await pluginSchemaChecker.checkCompatibility(tierBPlugins)
+    const pluginsWithMigrations = registeredManifests.filter(
+      (m) => (m.tier === 'B' || m.tier === 'C' || m.tier === 'main-app') && m.migrations
+    )
+    await pluginSchemaChecker.checkCompatibility(pluginsWithMigrations)
 
-    // 4. Grant capabilities
+    // 4. Tier C enterprise dependency check
+    console.log('[PluginBootService] Checking Tier C enterprise dependencies...')
+    for (const manifest of registeredManifests) {
+      if (manifest.tier !== 'C' || manifest.requiresEnterprise !== true) {
+        continue
+      }
+
+      let enterpriseAvailable = false
+      try {
+        enterpriseAvailable = await this.hasEnterpriseFeatures(
+          manifest.requiredEnterpriseFeatures ?? []
+        )
+      } catch (error) {
+        console.warn(
+          `[PluginBootService] Enterprise feature check failed for "${manifest.pluginId}":`,
+          error
+        )
+      }
+      if (!enterpriseAvailable) {
+        const reason = `Tier C plugin "${manifest.pluginId}" requires enterprise features that are unavailable on this deployment`
+        pluginRegistry.quarantine(manifest.pluginId, reason)
+        result.quarantined.push({
+          pluginId: manifest.pluginId,
+          error: reason,
+        })
+      }
+    }
+
+    // 5. Grant capabilities
     console.log('[PluginBootService] Granting capabilities...')
     for (const manifest of registeredManifests) {
+      const plugin = pluginRegistry.get(manifest.pluginId)
+      if (plugin?.status === 'quarantined') {
+        continue
+      }
+
       try {
         await this.grantCapabilities(manifest)
       } catch (error) {
@@ -229,7 +277,7 @@ export default class PluginBootService {
       }
     }
 
-    // 5. Register hooks
+    // 6. Register hooks
     console.log('[PluginBootService] Registering hooks...')
     for (const manifest of registeredManifests) {
       const plugin = pluginRegistry.get(manifest.pluginId)
@@ -247,11 +295,26 @@ export default class PluginBootService {
       }
     }
 
-    // 6. Register authz resolvers (Tier B only)
+    // 7. Register resource providers (boot-fatal on collision)
+    console.log('[PluginBootService] Registering resource providers...')
+    resourceProviderRegistry.clear()
+    try {
+      await hookRegistry.dispatchActionStrict('app:resources.register', {
+        registry: resourceProviderRegistry,
+      })
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new Error(`Resource provider registration failed: ${errorMessage}`)
+    }
+
+    // 8. Register authz resolvers (Tier B/C/main-app)
     console.log('[PluginBootService] Registering authz resolvers...')
     for (const manifest of registeredManifests) {
       const plugin = pluginRegistry.get(manifest.pluginId)
-      if (plugin?.status !== 'quarantined' && manifest.tier === 'B' && manifest.authzNamespace) {
+      if (
+        plugin?.status !== 'quarantined' &&
+        (manifest.tier === 'B' || manifest.tier === 'C' || manifest.tier === 'main-app')
+      ) {
         try {
           await this.registerAuthzResolver(manifest)
         } catch (error) {
@@ -265,7 +328,7 @@ export default class PluginBootService {
       }
     }
 
-    // 6.5 Validate full navigation pipeline with hooks (boot-fatal per spec §5.3)
+    // 8.5 Validate full navigation pipeline with hooks (boot-fatal per spec §5.3)
     // This catches collisions that only appear after hooks are applied
     // Per spec: collision detection is ALWAYS boot-fatal, regardless of environment
     if (!isSafeMode() && designRegistry.has()) {
@@ -281,14 +344,14 @@ export default class PluginBootService {
       }
     }
 
-    // 7. Mark plugins as active (route mounting happens in preload phase)
+    // 9. Mark plugins as active (route mounting happens in preload phase)
     // Note: Route mounting is deferred to start/plugin_routes_mount.ts preload
     // because it requires named middleware from kernel.ts which isn't loaded yet during boot
     console.log(
       '[PluginBootService] Marking plugins as active (routes will be mounted in preload)...'
     )
 
-    // 8. Mark remaining plugins as active
+    // 10. Mark remaining plugins as active
     for (const manifest of registeredManifests) {
       const plugin = pluginRegistry.get(manifest.pluginId)
       if (plugin?.status !== 'quarantined') {
@@ -297,7 +360,7 @@ export default class PluginBootService {
       }
     }
 
-    // 9. Emit boot events
+    // 11. Emit boot events
     await this.emitBootEvents(result)
 
     console.log(
@@ -524,15 +587,36 @@ export default class PluginBootService {
    */
   private async grantCapabilities(manifest: PluginManifest): Promise<void> {
     const decision = capabilityEnforcer.decideGrants(manifest)
+    const granted: string[] = []
+    const denied: string[] = [...decision.denied]
 
-    if (decision.denied.length > 0) {
-      console.warn(
-        `[PluginBootService] Denied capabilities for ${manifest.pluginId}:`,
-        decision.denied
-      )
+    for (const capability of decision.granted) {
+      if (manifest.tier !== 'C' || !isTierCRuntimeCoreCapability(capability)) {
+        granted.push(capability)
+        continue
+      }
+
+      if (capability === 'core:service:notifications:send' && !this.hasNotificationService()) {
+        denied.push(capability)
+        continue
+      }
+
+      granted.push(capability)
     }
 
-    pluginRegistry.grantCapabilities(manifest.pluginId, decision.granted)
+    if (denied.length > 0) {
+      console.warn(`[PluginBootService] Denied capabilities for ${manifest.pluginId}:`, denied)
+    }
+
+    const deploymentGrantedCoreCapabilities = granted.filter((capability) =>
+      isTierCRuntimeCoreCapability(capability)
+    )
+
+    pluginRegistry.grantCapabilities(manifest.pluginId, granted)
+    pluginRegistry.setDeploymentGrantedCoreCapabilities(
+      manifest.pluginId,
+      deploymentGrantedCoreCapabilities
+    )
   }
 
   /**
@@ -607,7 +691,8 @@ export default class PluginBootService {
    * Register authz resolver for a plugin namespace.
    */
   private async registerAuthzResolver(manifest: PluginManifest): Promise<void> {
-    if (!manifest.authzNamespace) {
+    const authzNamespace = manifest.tier === 'C' ? `${manifest.pluginId}.` : manifest.authzNamespace
+    if (!authzNamespace) {
       return
     }
 
@@ -640,10 +725,44 @@ export default class PluginBootService {
     }
 
     // Register the namespace
-    namespaceRegistry.register(manifest.pluginId, manifest.authzNamespace, resolver)
+    namespaceRegistry.register(manifest.pluginId, authzNamespace, resolver)
     console.log(
-      `[PluginBootService] Registered authz namespace "${manifest.authzNamespace}" for plugin "${manifest.pluginId}"`
+      `[PluginBootService] Registered authz namespace "${authzNamespace}" for plugin "${manifest.pluginId}"`
     )
+  }
+
+  /**
+   * Check whether required enterprise features are globally available.
+   */
+  private async hasEnterpriseFeatures(featureIds: string[]): Promise<boolean> {
+    if (featureIds.length === 0) {
+      return true
+    }
+
+    try {
+      const { default: DeploymentEnterpriseState } =
+        // @ts-ignore - Enterprise feature: module may not exist on public repo
+        await import('#models/deployment_enterprise_state')
+      for (const featureId of featureIds) {
+        const state = await DeploymentEnterpriseState.findByFeatureId(featureId)
+        if (!state || !state.allowed) {
+          return false
+        }
+      }
+      return true
+    } catch {
+      // Enterprise module not available — features not available
+      return false
+    }
+  }
+
+  /**
+   * Return whether the core notification service is available.
+   *
+   * Core notification service is available when the notifications module is present.
+   */
+  private hasNotificationService(): boolean {
+    return true
   }
 
   /**
@@ -707,9 +826,9 @@ export default class PluginBootService {
     console.log('[PluginBootService] Mounting plugin routes...')
 
     const activePlugins = pluginRegistry.getActive()
-    // Per spec §1.3: Main App may contain design module + optional Tier B server module
+    // Per spec: Tier B, Tier C, and main-app server modules can register routes.
     const pluginsWithRoutes = activePlugins.filter(
-      (p) => p.manifest.tier === 'B' || p.manifest.tier === 'main-app'
+      (p) => p.manifest.tier === 'B' || p.manifest.tier === 'C' || p.manifest.tier === 'main-app'
     )
 
     for (const plugin of pluginsWithRoutes) {

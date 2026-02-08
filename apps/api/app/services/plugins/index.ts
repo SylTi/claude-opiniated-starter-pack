@@ -19,3 +19,16 @@ export {
   getAllPluginSchemaVersions,
   updatePluginMigrationInfo,
 } from './schema_version_helper.js'
+export {
+  default as ResourceProviderRegistry,
+  resourceProviderRegistry,
+} from './resource_provider_registry.js'
+export {
+  default as PluginAbilityRegistry,
+  pluginAbilityRegistry,
+} from './plugin_ability_registry.js'
+export {
+  default as PluginPermissionGrantService,
+  pluginPermissionGrantService,
+} from './plugin_permission_grant_service.js'
+export { createCoreFacadeFactory } from './core_facade_factory.js'

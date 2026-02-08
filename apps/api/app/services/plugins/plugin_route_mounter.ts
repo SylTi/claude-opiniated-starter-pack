@@ -11,6 +11,8 @@ import app from '@adonisjs/core/services/app'
 import { serverPluginLoaders } from '@saas/config/plugins/server'
 import { RoutesRegistrar, createRoutesRegistrar } from './routes_registrar.js'
 import { pluginCapabilityService } from './plugin_capability_service.js'
+import { createCoreFacadeFactory } from './core_facade_factory.js'
+import { authzService } from '#services/authz/authz_service'
 import { auditEventEmitter } from '#services/audit_event_emitter'
 import {
   authTokenService,
@@ -25,14 +27,29 @@ import { AUDIT_EVENT_TYPES } from '@saas/shared'
  */
 function createHooksAdapter(pluginId: string) {
   return {
-    registerAction: (hook: string, handler: (...args: unknown[]) => void | Promise<void>) => {
-      hookRegistry.addAction(hook, pluginId, handler)
+    registerAction: (
+      hook: string,
+      handler: (...args: unknown[]) => void | Promise<void>,
+      priority?: number
+    ) => {
+      return hookRegistry.addAction(
+        hook,
+        pluginId,
+        handler,
+        priority !== undefined ? { priority } : undefined
+      )
     },
     registerFilter: (
       hook: string,
-      handler: (value: unknown, ...args: unknown[]) => unknown | Promise<unknown>
+      handler: (value: unknown, ...args: unknown[]) => unknown | Promise<unknown>,
+      priority?: number
     ) => {
-      hookRegistry.addFilter(hook, pluginId, handler as (data: unknown) => unknown)
+      return hookRegistry.addFilter(
+        hook,
+        pluginId,
+        handler as (data: unknown) => unknown,
+        priority !== undefined ? { priority } : undefined
+      )
     },
   }
 }
@@ -253,6 +270,18 @@ export default class PluginRouteMounter {
         const entitlements = createEntitlementsAdapter(pluginId)
         const audit = createAuditAdapter(pluginId)
         const authTokens = createAuthTokensAdapter(pluginId)
+        const pluginState = pluginRegistry.get(pluginId)
+        const deploymentGrantedCoreCapabilities = new Set(
+          pluginState?.deploymentGrantedCoreCapabilities ?? []
+        )
+        const core =
+          manifest.tier === 'C' && deploymentGrantedCoreCapabilities.size > 0
+            ? createCoreFacadeFactory({
+                pluginId,
+                manifest,
+                deploymentGrantedCapabilities: deploymentGrantedCoreCapabilities,
+              })
+            : null
 
         await pluginModule.register({
           routes: registrar,
@@ -260,6 +289,16 @@ export default class PluginRouteMounter {
           entitlements,
           audit,
           authTokens,
+          authz: authzService,
+          db: null,
+          jobs: {
+            register: (_name: string, _handler: (payload: unknown) => Promise<void> | void) => {
+              console.warn(
+                `[PluginRouteMounter] Plugin "${pluginId}" attempted to register a background job, but jobs runtime is not wired yet.`
+              )
+            },
+          },
+          core,
           pluginId,
           manifest,
         })
@@ -291,16 +330,18 @@ export default class PluginRouteMounter {
 
   /**
    * Mount routes for all active plugins that can register routes.
-   * Per spec §1.3: Both Tier B and main-app plugins can have routes.
+   * Per spec §1.3: Tier B, Tier C, and main-app plugins can have routes.
    */
   async mountPluginRoutes(): Promise<RouteMountResult[]> {
     const results: RouteMountResult[] = []
 
-    // Get all active plugins that can have routes (Tier B and main-app)
+    // Get all active plugins that can have routes (Tier B, Tier C, and main-app)
     // Per spec §1.3: Main App may contain design module + optional Tier B server module
     const activePlugins = pluginRegistry
       .getActive()
-      .filter((p) => p.manifest.tier === 'B' || p.manifest.tier === 'main-app')
+      .filter(
+        (p) => p.manifest.tier === 'B' || p.manifest.tier === 'C' || p.manifest.tier === 'main-app'
+      )
 
     for (const plugin of activePlugins) {
       const result = await this.mountPlugin(plugin.manifest)

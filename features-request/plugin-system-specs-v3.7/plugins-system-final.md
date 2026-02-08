@@ -1,6 +1,6 @@
 # Plugin System — Final (Security-first, tenant-mandatory + RLS)
 **Stack:** Next.js (App Router) + AdonisJS + Postgres (Supabase) + pnpm strict monorepo  
-**Goal:** Tier A/B plugin extensibility + Tier C implemented in core with tightly controlled “Enterprise Providers”.
+**Goal:** Tier A/B/C plugin extensibility with strict isolation, plus tightly controlled core-owned Enterprise Providers.
 
 ---
 
@@ -27,14 +27,15 @@ See `rls.md` for the concrete blueprint.
 - No secrets, no DB, no auth/crypto primitives.
 
 ### Tier B — App plugins (moderately privileged, in-process)
-- Provide “full-blown apps” mounted under `/apps/{pluginId}/...`
-- Register API routes under `/apps/{pluginId}/...`
+- Provide “full-blown apps” mounted under UI host route `/apps/{pluginId}/...`
+- Register API routes under `/api/v1/apps/{pluginId}/...`
 - Register background jobs
 - Own plugin tables/migrations (still tenant-scoped)
 
-### Tier C — Enterprise/infra features
-Tier C is **core code** (not plugins).  
-Extensibility happens only via **Type 1 — Enterprise Providers** (contracts implemented by internal packages).
+### Tier C — Platform plugins (privileged, marketplace)
+Tier C plugins are **marketplace-distributable plugins with controlled core service access**.
+They access core capabilities through constrained facades (request-scoped, audited, rate-limited).
+See `tier-c-platform-plugins-spec.md` for the full Tier C contract.
 
 ---
 
@@ -46,7 +47,14 @@ Plugins declare `requestedCapabilities`. Core enforces:
 - namespace scoping for routes/storage
 - audit logging for privileged operations
 
-Denied capabilities must **fail closed** (boot isolation, not app crash).
+Denied capabilities must **fail closed** (boot isolation, not app crash),
+except Tier C `core:*` capabilities, which may degrade to `null` facades
+as defined in `tier-c-platform-plugins-spec.md`.
+
+Tier C `core:*` capabilities can be evaluated in two scopes:
+- deployment scope (boot prerequisites / wiring),
+- request scope (tenant/user/admin entitlements).
+See `tier-c-platform-plugins-spec.md` for the exact split.
 
 ---
 
@@ -55,29 +63,67 @@ Denied capabilities must **fail closed** (boot isolation, not app crash).
 ### 3.1 Contracts (typed)
 ```ts
 // @pkg/hooks (shared concept; different instances in API and Browser)
-export type HookCallback<TArgs extends any[] = any[]> = (...args: TArgs) => void | Promise<void>;
-export type FilterCallback<TArgs extends any[] = any[], TResult = any> =
+export type HookCallback<TArgs extends unknown[] = unknown[]> = (...args: TArgs) => void | Promise<void>;
+export type FilterCallback<TArgs extends unknown[] = unknown[], TResult = unknown> =
   (...args: TArgs) => TResult | Promise<TResult>;
 
-export interface HookRegistry {
-  registerAction<H extends string>(
+// Base hook maps to support declaration merging from plugins.
+// Plugin packages augment these interfaces in their `./types` exports.
+export interface ServerActionHooks {}
+export interface ServerFilterHooks {}
+export interface ClientFilterHooks {}
+
+export interface HookListenerRegistry {
+  registerAction<H extends keyof ServerActionHooks & string>(
     hook: H,
-    cb: HookCallback<any[]>,
+    cb: HookCallback<ServerActionHooks[H] extends unknown[] ? ServerActionHooks[H] : unknown[]>,
+    priority?: number
+  ): () => void;
+  registerAction(
+    hook: string,
+    cb: HookCallback<unknown[]>,
     priority?: number
   ): () => void;
 
-  registerFilter<H extends string>(
+  registerFilter<H extends keyof ServerFilterHooks & string>(
     hook: H,
-    cb: FilterCallback<any[], any>,
+    cb: FilterCallback<ServerFilterHooks[H] extends unknown[] ? ServerFilterHooks[H] : unknown[], unknown>,
     priority?: number
   ): () => void;
+  registerFilter(
+    hook: string,
+    cb: FilterCallback<unknown[], unknown>,
+    priority?: number
+  ): () => void;
+}
 
+// Browser/plugin-client surface
+export interface ClientHookListenerRegistry {
+  registerFilter<H extends keyof ClientFilterHooks & string>(
+    hook: H,
+    cb: FilterCallback<ClientFilterHooks[H] extends unknown[] ? ClientFilterHooks[H] : unknown[], unknown>,
+    priority?: number
+  ): () => void;
+  registerFilter(
+    hook: string,
+    cb: FilterCallback<unknown[], unknown>,
+    priority?: number
+  ): () => void;
+}
+
+// Core-internal only. Not exposed to plugin-facing ServerPluginContext.
+export interface HookRegistryInternal extends HookListenerRegistry {
   dispatchAction(hook: string, ...args: any[]): Promise<void>;
   applyFilters<T>(hook: string, initial: T, ...args: any[]): Promise<T>;
 }
 ```
 
 ### 3.2 Runtime requirements
+- Plugin-facing server context exposes listener registration only (`HookListenerRegistry`).
+- Plugin-facing browser context exposes filter registration via `ClientHookListenerRegistry`.
+- `dispatchAction/applyFilters` are core-internal and must not be exposed on plugin-facing hooks.
+- Tier C plugin-defined hook emission goes through `HooksFacade` (capability + manifest + namespace validation).
+- Browser runtime uses the same typed-hook model, with client filter hooks represented by `ClientFilterHooks`.
 - Deterministic ordering: `(priority asc, registrationOrder asc)`
 - Error isolation: one plugin failure does not break others
 - Optional timeouts for long hooks
@@ -108,7 +154,7 @@ It loads a plugin “app module” from the static loader map and renders plugin
 
 ### 5.2 Adonis: namespaced routes
 Plugins register routes only under:
-- `/apps/{pluginId}/...`
+- `/api/v1/apps/{pluginId}/...`
 
 Plugins do **not** get raw router access; they receive a facade that enforces:
 - namespace prefix
@@ -120,7 +166,9 @@ Plugins do **not** get raw router access; they receive a facade that enforces:
 
 ## 6) Enterprise Providers (Type 1 — tightly controlled contracts)
 
-Tier C stays in core, but integrations are providers.
+Enterprise Providers are core-owned integrations and are distinct from Tier C Platform Plugins.
+Tier C Platform Plugins are marketplace plugins with constrained facade access.
+Enterprise Providers are internal contracts for enterprise infrastructure extensions.
 
 ### 6.1 KeyProvider (wrap/unwrap record DEKs)
 Used by **at-rest encryption** and **encrypted backups**.

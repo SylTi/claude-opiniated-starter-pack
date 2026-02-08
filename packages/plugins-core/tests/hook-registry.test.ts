@@ -60,4 +60,25 @@ describe('HookRegistry', () => {
     expect(registry.getFilterCount('f1')).toBe(1)
     expect(registry.getActionCount('a1')).toBe(0)
   })
+
+  it('returns unregister function for action listeners', async () => {
+    const calls: string[] = []
+    const unregister = registry.addAction('test:action', 'plugin-a', () => {
+      calls.push('a')
+    })
+
+    await registry.doAction('test:action', {})
+    unregister()
+    await registry.doAction('test:action', {})
+
+    expect(calls).toEqual(['a'])
+  })
+
+  it('dispatchActionStrict throws on handler errors', async () => {
+    registry.addAction('boot:strict', 'plugin-a', () => {
+      throw new Error('boom')
+    })
+
+    await expect(registry.dispatchActionStrict('boot:strict', {})).rejects.toThrow('boom')
+  })
 })

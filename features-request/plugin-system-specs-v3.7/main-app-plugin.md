@@ -51,7 +51,7 @@ The "Main App" is a **special package** that may contain:
 
 Security boundary:
 - The **design module is UI-only** and is not subject to Tier B server restrictions.
-- The **server module is Tier B** and MUST follow all Tier B rules (no raw db/router/bouncer/drive).
+- The **server module is Tier B** and MUST follow all Tier B rules (no raw/unscoped core db/router/bouncer/drive; only scoped contracts/clients).
 
 ### 1.4 Integration tokens allowlist (manifest)
 - Main App plugins may declare integration tokens in `plugin.meta.json` under `authTokens`.

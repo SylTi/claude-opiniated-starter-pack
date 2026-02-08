@@ -4,29 +4,7 @@ This document tracks conscious deviations from the plugin system specification t
 
 ---
 
-## 1) Route Prefix: `/api/v1/apps/<pluginId>` vs `/apps/<pluginId>`
-
-**Spec says:** `/apps/{pluginId}/...`
-
-**Implementation uses:** `/api/v1/apps/{pluginId}/...`
-
-### Rationale
-
-Our API follows a consistent versioning pattern where all REST endpoints are prefixed with `/api/v1/`. This allows:
-
-1. **API versioning** - Future breaking changes can be introduced under `/api/v2/` without disrupting existing clients
-2. **Consistency** - All backend routes follow the same pattern (`/api/v1/auth`, `/api/v1/billing`, `/api/v1/apps/...`)
-3. **Reverse proxy clarity** - Easy to route all API traffic to the backend vs static assets to the frontend
-
-### Affected files
-
-- `packages/plugins-core/src/types/manifest.ts` - Route prefix validation expects `/api/v1/apps/{pluginId}`
-- `plugins/*/plugin.meta.json` - All plugin manifests use the versioned prefix
-- `docs/API.md` - Plugin routes documented under `/api/v1/apps/`
-
----
-
-## 2) Tenant ID Type: Integer vs UUID
+## 1) Tenant ID Type: Integer vs UUID
 
 **Spec says:** `tenant_id uuid NOT NULL`
 
@@ -65,7 +43,6 @@ tenant_id = current_setting('app.tenant_id')::integer
 
 | Spec Requirement | Implementation | Reason |
 |-----------------|----------------|--------|
-| `/apps/{pluginId}` | `/api/v1/apps/{pluginId}` | API versioning consistency |
 | `tenant_id uuid` | `tenant_id integer` | Existing schema uses integers |
 
 These deviations are **intentional** and align with our application's architectural decisions. The security and isolation guarantees remain intact.

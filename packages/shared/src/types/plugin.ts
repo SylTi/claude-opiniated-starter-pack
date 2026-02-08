@@ -8,7 +8,7 @@
 /**
  * Plugin tier levels.
  */
-export type PluginTier = 'A' | 'B'
+export type PluginTier = 'A' | 'B' | 'C' | 'main-app'
 
 /**
  * Plugin status in the system.

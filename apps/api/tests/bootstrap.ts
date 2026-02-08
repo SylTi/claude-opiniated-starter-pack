@@ -94,6 +94,9 @@ export async function truncateAllTables(): Promise<void> {
   // Enterprise-only tables (may not exist on public repo)
   const enterpriseTables = ['sso_states', 'sso_user_identities', 'tenant_sso_configs']
 
+  // Plugin tables (may have data from plugin tests)
+  const pluginTables = ['plugin_permission_grants', 'plugin_states', 'plugin_db_state']
+
   // Core tables (always exist)
   const coreTables = [
     'discount_code_usages',
@@ -122,6 +125,15 @@ export async function truncateAllTables(): Promise<void> {
       await adminDb.rawQuery(`TRUNCATE TABLE "${table}" RESTART IDENTITY CASCADE`)
     } catch {
       // Table doesn't exist on public repo - skip silently
+    }
+  }
+
+  // Truncate plugin tables (silently skip if not exist)
+  for (const table of pluginTables) {
+    try {
+      await adminDb.rawQuery(`TRUNCATE TABLE "${table}" RESTART IDENTITY CASCADE`)
+    } catch {
+      // Table doesn't exist - skip silently
     }
   }
 

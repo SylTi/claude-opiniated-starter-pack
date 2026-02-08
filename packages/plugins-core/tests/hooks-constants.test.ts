@@ -6,6 +6,7 @@ describe('ACTION_HOOKS constants', () => {
     expect(ACTION_HOOKS['app:boot']).toBe('app:boot')
     expect(ACTION_HOOKS['app:ready']).toBe('app:ready')
     expect(ACTION_HOOKS['app:shutdown']).toBe('app:shutdown')
+    expect(ACTION_HOOKS['app:resources.register']).toBe('app:resources.register')
   })
 
   it('has all auth hooks from spec', () => {
@@ -53,8 +54,8 @@ describe('ACTION_HOOKS constants', () => {
 
   it('contains expected total count of hooks', () => {
     const keys = Object.keys(ACTION_HOOKS)
-    // 3 lifecycle + 5 auth + 7 team + 6 billing + 1 audit = 22
-    expect(keys.length).toBe(22)
+    // 4 lifecycle + 5 auth + 7 team + 6 billing + 1 audit = 23
+    expect(keys.length).toBe(23)
   })
 })
 

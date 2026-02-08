@@ -129,6 +129,17 @@ export class PluginRegistry {
   }
 
   /**
+   * Set Tier C deployment-granted runtime core capabilities.
+   */
+  setDeploymentGrantedCoreCapabilities(pluginId: string, capabilities: string[]): boolean {
+    const state = this.plugins.get(pluginId)
+    if (!state) return false
+
+    state.deploymentGrantedCoreCapabilities = capabilities
+    return true
+  }
+
+  /**
    * Check if a plugin has a specific capability.
    */
   hasCapability(pluginId: string, capability: string): boolean {
@@ -162,7 +173,7 @@ export class PluginRegistry {
   /**
    * Get plugins by tier.
    */
-  getByTier(tier: 'A' | 'B'): PluginRuntimeState[] {
+  getByTier(tier: 'A' | 'B' | 'C' | 'main-app'): PluginRuntimeState[] {
     return this.getAll().filter((p) => p.manifest.tier === tier)
   }
 
@@ -216,6 +227,8 @@ export class PluginRegistry {
     pending: number
     tierA: number
     tierB: number
+    tierC: number
+    mainApp: number
   } {
     const all = this.getAll()
     return {
@@ -225,6 +238,8 @@ export class PluginRegistry {
       pending: all.filter((p) => p.status === 'pending').length,
       tierA: all.filter((p) => p.manifest.tier === 'A').length,
       tierB: all.filter((p) => p.manifest.tier === 'B').length,
+      tierC: all.filter((p) => p.manifest.tier === 'C').length,
+      mainApp: all.filter((p) => p.manifest.tier === 'main-app').length,
     }
   }
 }

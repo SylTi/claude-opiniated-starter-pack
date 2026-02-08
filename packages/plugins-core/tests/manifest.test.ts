@@ -66,6 +66,14 @@ describe('validatePluginManifest', () => {
       expect(result.valid).toBe(true)
     })
 
+    it('accepts tier C', () => {
+      const manifest = createBaseManifest({ tier: 'C' })
+
+      const result = validatePluginManifest(manifest)
+
+      expect(result.valid).toBe(true)
+    })
+
     it('accepts tier main-app', () => {
       const manifest = createBaseManifest({
         tier: 'main-app',
@@ -80,7 +88,7 @@ describe('validatePluginManifest', () => {
     })
 
     it('rejects invalid tier', () => {
-      const manifest = createBaseManifest({ tier: 'C' as 'A' })
+      const manifest = createBaseManifest({ tier: 'D' as 'A' })
 
       const result = validatePluginManifest(manifest)
 
@@ -432,6 +440,79 @@ describe('validatePluginManifest', () => {
 
       expect(result.valid).toBe(false)
       expect(result.errors.some(e => e.includes('app:authz'))).toBe(true)
+    })
+  })
+
+  describe('tier C validation', () => {
+    it('rejects authzNamespace because it is derived', () => {
+      const manifest = createBaseManifest({
+        tier: 'C',
+        authzNamespace: 'collab.',
+      })
+
+      const result = validatePluginManifest(manifest)
+
+      expect(result.valid).toBe(false)
+      expect(result.errors.some(e => e.includes('cannot set authzNamespace'))).toBe(true)
+    })
+
+    it('requires core:hooks:define when definedHooks are present', () => {
+      const manifest = createBaseManifest({
+        tier: 'C',
+        definedHooks: ['collab:comment.created'],
+        requestedCapabilities: [],
+      })
+
+      const result = validatePluginManifest(manifest)
+
+      expect(result.valid).toBe(false)
+      expect(result.errors.some(e => e.includes('core:hooks:define'))).toBe(true)
+    })
+
+    it('validates definedHooks namespace prefix', () => {
+      const manifest = createBaseManifest({
+        tier: 'C',
+        definedHooks: ['other:comment.created'],
+        requestedCapabilities: [{ capability: 'core:hooks:define', reason: 'Dispatch own hooks' }],
+      })
+
+      const result = validatePluginManifest(manifest)
+
+      expect(result.valid).toBe(false)
+      expect(result.errors.some(e => e.includes('must be prefixed with "test-plugin:"'))).toBe(true)
+    })
+
+    it('rejects requiredEnterpriseFeatures when requiresEnterprise is not true', () => {
+      const manifest = createBaseManifest({
+        tier: 'C',
+        requiredEnterpriseFeatures: ['audit_export_sinks'],
+      })
+
+      const result = validatePluginManifest(manifest)
+
+      expect(result.valid).toBe(false)
+      expect(result.errors.some(e => e.includes('requiredEnterpriseFeatures can only'))).toBe(true)
+    })
+
+    it('accepts valid Tier C manifest', () => {
+      const manifest = createBaseManifest({
+        pluginId: 'collab',
+        tier: 'C',
+        requiresEnterprise: true,
+        requiredEnterpriseFeatures: ['audit_export_sinks'],
+        definedHooks: ['collab:comment.created'],
+        definedFilters: ['collab:comment.render'],
+        requestedCapabilities: [
+          { capability: 'app:routes', reason: 'Expose API routes' },
+          { capability: 'core:hooks:define', reason: 'Dispatch collab hooks' },
+          { capability: 'core:service:users:read', reason: 'Resolve mentions' },
+        ],
+      })
+
+      const result = validatePluginManifest(manifest)
+
+      expect(result.valid).toBe(true)
+      expect(result.errors).toHaveLength(0)
     })
   })
 

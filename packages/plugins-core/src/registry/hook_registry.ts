@@ -33,7 +33,7 @@ export class HookRegistry {
     pluginId: string,
     callback: FilterCallback<T>,
     options?: HookRegistrationOptions
-  ): void {
+  ): () => void {
     const priority = options?.priority ?? HOOK_PRIORITY.NORMAL
     const handler: HookHandler<unknown> = {
       pluginId,
@@ -46,6 +46,10 @@ export class HookRegistry {
     handlers.push(handler)
     this.sortHandlers(handlers)
     this.filters.set(hookName, handlers)
+
+    return () => {
+      this.removeFilter(hookName, pluginId)
+    }
   }
 
   /**
@@ -57,7 +61,7 @@ export class HookRegistry {
     pluginId: string,
     callback: ActionCallback<T>,
     options?: HookRegistrationOptions
-  ): void {
+  ): () => void {
     const priority = options?.priority ?? HOOK_PRIORITY.NORMAL
     const handler: HookHandler<unknown> = {
       pluginId,
@@ -70,6 +74,48 @@ export class HookRegistry {
     handlers.push(handler)
     this.sortHandlers(handlers)
     this.actions.set(hookName, handlers)
+
+    return () => {
+      this.removeAction(hookName, pluginId)
+    }
+  }
+
+  /**
+   * Listener-only registration API for core-owned listeners.
+   * Plugin listeners should use plugin-specific adapters that stamp pluginId.
+   */
+  registerAction(
+    hookName: string,
+    callback: (...args: unknown[]) => void | Promise<void>,
+    priority?: number
+  ): () => void {
+    return this.addAction(
+      hookName,
+      '__core__',
+      (data) => callback(data),
+      {
+        priority,
+      }
+    )
+  }
+
+  /**
+   * Listener-only registration API for core-owned listeners.
+   * Plugin listeners should use plugin-specific adapters that stamp pluginId.
+   */
+  registerFilter(
+    hookName: string,
+    callback: (...args: unknown[]) => unknown | Promise<unknown>,
+    priority?: number
+  ): () => void {
+    return this.addFilter(
+      hookName,
+      '__core__',
+      (data) => callback(data),
+      {
+        priority,
+      }
+    )
   }
 
   /**
@@ -137,16 +183,13 @@ export class HookRegistry {
    * Runs all registered filter callbacks in priority order.
    * If a filter throws, the error is logged and the next filter is called.
    */
-  async applyFilters<T>(
-    hookName: string,
-    value: T,
-    context?: Record<string, unknown>
-  ): Promise<T> {
+  async applyFilters<T>(hookName: string, value: T, ...args: unknown[]): Promise<T> {
     const handlers = this.filters.get(hookName)
     if (!handlers || handlers.length === 0) {
       return value
     }
 
+    const context = args[0] as Record<string, unknown> | undefined
     let result = value
     for (const handler of handlers) {
       try {
@@ -187,6 +230,35 @@ export class HookRegistry {
         )
       }
     }
+  }
+
+  /**
+   * Execute actions without error isolation.
+   * Used for boot-time structural checks that must fail hard on handler errors.
+   */
+  async dispatchActionStrict<T>(
+    hookName: string,
+    data: T,
+    context?: Record<string, unknown>
+  ): Promise<void> {
+    const handlers = this.actions.get(hookName)
+    if (!handlers || handlers.length === 0) {
+      return
+    }
+
+    for (const handler of handlers) {
+      const callback = handler.callback as ActionCallback<T>
+      await callback(data, context)
+    }
+  }
+
+  /**
+   * Dispatch an action hook.
+   * Alias of doAction with variadic arguments for typed facade contracts.
+   */
+  async dispatchAction(hookName: string, ...args: unknown[]): Promise<void> {
+    const data = args.length <= 1 ? args[0] : args
+    await this.doAction(hookName, data)
   }
 
   /**

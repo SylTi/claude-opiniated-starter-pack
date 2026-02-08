@@ -66,6 +66,71 @@ export interface HookRegistration {
 }
 
 /**
+ * Type maps that plugins can augment for strongly-typed hooks.
+ */
+export interface ServerActionHooks {}
+export interface ServerFilterHooks {}
+export interface ClientFilterHooks {}
+
+/**
+ * Plugin-facing hook contract: listener registration only.
+ * Dispatch methods are intentionally excluded from this surface.
+ */
+export interface HookListenerRegistry {
+  registerAction<H extends keyof ServerActionHooks & string>(
+    hook: H,
+    cb: (
+      ...args: ServerActionHooks[H] extends unknown[] ? ServerActionHooks[H] : unknown[]
+    ) => void | Promise<void>,
+    priority?: number
+  ): () => void
+  registerAction(
+    hook: string,
+    cb: (...args: unknown[]) => void | Promise<void>,
+    priority?: number
+  ): () => void
+
+  registerFilter<H extends keyof ServerFilterHooks & string>(
+    hook: H,
+    cb: (
+      ...args: ServerFilterHooks[H] extends unknown[] ? ServerFilterHooks[H] : unknown[]
+    ) => unknown | Promise<unknown>,
+    priority?: number
+  ): () => void
+  registerFilter(
+    hook: string,
+    cb: (...args: unknown[]) => unknown | Promise<unknown>,
+    priority?: number
+  ): () => void
+}
+
+/**
+ * Browser-side listener registration contract (filters only).
+ */
+export interface ClientHookListenerRegistry {
+  registerFilter<H extends keyof ClientFilterHooks & string>(
+    hook: H,
+    cb: (
+      ...args: ClientFilterHooks[H] extends unknown[] ? ClientFilterHooks[H] : unknown[]
+    ) => unknown | Promise<unknown>,
+    priority?: number
+  ): () => void
+  registerFilter(
+    hook: string,
+    cb: (...args: unknown[]) => unknown | Promise<unknown>,
+    priority?: number
+  ): () => void
+}
+
+/**
+ * Core-internal hook contract with dispatch APIs.
+ */
+export interface HookRegistryInternal extends HookListenerRegistry {
+  dispatchAction(hookName: string, ...args: unknown[]): Promise<void>
+  applyFilters<T>(hookName: string, initial: T, ...args: unknown[]): Promise<T>
+}
+
+/**
  * Built-in filter hooks.
  */
 export const FILTER_HOOKS = {
@@ -105,6 +170,7 @@ export const ACTION_HOOKS = {
   'app:boot': 'app:boot',
   'app:ready': 'app:ready',
   'app:shutdown': 'app:shutdown',
+  'app:resources.register': 'app:resources.register',
 
   // Auth (spec: section 2.2)
   'auth:registered': 'auth:registered',

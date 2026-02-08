@@ -2,7 +2,7 @@
 **Security-first invariants for plugin authors and core reviewers**
 
 This document is the **non-negotiable rulebook** for:
-- Tier A/B plugins (UI + App plugins)
+- Tier A/B/C plugins (UI + App + Platform plugins)
 - Type 1 Enterprise Providers (tightly controlled provider modules)
 
 If a plugin violates any **MUST** rule below, it is a **merge blocker**.
@@ -21,6 +21,7 @@ Design intent: a plugin must not be able to **accidentally** (or casually) bypas
 - **RLS context**: `SET LOCAL app.tenant_id` and `SET LOCAL app.user_id` are set inside the request transaction.
 - **Tier A**: UI-only (filters/slots). No server routes, no DB schema.
 - **Tier B**: App plugin (namespaced UI + namespaced API routes + optional DB tables).
+- **Tier C**: Platform plugin (marketplace, privileged). Core service access only through constrained facades.
 - **Type 1 Enterprise Provider**: a core-owned contract implementation (SSO provider, audit sink, key provider, etc.).
 
 ---
@@ -36,14 +37,19 @@ Design intent: a plugin must not be able to **accidentally** (or casually) bypas
 - A plugin **MUST** declare `requestedCapabilities` in `plugin.meta.json`.
 - A plugin **MUST NOT** perform privileged actions unless core grants the capability.
 - If a capability is missing/denied, plugin boot **MUST fail closed** (plugin disabled) without crashing the app.
+  - **Tier C exception (core capabilities only):** denied `core:*` capabilities may degrade to `null` facades so the plugin boots with reduced functionality.
+  - Non-`core:*` capabilities (`app:*`, enterprise provider capabilities) remain strict fail-closed.
 
 ### 1.3 No open context / no raw core bypass
-- Server plugins **MUST NOT** receive raw `db`, raw `router`, raw `bouncer`, raw `drive` objects.
+- Server plugins **MUST NOT** receive raw/unscoped core `db`, `router`, `bouncer`, `drive` objects.
+- A tenant-scoped DB client for plugin-owned tables is allowed; direct core-table access is forbidden.
 - Plugins **MUST** use core facades/registrars that enforce:
   - capability checks
   - namespace scoping
   - tenant scoping
   - audit logging where appropriate
+- Tier C plugins **MUST** access core data/services only through request-scoped facades created from `CoreFacadeFactory.forRequest(ctx)`.
+- Tier C plugin-facing hooks in server context are listener-only; hook dispatch must go through the sanctioned Tier C hook facade path.
 
 ### 1.4 Determinism & failure isolation
 - Hook execution order **MUST** be deterministic: `(priority asc, registrationOrder asc)`.
@@ -114,8 +120,10 @@ Design intent: a plugin must not be able to **accidentally** (or casually) bypas
 - Each plugin that augments hook types **MUST** export a `./types` entry.
 - `@pkg/config/plugins.types.d.ts` **MUST** import all plugin `./types` exports.
 - Both apps **MUST** import `@pkg/config/plugins.types` (once) so TypeScript sees augmentations.
+- If a plugin listens to hooks from a package it does not directly depend on (cross-repo optional integration),
+  it may register by string hook name and perform local runtime payload validation.
 
-**Rule:** if hook names degrade to `never`, the build must fail in CI.
+**Rule:** if hook names degrade to `never` for directly installed/typed hook packages, the build must fail in CI.
 
 ---
 
@@ -181,7 +189,7 @@ If any are missing: **security defect**.
 ## 7) Mandatory invariants for any tenant-scoped plugin table
 
 > **Implementation Note:** Our schema uses `integer` IDs instead of `uuid`.
-> See `implementation-deviations.md` for rationale. Replace `::uuid` with `::integer` in all examples below.
+> See `implementation-deviations.md` for rationale.
 
 For a table named `T`:
 
@@ -194,7 +202,7 @@ For a table named `T`:
 
 ### 7.2 Recommended default
 To reduce “developer forgot to set tenant_id” bugs:
-- `tenant_id DEFAULT current_setting('app.tenant_id')::uuid`
+- `tenant_id DEFAULT current_setting('app.tenant_id')::integer`
 
 This default is only safe if all request queries run inside the request transaction where core has already set `SET LOCAL app.tenant_id`.
 
@@ -210,10 +218,10 @@ At minimum:
 - DELETE policy
 
 Each policy must include the tenant predicate:
-- `tenant_id = current_setting('app.tenant_id')::uuid`
+- `tenant_id = current_setting('app.tenant_id')::integer`
 
 If your app requires membership checks, policies should also include:
-- `app.is_tenant_member(current_setting('app.user_id')::uuid, tenant_id)`
+- `app.is_tenant_member(current_setting('app.user_id')::integer, tenant_id)`
 
 ---
 
@@ -268,7 +276,7 @@ begin
     create policy tenant_select on %1$s
     for select
     using (
-      tenant_id = current_setting('app.tenant_id')::uuid
+      tenant_id = current_setting('app.tenant_id')::integer
     )
   $f$, _tbl);
 
@@ -276,7 +284,7 @@ begin
     create policy tenant_insert on %1$s
     for insert
     with check (
-      tenant_id = current_setting('app.tenant_id')::uuid
+      tenant_id = current_setting('app.tenant_id')::integer
     )
   $f$, _tbl);
 
@@ -284,10 +292,10 @@ begin
     create policy tenant_update on %1$s
     for update
     using (
-      tenant_id = current_setting('app.tenant_id')::uuid
+      tenant_id = current_setting('app.tenant_id')::integer
     )
     with check (
-      tenant_id = current_setting('app.tenant_id')::uuid
+      tenant_id = current_setting('app.tenant_id')::integer
     )
   $f$, _tbl);
 
@@ -295,7 +303,7 @@ begin
     create policy tenant_delete on %1$s
     for delete
     using (
-      tenant_id = current_setting('app.tenant_id')::uuid
+      tenant_id = current_setting('app.tenant_id')::integer
     )
   $f$, _tbl);
 end;
@@ -387,10 +395,10 @@ export default class PluginReviewsItems extends BaseSchema {
 
   async up () {
     this.schema.createTable(this.tableName, (table) => {
-      table.uuid('id').primary()
-      table.uuid('tenant_id')
+      table.increments('id').primary()
+      table.integer('tenant_id')
         .notNullable()
-        .defaultTo(this.schema.raw("current_setting('app.tenant_id')::uuid"))
+        .defaultTo(this.schema.raw("current_setting('app.tenant_id')::integer"))
         .references('id')
         .inTable('tenants')
         .onDelete('RESTRICT')
@@ -462,7 +470,7 @@ where not exists (
 
 ### 12.2 If the plugin adds DB tables
 - [ ] Table names are prefixed `plugin_<pluginId>_*`.
-- [ ] All plugin tables have `tenant_id uuid not null`.
+- [ ] All plugin tables have `tenant_id integer not null`.
 - [ ] FK to `tenants(id)`.
 - [ ] Index begins with `tenant_id`.
 - [ ] RLS enabled + forced.

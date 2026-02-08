@@ -19,6 +19,14 @@
  * - app:jobs - Register background jobs
  * - app:authz - Register authorization resolver for plugin namespace
  *
+ * Tier C (Platform plugins):
+ * - core:service:users:read - Read user data through core facade
+ * - core:service:resources:read - Resolve resources through core facade
+ * - core:service:permissions:manage - Register/check/grant/revoke plugin abilities
+ * - core:service:notifications:send - Send notifications through core facade
+ * - core:hooks:define - Dispatch plugin-defined hooks through core facade
+ * - core:entity:fk:users - Allow FK references to users table in plugin migrations
+ *
  * Main-app tier (Design ownership):
  * - ui:design:global - Own global theme tokens and shell components
  * - ui:nav:baseline - Provide baseline navigation model
@@ -37,6 +45,14 @@ export const PLUGIN_CAPABILITIES = {
   'app:db:write': 'app:db:write',
   'app:jobs': 'app:jobs',
   'app:authz': 'app:authz',
+
+  // Tier C - Platform capabilities
+  'core:service:users:read': 'core:service:users:read',
+  'core:service:resources:read': 'core:service:resources:read',
+  'core:service:permissions:manage': 'core:service:permissions:manage',
+  'core:service:notifications:send': 'core:service:notifications:send',
+  'core:hooks:define': 'core:hooks:define',
+  'core:entity:fk:users': 'core:entity:fk:users',
 
   // Main-app tier - Design capabilities
   'ui:design:global': 'ui:design:global',
@@ -78,6 +94,18 @@ export const TIER_B_CAPABILITIES: PluginCapability[] = [
 ]
 
 /**
+ * Tier C capabilities (platform/core integrations).
+ */
+export const TIER_C_CAPABILITIES: PluginCapability[] = [
+  PLUGIN_CAPABILITIES['core:service:users:read'],
+  PLUGIN_CAPABILITIES['core:service:resources:read'],
+  PLUGIN_CAPABILITIES['core:service:permissions:manage'],
+  PLUGIN_CAPABILITIES['core:service:notifications:send'],
+  PLUGIN_CAPABILITIES['core:hooks:define'],
+  PLUGIN_CAPABILITIES['core:entity:fk:users'],
+]
+
+/**
  * Main-app tier capabilities (design ownership).
  */
 export const MAIN_APP_CAPABILITIES: PluginCapability[] = [
@@ -93,7 +121,7 @@ export const MAIN_APP_CAPABILITIES: PluginCapability[] = [
  * @param pluginId - Plugin ID (optional, used for validating plugin-specific capabilities)
  */
 export function validateCapabilitiesForTier(
-  tier: 'A' | 'B' | 'main-app',
+  tier: 'A' | 'B' | 'C' | 'main-app',
   capabilities: PluginCapability[],
   pluginId?: string
 ): { valid: boolean; invalidCapabilities: PluginCapability[] } {
@@ -105,6 +133,9 @@ export function validateCapabilitiesForTier(
       break
     case 'B':
       allowedCapabilities = [...TIER_A_CAPABILITIES, ...TIER_B_CAPABILITIES]
+      break
+    case 'C':
+      allowedCapabilities = [...TIER_A_CAPABILITIES, ...TIER_B_CAPABILITIES, ...TIER_C_CAPABILITIES]
       break
     case 'main-app':
       // Main-app can use Tier A, Tier B, and design capabilities
@@ -119,9 +150,9 @@ export function validateCapabilitiesForTier(
       return false
     }
 
-    // For Tier B and main-app, allow plugin-specific capabilities
-    // These are custom capabilities that start with the plugin's namespace (e.g., "notarium.core")
-    if ((tier === 'B' || tier === 'main-app') && pluginId) {
+    // For Tier B, C and main-app, allow plugin-specific capabilities
+    // These are custom capabilities that start with the plugin's namespace (e.g., "myapp.core")
+    if ((tier === 'B' || tier === 'C' || tier === 'main-app') && pluginId) {
       const pluginPrefix = `${pluginId}.`
       if (cap.startsWith(pluginPrefix)) {
         return false // Valid plugin-specific capability

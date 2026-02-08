@@ -79,9 +79,10 @@ export interface PluginAuthTokensConfig {
  * Plugin tiers define access levels:
  * - A: UI plugins (unprivileged) - filters/slots only, no server routes, no DB
  * - B: App plugins (moderately privileged) - routes, own tables, background jobs
+ * - C: Platform plugins (privileged) - controlled core service facades + Tier B features
  * - main-app: Design ownership (exactly one allowed) - global theme, baseline nav, shells
  */
-export type PluginTier = 'A' | 'B' | 'main-app'
+export type PluginTier = 'A' | 'B' | 'C' | 'main-app'
 
 /**
  * Plugin migration configuration.
@@ -134,6 +135,12 @@ export interface PluginManifest {
   /** Hook registrations (optional) */
   hooks?: HookRegistration[]
 
+  /** Tier C: action hooks this plugin is allowed to dispatch */
+  definedHooks?: string[]
+
+  /** Tier C: filter hooks this plugin is allowed to dispatch */
+  definedFilters?: string[]
+
   /**
    * Route prefix for Tier B plugins.
    *
@@ -166,6 +173,12 @@ export interface PluginManifest {
   /** Authorization namespace (Tier B only, e.g., 'notes.') */
   authzNamespace?: string
 
+  /** Tier C: deployment requires enterprise core support */
+  requiresEnterprise?: boolean
+
+  /** Tier C: enterprise features required by this plugin */
+  requiredEnterpriseFeatures?: string[]
+
   /** Minimum required app version (semver) */
   minAppVersion?: string
 
@@ -184,6 +197,75 @@ export interface PluginManifest {
    * allowed token kinds and scopes based on this configuration.
    */
   authTokens?: PluginAuthTokensConfig
+}
+
+const HOOK_NAMESPACE_PATTERN = /^[a-z0-9-]+:[a-z0-9]+(?:[._-][a-z0-9]+)*$/i
+
+function validateRoutePrefix(pluginId: string, routePrefix: string, errors: string[]): void {
+  const expectedPrefix = `/api/v1/apps/${pluginId}`
+  const isExactMatch = routePrefix === expectedPrefix
+  const isSubPath = routePrefix.startsWith(expectedPrefix + '/')
+  if (!isExactMatch && !isSubPath) {
+    errors.push(
+      `routePrefix must be exactly "${expectedPrefix}" or start with "${expectedPrefix}/" ` +
+        `(got "${routePrefix}"). Plugins cannot mount routes outside their namespace.`
+    )
+  }
+}
+
+function validatePluginTables(
+  pluginId: string,
+  tables: PluginTableDeclaration[] | undefined,
+  errors: string[],
+  globalTables?: string[]
+): void {
+  if (!tables) return
+
+  for (const table of tables) {
+    if (!table.name.startsWith(`plugin_${pluginId}_`)) {
+      errors.push(`Table "${table.name}" must be prefixed with "plugin_${pluginId}_"`)
+    }
+    if (table.hasTenantId !== true && !globalTables?.includes(table.name)) {
+      errors.push(`Table "${table.name}" must declare hasTenantId: true`)
+    }
+  }
+}
+
+function validateMigrations(migrations: PluginMigrationConfig | undefined, errors: string[]): void {
+  if (!migrations) return
+
+  if (typeof migrations.schemaVersion !== 'number' || migrations.schemaVersion < 0) {
+    errors.push('migrations.schemaVersion must be a non-negative integer')
+  }
+  if (!migrations.dir || typeof migrations.dir !== 'string') {
+    errors.push('migrations.dir is required when migrations is specified')
+  }
+}
+
+function validateDefinedHookNames(
+  pluginId: string,
+  hookNames: string[] | undefined,
+  fieldName: 'definedHooks' | 'definedFilters',
+  errors: string[]
+): void {
+  if (!hookNames) return
+
+  for (const hookName of hookNames) {
+    if (typeof hookName !== 'string' || hookName.length === 0) {
+      errors.push(`${fieldName} must contain only non-empty strings`)
+      continue
+    }
+
+    if (!hookName.startsWith(`${pluginId}:`)) {
+      errors.push(`${fieldName} hook "${hookName}" must be prefixed with "${pluginId}:"`)
+    }
+
+    if (!HOOK_NAMESPACE_PATTERN.test(hookName)) {
+      errors.push(
+        `${fieldName} hook "${hookName}" is invalid. Expected format "{pluginId}:{event.name}"`
+      )
+    }
+  }
 }
 
 /**
@@ -208,8 +290,8 @@ export function validatePluginManifest(manifest: PluginManifest): {
     errors.push('version is required and must be a string')
   }
 
-  if (!manifest.tier || !['A', 'B', 'main-app'].includes(manifest.tier)) {
-    errors.push('tier must be "A", "B", or "main-app"')
+  if (!manifest.tier || !['A', 'B', 'C', 'main-app'].includes(manifest.tier)) {
+    errors.push('tier must be "A", "B", "C", or "main-app"')
   }
 
   if (!Array.isArray(manifest.requestedCapabilities)) {
@@ -294,44 +376,37 @@ export function validatePluginManifest(manifest: PluginManifest): {
     }
   }
 
-  // Tier B specific validations
-  if (manifest.tier === 'B') {
-    // Route prefix validation - must match expected pattern or be omitted
-    // Strict check: must be exactly the expected prefix OR start with expectedPrefix + "/"
-    // This prevents a plugin from claiming "/api/v1/apps/{pluginId}-other" and shadowing another plugin
-    if (manifest.routePrefix) {
-      const expectedPrefix = `/api/v1/apps/${manifest.pluginId}`
-      const isExactMatch = manifest.routePrefix === expectedPrefix
-      const isSubPath = manifest.routePrefix.startsWith(expectedPrefix + '/')
-      if (!isExactMatch && !isSubPath) {
+  if (Array.isArray(manifest.requestedCapabilities)) {
+    const requestedCapabilityIds = manifest.requestedCapabilities.map((cap) => cap.capability)
+
+    for (const capabilityId of requestedCapabilityIds) {
+      if (capabilityId.startsWith('core:') && capabilityId.includes('.')) {
         errors.push(
-          `routePrefix must be exactly "${expectedPrefix}" or start with "${expectedPrefix}/" ` +
-            `(got "${manifest.routePrefix}"). Plugins cannot mount routes outside their namespace.`
+          `Capability "${capabilityId}" is invalid. core:* capabilities must use ":" separators, not "."`
         )
       }
     }
 
-    // Tables must have correct prefix
-    if (manifest.tables) {
-      for (const table of manifest.tables) {
-        if (!table.name.startsWith(`plugin_${manifest.pluginId}_`)) {
-          errors.push(`Table "${table.name}" must be prefixed with "plugin_${manifest.pluginId}_"`)
-        }
-        if (table.hasTenantId !== true) {
-          errors.push(`Table "${table.name}" must declare hasTenantId: true`)
-        }
+    if (manifest.tier !== 'C') {
+      const coreCapabilities = requestedCapabilityIds.filter((capabilityId) =>
+        capabilityId.startsWith('core:')
+      )
+      if (coreCapabilities.length > 0) {
+        errors.push(
+          `Only Tier C plugins can request core:* capabilities. Found: ${coreCapabilities.join(', ')}`
+        )
       }
+    }
+  }
+
+  // Tier B specific validations
+  if (manifest.tier === 'B') {
+    if (manifest.routePrefix) {
+      validateRoutePrefix(manifest.pluginId, manifest.routePrefix, errors)
     }
 
-    // Migrations require schemaVersion
-    if (manifest.migrations) {
-      if (typeof manifest.migrations.schemaVersion !== 'number' || manifest.migrations.schemaVersion < 0) {
-        errors.push('migrations.schemaVersion must be a non-negative integer')
-      }
-      if (!manifest.migrations.dir || typeof manifest.migrations.dir !== 'string') {
-        errors.push('migrations.dir is required when migrations is specified')
-      }
-    }
+    validatePluginTables(manifest.pluginId, manifest.tables, errors)
+    validateMigrations(manifest.migrations, errors)
 
     // Authz namespace must end with dot
     if (manifest.authzNamespace && !manifest.authzNamespace.endsWith('.')) {
@@ -351,6 +426,74 @@ export function validatePluginManifest(manifest: PluginManifest): {
         )
       }
     }
+
+    if (manifest.definedHooks && manifest.definedHooks.length > 0) {
+      errors.push('Tier B plugins cannot declare definedHooks (Tier C only)')
+    }
+    if (manifest.definedFilters && manifest.definedFilters.length > 0) {
+      errors.push('Tier B plugins cannot declare definedFilters (Tier C only)')
+    }
+    if (manifest.requiresEnterprise !== undefined) {
+      errors.push('Tier B plugins cannot declare requiresEnterprise')
+    }
+    if (manifest.requiredEnterpriseFeatures !== undefined) {
+      errors.push('Tier B plugins cannot declare requiredEnterpriseFeatures')
+    }
+  }
+
+  // Tier C specific validations
+  if (manifest.tier === 'C') {
+    if (manifest.routePrefix) {
+      validateRoutePrefix(manifest.pluginId, manifest.routePrefix, errors)
+    }
+
+    validatePluginTables(manifest.pluginId, manifest.tables, errors)
+    validateMigrations(manifest.migrations, errors)
+
+    if (manifest.authzNamespace !== undefined) {
+      errors.push('Tier C plugins cannot set authzNamespace (it is derived as "{pluginId}.")')
+    }
+
+    validateDefinedHookNames(manifest.pluginId, manifest.definedHooks, 'definedHooks', errors)
+    validateDefinedHookNames(manifest.pluginId, manifest.definedFilters, 'definedFilters', errors)
+
+    const hasDefinedHooks = (manifest.definedHooks?.length ?? 0) > 0
+    const hasDefinedFilters = (manifest.definedFilters?.length ?? 0) > 0
+    if ((hasDefinedHooks || hasDefinedFilters) && Array.isArray(manifest.requestedCapabilities)) {
+      const hasHooksDefineCapability = manifest.requestedCapabilities.some(
+        (cap) => cap.capability === 'core:hooks:define'
+      )
+      if (!hasHooksDefineCapability) {
+        errors.push(
+          'definedHooks/definedFilters require the "core:hooks:define" capability in requestedCapabilities.'
+        )
+      }
+    }
+
+    if (
+      manifest.requiresEnterprise !== undefined &&
+      typeof manifest.requiresEnterprise !== 'boolean'
+    ) {
+      errors.push('requiresEnterprise must be a boolean if provided')
+    }
+
+    if (manifest.requiredEnterpriseFeatures !== undefined) {
+      if (
+        !Array.isArray(manifest.requiredEnterpriseFeatures) ||
+        manifest.requiredEnterpriseFeatures.some(
+          (featureId) => typeof featureId !== 'string' || featureId.trim().length === 0
+        )
+      ) {
+        errors.push('requiredEnterpriseFeatures must be an array of non-empty strings')
+      }
+    }
+
+    if (
+      manifest.requiresEnterprise !== true &&
+      (manifest.requiredEnterpriseFeatures?.length ?? 0) > 0
+    ) {
+      errors.push('requiredEnterpriseFeatures can only be declared when requiresEnterprise is true')
+    }
   }
 
   // Tier A cannot have Tier B features
@@ -367,6 +510,18 @@ export function validatePluginManifest(manifest: PluginManifest): {
     if (manifest.authzNamespace) {
       errors.push('Tier A plugins cannot have authzNamespace')
     }
+    if (manifest.definedHooks && manifest.definedHooks.length > 0) {
+      errors.push('Tier A plugins cannot declare definedHooks (Tier C only)')
+    }
+    if (manifest.definedFilters && manifest.definedFilters.length > 0) {
+      errors.push('Tier A plugins cannot declare definedFilters (Tier C only)')
+    }
+    if (manifest.requiresEnterprise !== undefined) {
+      errors.push('Tier A plugins cannot declare requiresEnterprise')
+    }
+    if (manifest.requiredEnterpriseFeatures !== undefined) {
+      errors.push('Tier A plugins cannot declare requiredEnterpriseFeatures')
+    }
   }
 
   // Main-app tier: design ownership + optional Tier B features
@@ -378,27 +533,8 @@ export function validatePluginManifest(manifest: PluginManifest): {
     }
 
     // Main-app CAN have tables, migrations, and authzNamespace (like Tier B)
-    // Validate tables if present
-    if (manifest.tables) {
-      for (const table of manifest.tables) {
-        if (!table.name.startsWith(`plugin_${manifest.pluginId}_`)) {
-          errors.push(`Table "${table.name}" must be prefixed with "plugin_${manifest.pluginId}_"`)
-        }
-        if (table.hasTenantId !== true && !manifest.globalTables?.includes(table.name)) {
-          errors.push(`Table "${table.name}" must declare hasTenantId: true (or be listed in globalTables)`)
-        }
-      }
-    }
-
-    // Validate migrations if present
-    if (manifest.migrations) {
-      if (typeof manifest.migrations.schemaVersion !== 'number' || manifest.migrations.schemaVersion < 0) {
-        errors.push('migrations.schemaVersion must be a non-negative integer')
-      }
-      if (!manifest.migrations.dir || typeof manifest.migrations.dir !== 'string') {
-        errors.push('migrations.dir is required when migrations is specified')
-      }
-    }
+    validatePluginTables(manifest.pluginId, manifest.tables, errors, manifest.globalTables)
+    validateMigrations(manifest.migrations, errors)
 
     // Validate authzNamespace if present
     if (manifest.authzNamespace && !manifest.authzNamespace.endsWith('.')) {
@@ -416,6 +552,19 @@ export function validatePluginManifest(manifest: PluginManifest): {
             'Add { capability: "ui:design:global", reason: "..." } to requestedCapabilities.'
         )
       }
+    }
+
+    if (manifest.definedHooks && manifest.definedHooks.length > 0) {
+      errors.push('main-app plugins cannot declare definedHooks (Tier C only)')
+    }
+    if (manifest.definedFilters && manifest.definedFilters.length > 0) {
+      errors.push('main-app plugins cannot declare definedFilters (Tier C only)')
+    }
+    if (manifest.requiresEnterprise !== undefined) {
+      errors.push('main-app plugins cannot declare requiresEnterprise')
+    }
+    if (manifest.requiredEnterpriseFeatures !== undefined) {
+      errors.push('main-app plugins cannot declare requiredEnterpriseFeatures')
     }
   }
 
@@ -460,6 +609,8 @@ export interface PluginRuntimeState {
   errorMessage?: string
   /** Capabilities that were granted */
   grantedCapabilities: string[]
+  /** Tier C runtime core capabilities granted at deployment scope */
+  deploymentGrantedCoreCapabilities?: string[]
   /** Boot timestamp */
   bootedAt?: Date
 }
