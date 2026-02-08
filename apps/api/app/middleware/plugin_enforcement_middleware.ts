@@ -15,6 +15,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 import { pluginRegistry } from '@saas/plugins-core'
 import PluginState from '#models/plugin_state'
+import { createPluginFeaturePolicyService } from '#services/plugins/plugin_feature_policy_service'
 
 /**
  * Plugin Enforcement Middleware.
@@ -29,7 +30,11 @@ export default class PluginEnforcementMiddleware {
    * @param next - Next middleware function
    * @param options - Middleware options (pluginId)
    */
-  async handle(ctx: HttpContext, next: NextFn, options: { guards?: string[] } = {}): Promise<void> {
+  async handle(
+    ctx: HttpContext,
+    next: NextFn,
+    options: { guards?: string[]; requiredFeatures?: string[] } = {}
+  ): Promise<void> {
     // Extract pluginId from options
     const pluginId = options.guards?.[0]
 
@@ -101,6 +106,24 @@ export default class PluginEnforcementMiddleware {
         manifest: plugin.manifest,
         state: pluginState,
         grantedCapabilities: plugin.grantedCapabilities,
+      }
+
+      const requiredFeatures = options.requiredFeatures ?? []
+      if (requiredFeatures.length > 0) {
+        const featurePolicy = createPluginFeaturePolicyService({
+          pluginId,
+          manifest: plugin.manifest,
+        })
+
+        for (const featureId of requiredFeatures) {
+          const isEnabled = await featurePolicy.has(featureId, ctx)
+          if (!isEnabled) {
+            return ctx.response.forbidden({
+              error: 'E_FEATURE_DISABLED',
+              message: `Feature ${featureId} is disabled for this tenant`,
+            })
+          }
+        }
       }
 
       await next()

@@ -106,6 +106,13 @@ export interface PluginTableDeclaration {
   hasTenantId: true
 }
 
+export interface PluginFeatureDefinition {
+  /** Default tenant state when no per-tenant override exists */
+  defaultEnabled: boolean
+}
+
+export type PluginFeaturesMap = Record<string, PluginFeatureDefinition>
+
 /**
  * The plugin.meta.json structure.
  * This is the source of truth for plugin metadata.
@@ -140,6 +147,9 @@ export interface PluginManifest {
 
   /** Tier C: filter hooks this plugin is allowed to dispatch */
   definedFilters?: string[]
+
+  /** Optional route/runtime feature gates managed by core policy */
+  features?: PluginFeaturesMap
 
   /**
    * Route prefix for Tier B plugins.
@@ -200,6 +210,7 @@ export interface PluginManifest {
 }
 
 const HOOK_NAMESPACE_PATTERN = /^[a-z0-9-]+:[a-z0-9]+(?:[._-][a-z0-9]+)*$/i
+const FEATURE_ID_PATTERN = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/i
 
 function validateRoutePrefix(pluginId: string, routePrefix: string, errors: string[]): void {
   const expectedPrefix = `/api/v1/apps/${pluginId}`
@@ -264,6 +275,35 @@ function validateDefinedHookNames(
       errors.push(
         `${fieldName} hook "${hookName}" is invalid. Expected format "{pluginId}:{event.name}"`
       )
+    }
+  }
+}
+
+function validateFeatures(features: PluginFeaturesMap | undefined, errors: string[]): void {
+  if (features === undefined) {
+    return
+  }
+
+  if (typeof features !== 'object' || features === null || Array.isArray(features)) {
+    errors.push('features must be an object mapping feature IDs to { defaultEnabled: boolean }')
+    return
+  }
+
+  for (const [featureId, definition] of Object.entries(features)) {
+    if (!FEATURE_ID_PATTERN.test(featureId)) {
+      errors.push(
+        `Feature "${featureId}" is invalid. Expected format "{name}" using letters/numbers with optional . _ - separators.`
+      )
+      continue
+    }
+
+    if (typeof definition !== 'object' || definition === null || Array.isArray(definition)) {
+      errors.push(`features["${featureId}"] must be an object`)
+      continue
+    }
+
+    if (typeof definition.defaultEnabled !== 'boolean') {
+      errors.push(`features["${featureId}"].defaultEnabled must be a boolean`)
     }
   }
 }
@@ -399,6 +439,8 @@ export function validatePluginManifest(manifest: PluginManifest): {
     }
   }
 
+  validateFeatures(manifest.features, errors)
+
   // Tier B specific validations
   if (manifest.tier === 'B') {
     if (manifest.routePrefix) {
@@ -521,6 +563,9 @@ export function validatePluginManifest(manifest: PluginManifest): {
     }
     if (manifest.requiredEnterpriseFeatures !== undefined) {
       errors.push('Tier A plugins cannot declare requiredEnterpriseFeatures')
+    }
+    if (manifest.features !== undefined) {
+      errors.push('Tier A plugins cannot declare features (no server/runtime feature gates)')
     }
   }
 

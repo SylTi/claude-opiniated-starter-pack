@@ -12,6 +12,7 @@ import { serverPluginLoaders } from '@saas/config/plugins/server'
 import { RoutesRegistrar, createRoutesRegistrar } from './routes_registrar.js'
 import { pluginCapabilityService } from './plugin_capability_service.js'
 import { createCoreFacadeFactory } from './core_facade_factory.js'
+import { createPluginFeaturePolicyService } from './plugin_feature_policy_service.js'
 import { authzService } from '#services/authz/authz_service'
 import { auditEventEmitter } from '#services/audit_event_emitter'
 import {
@@ -260,7 +261,7 @@ export default class PluginRouteMounter {
         prefix = basePrefix
       }
       const routerInstance = await getRouter()
-      const registrar = createRoutesRegistrar(pluginId, routerInstance, prefix)
+      const registrar = createRoutesRegistrar(pluginId, routerInstance, prefix, manifest)
       this.registrars.set(pluginId, registrar)
 
       // Call plugin's register function if it exists
@@ -282,6 +283,10 @@ export default class PluginRouteMounter {
                 deploymentGrantedCapabilities: deploymentGrantedCoreCapabilities,
               })
             : null
+        const featurePolicy = createPluginFeaturePolicyService({
+          pluginId,
+          manifest,
+        })
 
         await pluginModule.register({
           routes: registrar,
@@ -298,6 +303,7 @@ export default class PluginRouteMounter {
               )
             },
           },
+          featurePolicy,
           core,
           pluginId,
           manifest,

@@ -32,3 +32,7 @@ export {
   pluginPermissionGrantService,
 } from './plugin_permission_grant_service.js'
 export { createCoreFacadeFactory } from './core_facade_factory.js'
+export {
+  createPluginFeaturePolicyService,
+  PluginFeatureDisabledError,
+} from './plugin_feature_policy_service.js'

@@ -9,6 +9,7 @@
 
 import type { HttpContext } from '@adonisjs/core/http'
 import type router from '@adonisjs/core/services/router'
+import type { PluginManifest } from '@saas/plugins-core'
 
 // Middleware collection type
 type MiddlewareCollection = Awaited<typeof import('#start/kernel')>['middleware']
@@ -35,6 +36,13 @@ async function getMiddlewareCollection(): Promise<MiddlewareCollection> {
  */
 export type RouteHandler = (ctx: HttpContext) => Promise<void> | void
 
+export type RouteOptions = {
+  middleware?: RouteMiddleware[]
+  requiredFeatures?: string[]
+}
+
+type RouteRegistrationOptions = RouteOptions | RouteMiddleware[]
+
 /**
  * Route definition.
  */
@@ -43,6 +51,7 @@ export interface RouteDefinition {
   path: string
   handler: RouteHandler
   middleware?: RouteMiddleware[]
+  requiredFeatures?: string[]
 }
 
 /**
@@ -62,12 +71,19 @@ export class RoutesRegistrar {
   private pluginId: string
   private router: typeof router
   private prefix: string
+  private declaredFeatures: ReadonlySet<string>
   private registeredRoutes: RegisteredRoute[] = []
 
-  constructor(pluginId: string, routerInstance: typeof router, prefix?: string) {
+  constructor(
+    pluginId: string,
+    routerInstance: typeof router,
+    prefix?: string,
+    manifest?: PluginManifest
+  ) {
     this.pluginId = pluginId
     this.router = routerInstance
     this.prefix = prefix || `/api/v1/apps/${pluginId}`
+    this.declaredFeatures = new Set(Object.keys(manifest?.features ?? {}))
   }
 
   /**
@@ -80,36 +96,36 @@ export class RoutesRegistrar {
   /**
    * Register a GET route.
    */
-  get(path: string, handler: RouteHandler, middleware?: RouteMiddleware[]): Promise<void> {
-    return this.registerRoute('get', path, handler, middleware)
+  get(path: string, handler: RouteHandler, options?: RouteRegistrationOptions): Promise<void> {
+    return this.registerRoute('get', path, handler, options)
   }
 
   /**
    * Register a POST route.
    */
-  post(path: string, handler: RouteHandler, middleware?: RouteMiddleware[]): Promise<void> {
-    return this.registerRoute('post', path, handler, middleware)
+  post(path: string, handler: RouteHandler, options?: RouteRegistrationOptions): Promise<void> {
+    return this.registerRoute('post', path, handler, options)
   }
 
   /**
    * Register a PUT route.
    */
-  put(path: string, handler: RouteHandler, middleware?: RouteMiddleware[]): Promise<void> {
-    return this.registerRoute('put', path, handler, middleware)
+  put(path: string, handler: RouteHandler, options?: RouteRegistrationOptions): Promise<void> {
+    return this.registerRoute('put', path, handler, options)
   }
 
   /**
    * Register a PATCH route.
    */
-  patch(path: string, handler: RouteHandler, middleware?: RouteMiddleware[]): Promise<void> {
-    return this.registerRoute('patch', path, handler, middleware)
+  patch(path: string, handler: RouteHandler, options?: RouteRegistrationOptions): Promise<void> {
+    return this.registerRoute('patch', path, handler, options)
   }
 
   /**
    * Register a DELETE route.
    */
-  delete(path: string, handler: RouteHandler, middleware?: RouteMiddleware[]): Promise<void> {
-    return this.registerRoute('delete', path, handler, middleware)
+  delete(path: string, handler: RouteHandler, options?: RouteRegistrationOptions): Promise<void> {
+    return this.registerRoute('delete', path, handler, options)
   }
 
   /**
@@ -117,7 +133,10 @@ export class RoutesRegistrar {
    */
   async registerRoutes(routes: RouteDefinition[]): Promise<void> {
     for (const route of routes) {
-      await this.registerRoute(route.method, route.path, route.handler, route.middleware)
+      await this.registerRoute(route.method, route.path, route.handler, {
+        middleware: route.middleware,
+        requiredFeatures: route.requiredFeatures,
+      })
     }
   }
 
@@ -135,8 +154,10 @@ export class RoutesRegistrar {
     method: 'get' | 'post' | 'put' | 'patch' | 'delete',
     path: string,
     handler: RouteHandler,
-    additionalMiddleware?: RouteMiddleware[]
+    options?: RouteRegistrationOptions
   ): Promise<void> {
+    const normalizedOptions = this.normalizeOptions(options)
+
     // Ensure path starts with /
     const normalizedPath = path.startsWith('/') ? path : `/${path}`
     const fullPath = `${this.prefix}${normalizedPath}`
@@ -159,9 +180,12 @@ export class RoutesRegistrar {
     const defaultMiddleware: RouteMiddleware[] = [
       middleware.auth(),
       middleware.tenant(),
-      middleware.pluginEnforcement({ guards: [pluginId] }),
+      middleware.pluginEnforcement({
+        guards: [pluginId],
+        requiredFeatures: normalizedOptions.requiredFeatures,
+      }),
     ]
-    const allMiddleware = [...defaultMiddleware, ...(additionalMiddleware || [])]
+    const allMiddleware = [...defaultMiddleware, ...(normalizedOptions.middleware || [])]
     route.use(allMiddleware)
 
     // Track registered route
@@ -176,6 +200,32 @@ export class RoutesRegistrar {
       `[RoutesRegistrar] Registered ${method.toUpperCase()} ${fullPath} for plugin ${this.pluginId}`
     )
   }
+
+  private normalizeOptions(options: RouteRegistrationOptions | undefined): RouteOptions {
+    if (Array.isArray(options)) {
+      return { middleware: options, requiredFeatures: [] }
+    }
+
+    const requiredFeatures = (options?.requiredFeatures ?? []).map((featureId) => featureId.trim())
+    const invalidFeatureId = requiredFeatures.find((featureId) => featureId.length === 0)
+    if (invalidFeatureId !== undefined) {
+      throw new Error(`Plugin "${this.pluginId}" declared an empty required feature ID`)
+    }
+
+    for (const featureId of requiredFeatures) {
+      if (!this.declaredFeatures.has(featureId)) {
+        throw new Error(
+          `Plugin "${this.pluginId}" route requires undeclared feature "${featureId}". ` +
+            `Add it to manifest.features first.`
+        )
+      }
+    }
+
+    return {
+      middleware: options?.middleware ?? [],
+      requiredFeatures,
+    }
+  }
 }
 
 /**
@@ -184,7 +234,8 @@ export class RoutesRegistrar {
 export function createRoutesRegistrar(
   pluginId: string,
   routerInstance: typeof router,
-  prefix?: string
+  prefix?: string,
+  manifest?: PluginManifest
 ): RoutesRegistrar {
-  return new RoutesRegistrar(pluginId, routerInstance, prefix)
+  return new RoutesRegistrar(pluginId, routerInstance, prefix, manifest)
 }

@@ -24,21 +24,46 @@ export interface PluginHttpContext {
   plugin?: {
     id: string
     grantedCapabilities: string[]
+    state?: {
+      config?: Record<string, unknown> | null
+    }
   }
-  request?: {
-    id?: string
-  }
+  request?: unknown
+}
+
+export type RouteFeatureOptions = {
+  requiredFeatures?: string[]
 }
 
 /**
  * Route registration contract exposed to plugins.
  */
 export interface RoutesRegistrar {
-  get(path: string, handler: (ctx: PluginHttpContext) => Promise<void> | void): Promise<void>
-  post(path: string, handler: (ctx: PluginHttpContext) => Promise<void> | void): Promise<void>
-  put(path: string, handler: (ctx: PluginHttpContext) => Promise<void> | void): Promise<void>
-  patch(path: string, handler: (ctx: PluginHttpContext) => Promise<void> | void): Promise<void>
-  delete(path: string, handler: (ctx: PluginHttpContext) => Promise<void> | void): Promise<void>
+  get(
+    path: string,
+    handler: (ctx: PluginHttpContext) => Promise<void> | void,
+    options?: RouteFeatureOptions
+  ): Promise<void>
+  post(
+    path: string,
+    handler: (ctx: PluginHttpContext) => Promise<void> | void,
+    options?: RouteFeatureOptions
+  ): Promise<void>
+  put(
+    path: string,
+    handler: (ctx: PluginHttpContext) => Promise<void> | void,
+    options?: RouteFeatureOptions
+  ): Promise<void>
+  patch(
+    path: string,
+    handler: (ctx: PluginHttpContext) => Promise<void> | void,
+    options?: RouteFeatureOptions
+  ): Promise<void>
+  delete(
+    path: string,
+    handler: (ctx: PluginHttpContext) => Promise<void> | void,
+    options?: RouteFeatureOptions
+  ): Promise<void>
 }
 
 /**
@@ -185,6 +210,11 @@ export interface CoreFacadeFactory {
   deploymentGrantedCapabilities: ReadonlySet<string>
 }
 
+export interface PluginFeaturePolicyService {
+  has(featureId: string, ctx: PluginHttpContext): Promise<boolean>
+  require(featureId: string, ctx: PluginHttpContext): Promise<void>
+}
+
 /**
  * Plugin server registration context.
  */
@@ -196,6 +226,7 @@ export interface ServerPluginContext {
   authz: AuthzServiceContract
   db: TenantScopedDbClient
   jobs: JobsRegistrar
+  featurePolicy: PluginFeaturePolicyService
   core: CoreFacadeFactory | null
 }
 
@@ -219,4 +250,3 @@ export class StaleFacadeUsageError extends Error {
     this.activeRequestId = activeRequestId
   }
 }
-

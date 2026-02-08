@@ -3,6 +3,7 @@ import { HttpContext, ExceptionHandler } from '@adonisjs/core/http'
 import { isRbacDeniedError } from '#services/rbac_guard'
 import { AuditContext } from '#services/audit_context'
 import { AUDIT_EVENT_TYPES } from '#constants/audit_events'
+import { PluginFeatureDisabledError } from '#services/plugins/plugin_feature_policy_service'
 
 export default class HttpExceptionHandler extends ExceptionHandler {
   /**
@@ -16,6 +17,10 @@ export default class HttpExceptionHandler extends ExceptionHandler {
    * response to the client
    */
   async handle(error: unknown, ctx: HttpContext) {
+    if (error instanceof PluginFeatureDisabledError) {
+      return ctx.response.forbidden(error.toResponse())
+    }
+
     // Handle RBAC denied errors with proper 403 response
     if (isRbacDeniedError(error)) {
       // Emit audit event for permission denial
