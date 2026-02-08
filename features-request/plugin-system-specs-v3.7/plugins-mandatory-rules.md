@@ -57,8 +57,15 @@ Design intent: a plugin must not be able to **accidentally** (or casually) bypas
 - Long-running hooks **SHOULD** have timeouts (especially Tier B).
 - Plugin boot **MUST** be isolated: if a plugin throws on boot, it is marked failed/quarantined and execution continues.
 
+### 1.5 Plugin dependency enforcement
+- If `manifest.dependencies` is declared, each dependency **MUST** resolve to an installed plugin ID.
+- Plugin dependency cycles **MUST** be rejected (fail closed for involved plugins).
+- A dependent plugin **MUST NOT** boot active if required dependencies are unavailable.
+- A tenant **MUST NOT** enable a plugin if required dependencies are disabled for that tenant.
+- Disabling a dependency **MUST** cascade-disable dependents for that tenant.
 
-### 1.5 Data egress, secrets, and privacy
+
+### 1.6 Data egress, secrets, and privacy
 - Client plugins **MUST NOT** access server secrets (KMS keys, DB credentials, service tokens).
 - Any outbound network call to third-party services **MUST** be:
   - declared in metadata (domains/hosts),
@@ -69,7 +76,7 @@ Design intent: a plugin must not be able to **accidentally** (or casually) bypas
   - the capability is granted (e.g., `enterprise.audit.sink` / `enterprise.backup.provider`),
   - and the data flow is documented and audited.
 
-### 1.6 Hook semantics (Actions vs Filters)
+### 1.7 Hook semantics (Actions vs Filters)
 - **Actions** may perform side effects. They **SHOULD** be idempotent (or tolerate duplicate delivery).
 - **Filters** must behave like pure transformations:
   - **MUST** return the same logical type/shape as the input contract,
@@ -77,7 +84,7 @@ Design intent: a plugin must not be able to **accidentally** (or casually) bypas
   - **MUST NOT** perform network calls unless capability-gated and explicitly allowed by the contract.
 - Hooks **SHOULD** be fast; long-running work should be offloaded to jobs.
 
-### 1.7 Versioning and migrations
+### 1.8 Versioning and migrations
 - Plugin `id` is stable forever. Renaming a plugin is a breaking change and requires a migration plan.
 - Migrations are append-only:
   - **MUST NOT** rewrite published migration files.
@@ -137,6 +144,8 @@ Design intent: a plugin must not be able to **accidentally** (or casually) bypas
   - `/api/v1/apps/<pluginId>/...` *(adapted to include API versioning)*
 - Plugins **MUST NOT** register/override core routes.
 - Route registration **MUST** use a core `RoutesRegistrar` facade that enforces namespace + middleware defaults.
+- If a route declares required plugin features, the check **MUST** be enforced by core middleware (not UI-only checks).
+- Feature-gate denial **MUST** return HTTP `403` with `E_FEATURE_DISABLED`.
 
 ### 4.2 Next.js pages are hosted, not registered
 - Plugins **MUST NOT** attempt to register Next.js routes dynamically.

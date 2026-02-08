@@ -161,6 +161,11 @@ Plugins do **not** get raw router access; they receive a facade that enforces:
 - middleware defaults (auth/tenant context)
 - rate limits (optional)
 - capability checks
+- feature-policy checks (route-level required features, core-enforced)
+
+Feature-policy denial contract:
+- HTTP `403`
+- `{ error: "E_FEATURE_DISABLED", message: "Feature <id> is disabled for this tenant" }`
 
 ---
 
@@ -253,7 +258,8 @@ Core features live in `core/`:
 - `core/toConf/*`
 - `core/plugAndPlay/*`
 
-Dependencies and cascade rules are documented in `interdependencies.md`.
+Enterprise feature dependencies and cascade rules are documented in `interdependencies.md`.
+Plugin-to-plugin dependency enforcement is documented in `plugin-dependency-enforcement-spec.md`.
 
 **Implementation deviations:** See `implementation-deviations.md` for conscious divergences from this spec (API versioning, integer IDs) that align with our existing architecture.
 

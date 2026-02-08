@@ -5,6 +5,13 @@
 
 ---
 
+## Dependency note
+
+Tier C plugins may declare `manifest.dependencies` on other plugins (for example, `collab` depending on `files` for attachments).  
+Dependency lifecycle and enforcement rules are defined in `plugin-dependency-enforcement-spec.md`.
+
+---
+
 ## 0) Purpose & Context
 
 This spec introduces **Tier C — Platform Plugins**: a new plugin tier for marketplace-distributable plugins that need deeper integration with core than Tier B allows.
@@ -143,7 +150,13 @@ They still cannot:
     "collab:resource.types",
     "collab:comment.render",
     "collab:mention.autocomplete"
-  ]
+  ],
+  "features": {
+    "comments": { "defaultEnabled": true },
+    "shares": { "defaultEnabled": true },
+    "mentions": { "defaultEnabled": true },
+    "threads": { "defaultEnabled": true }
+  }
 }
 ```
 
@@ -151,6 +164,7 @@ New manifest fields for Tier C:
 - `"tier": "C"` — declares platform plugin tier
 - `"definedHooks"` — action hooks this plugin emits (other plugins can listen)
 - `"definedFilters"` — filter hooks this plugin emits (other plugins can modify). This list is flat and may include both server-dispatched and client-dispatched filter names.
+- `"features"` — optional plugin feature declarations used by core feature-policy enforcement (per-tenant + main-app hard-disable overlays).
 - `"requestedCapabilities"` — includes existing app capabilities (`app:*`) plus Tier C core capabilities introduced by this spec (`core:service:*`, `core:hooks:define`, `core:entity:fk:users`)
 
 Terminology note: in this spec, "manifest" refers to the plugin package metadata file (`plugin.meta.json`).
@@ -537,6 +551,7 @@ export interface ServerPluginContext {
   authz: AuthzService
   db: TenantScopedDbClient // tenant-scoped DB for plugin-owned tables only
   jobs: JobsRegistrar
+  featurePolicy: PluginFeaturePolicyService
 
   // New (Tier C only — null for Tier A/B)
   core: CoreFacadeFactory | null
@@ -680,6 +695,54 @@ Invariant (runtime facade capabilities):
 Background job rule:
 - `CoreFacadeFactory.forRequest(ctx)` is request-only. Background jobs do not receive `HttpContext`, so jobs cannot use Tier C facades directly.
 - If a plugin needs core-side actions from a job, it must route through a core-owned workflow or an authenticated request path that provides `HttpContext`.
+
+### 2.5 Core feature policy gates (non-bypassable)
+
+Feature gating is a **core abstraction**, not per-plugin custom code.
+
+Why:
+- Multiple plugins need feature toggles.
+- Main app and platform policy must be enforceable centrally.
+- Direct API calls must not bypass disabled features.
+
+Policy model (effective feature policy):
+1. Plugin declares available features in manifest (`features` map).
+2. Core applies main-app/platform hard-disable policy (cannot be overridden by tenant/plugin code).
+3. Core applies tenant plugin config (`plugin_states.config`) for tenant-level feature toggles.
+4. Effective feature policy is resolved per request and used by route middleware and runtime checks.
+
+Route enforcement:
+- `RoutesRegistrar` accepts per-route feature requirements.
+- Core attaches middleware ahead of plugin handlers.
+- If a required feature is disabled, request is rejected with HTTP `403`.
+
+```ts
+export type RouteFeatureOptions = {
+  requiredFeatures?: string[]
+}
+
+export interface RoutesRegistrar {
+  get(path: string, handler: (ctx: HttpContext) => Promise<void> | void, options?: RouteFeatureOptions): Promise<void>
+  post(path: string, handler: (ctx: HttpContext) => Promise<void> | void, options?: RouteFeatureOptions): Promise<void>
+  put(path: string, handler: (ctx: HttpContext) => Promise<void> | void, options?: RouteFeatureOptions): Promise<void>
+  patch(path: string, handler: (ctx: HttpContext) => Promise<void> | void, options?: RouteFeatureOptions): Promise<void>
+  delete(path: string, handler: (ctx: HttpContext) => Promise<void> | void, options?: RouteFeatureOptions): Promise<void>
+}
+
+export interface PluginFeaturePolicyService {
+  has(featureId: string, ctx: HttpContext): Promise<boolean>
+  require(featureId: string, ctx: HttpContext): Promise<void> // throws 403
+}
+```
+
+Error contract:
+- HTTP `403`
+- `{ error: 'E_FEATURE_DISABLED', message: 'Feature <id> is disabled for this tenant' }`
+
+Security rule:
+- UI hiding is not sufficient.
+- Server-side enforcement is mandatory.
+- Any feature-restricted behavior must be guarded by core feature policy checks in routes/services.
 
 ---
 
@@ -1295,20 +1358,28 @@ plugin_collab_mentions
   mentioned_user_id (FK users), resolved, created_at
 ```
 
+Collab v1 feature scope:
+- Included: comments, shares, mentions, threads (feature-gated).
+- Deferred: attachments (out of scope for v1; can be added later via `files` dependency).
+
 ### 10.2 API routes
 
 ```
-POST   /api/v1/apps/collab/comments          → Create comment
-GET    /api/v1/apps/collab/comments           → List comments for resource
-DELETE /api/v1/apps/collab/comments/:id       → Delete comment
+POST   /api/v1/apps/collab/comments           → Create comment (requires: comments)
+GET    /api/v1/apps/collab/comments           → List comments for resource (requires: comments)
+DELETE /api/v1/apps/collab/comments/:id       → Delete comment (requires: comments)
 
-POST   /api/v1/apps/collab/shares             → Share resource
-GET    /api/v1/apps/collab/shares             → List shares for resource
-DELETE /api/v1/apps/collab/shares/:id         → Revoke share
+POST   /api/v1/apps/collab/shares             → Share resource (requires: shares)
+GET    /api/v1/apps/collab/shares             → List shares for resource (requires: shares)
+DELETE /api/v1/apps/collab/shares/:id         → Revoke share (requires: shares)
 
-GET    /api/v1/apps/collab/mentions           → List unresolved mentions for user
-POST   /api/v1/apps/collab/mentions/:id/read  → Mark mention as read
+GET    /api/v1/apps/collab/mentions           → List unresolved mentions for user (requires: mentions)
+POST   /api/v1/apps/collab/mentions/:id/read  → Mark mention as read (requires: mentions)
 ```
+
+Feature-gate contract:
+- Disabled feature access returns HTTP `403` with `E_FEATURE_DISABLED`.
+- This is server-enforced by core route middleware and cannot be bypassed via direct API calls.
 
 ### 10.3 Server entrypoint (simplified)
 
@@ -1316,7 +1387,7 @@ POST   /api/v1/apps/collab/mentions/:id/read  → Mark mention as read
 import type { ServerPluginContext, HttpContext } from '@saas/plugins-core'
 
 export default async function CollabServer(ctx: ServerPluginContext): Promise<void> {
-  const { routes, core } = ctx
+  const { routes, core, featurePolicy } = ctx
 
   if (!core) {
     throw new Error('Collab plugin requires Tier C core facades')
@@ -1358,9 +1429,17 @@ export default async function CollabServer(ctx: ServerPluginContext): Promise<vo
       })
     }
 
-    const { resource_type, resource_id, body } = reqCtx.request.only([
-      'resource_type', 'resource_id', 'body',
+    const { resource_type, resource_id, body, parent_id } = reqCtx.request.only([
+      'resource_type', 'resource_id', 'body', 'parent_id',
     ])
+
+    // Threaded comments are optional and core-enforced via feature policy.
+    if (parent_id && !(await featurePolicy.has('threads', reqCtx))) {
+      return reqCtx.response.forbidden({
+        error: 'E_FEATURE_DISABLED',
+        message: 'Feature threads is disabled for this tenant',
+      })
+    }
 
     // Validate resource exists via facade (not direct table access)
     const resource = await facades.resources.resolve(resource_type, resource_id)
@@ -1388,14 +1467,21 @@ export default async function CollabServer(ctx: ServerPluginContext): Promise<vo
         resource_type,
         resource_id,
         body,
+        parent_id: parent_id ?? null,
       })
       .returning('*')
     if (!comment) {
       throw new Error('Failed to create comment')
     }
 
-    // Parse mentions and notify (graceful degradation if notifications unavailable)
+    // Parse mentions; mentions feature is hard-enforced server-side.
     const mentionedUserIds = parseMentions(body)
+    if (mentionedUserIds.length > 0 && !(await featurePolicy.has('mentions', reqCtx))) {
+      return reqCtx.response.forbidden({
+        error: 'E_FEATURE_DISABLED',
+        message: 'Feature mentions is disabled for this tenant',
+      })
+    }
     if (mentionedUserIds.length > 0 && facades.notifications && facades.users) {
       const users = await facades.users.findByIds(mentionedUserIds)
       const notifications = users.map((user) => ({
@@ -1420,7 +1506,11 @@ export default async function CollabServer(ctx: ServerPluginContext): Promise<vo
     }
 
     return reqCtx.response.created({ data: comment })
-  })
+  }, { requiredFeatures: ['comments'] })
+
+  routes.get('/mentions', async (reqCtx: HttpContext) => {
+    // handler omitted
+  }, { requiredFeatures: ['mentions'] })
 }
 ```
 
@@ -1668,7 +1758,16 @@ And explicitly document:
 - [ ] Unit tests: quarantine on requiresEnterprise missing
 - [ ] Integration tests: full boot sequence with Tier A + B + C plugins
 
-### Phase 3: Manifest + validation
+### Phase 3: Core feature policy (non-bypassable)
+- [ ] Add manifest `features` schema (feature IDs + default enabled state)
+- [ ] Add core `PluginFeaturePolicyService` (effective policy from hard-disable + tenant plugin config)
+- [ ] Extend `RoutesRegistrar` with `requiredFeatures` route option
+- [ ] Enforce `requiredFeatures` in core route middleware before plugin handlers
+- [ ] Return standardized `403 E_FEATURE_DISABLED` on denied feature access
+- [ ] Add functional tests proving direct API calls cannot bypass disabled features
+- [ ] Add tests for hard-disable precedence over tenant/plugin toggles
+
+### Phase 4: Manifest + validation
 - [ ] Add `tier: "C"` to manifest schema
 - [ ] Add `definedHooks`, `definedFilters` to manifest schema
 - [ ] Add `requiresEnterprise`, `requiredEnterpriseFeatures` to manifest schema
@@ -1684,7 +1783,7 @@ And explicitly document:
 - [ ] Unit tests: treat `core:entity:fk:users` as migration/review capability only (no runtime facade mapping)
 - [ ] Unit tests: accept canonical existing app capability IDs (`app:routes`, `app:db:read`, etc.) alongside new Tier C `core:*` IDs
 
-### Phase 4: Security + audit
+### Phase 5: Security + audit
 - [ ] Add audit records for facade write operations
 - [ ] Add structured logging for facade read operations
 - [ ] Implement per-plugin-per-tenant rate limiting for facades
@@ -1695,7 +1794,7 @@ And explicitly document:
 - [ ] Unit tests: rate limit enforcement (within limit, exceeded, keyed by plugin+tenant)
 - [ ] Integration tests: end-to-end Tier C plugin creating comment with mention notification
 
-### Phase 5: Documentation
+### Phase 6: Documentation
 - [ ] Update `plugins-doc.md` with Tier C author guide
 - [ ] Create Tier C plugin template in marketplace repo
 - [ ] Document facade APIs for plugin authors
@@ -1788,6 +1887,8 @@ These were open questions in earlier versions of this spec, now resolved:
     - Removals/signature changes/behavioral breaks: major
 
 33. **Hook discoverability policy**: Marketplace listings auto-generate baseline hook/filter docs from manifest declarations; plugin documentation remains required for payload semantics and usage guidance.
+
+34. **Feature-gate enforcement is core-owned**: plugin feature toggles are resolved by a core `PluginFeaturePolicyService` (hard-disable + tenant plugin config), route-level feature gates are enforced by core middleware, and denied access returns HTTP 403 `E_FEATURE_DISABLED` (non-bypassable by direct API calls).
 
 ---
 
