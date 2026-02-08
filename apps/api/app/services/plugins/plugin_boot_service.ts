@@ -238,14 +238,21 @@ export default class PluginBootService {
 
       let enterpriseAvailable = false
       try {
-        enterpriseAvailable = await this.hasEnterpriseFeatures(
+        // @ts-ignore - Enterprise feature: module may not exist on public repo
+        const { checkEnterpriseAvailability } = await import('./plugin_boot_enterprise.js')
+        enterpriseAvailable = await checkEnterpriseAvailability(
           manifest.requiredEnterpriseFeatures ?? []
         )
       } catch (error) {
-        console.warn(
-          `[PluginBootService] Enterprise feature check failed for "${manifest.pluginId}":`,
-          error
-        )
+        // Enterprise module not available or check failed
+        if (error instanceof Error && error.message.includes('Cannot find module')) {
+          // Module doesn't exist on public repo — skip silently
+        } else {
+          console.warn(
+            `[PluginBootService] Enterprise feature check failed for "${manifest.pluginId}":`,
+            error
+          )
+        }
       }
       if (!enterpriseAvailable) {
         const reason = `Tier C plugin "${manifest.pluginId}" requires enterprise features that are unavailable on this deployment`
@@ -729,31 +736,6 @@ export default class PluginBootService {
     console.log(
       `[PluginBootService] Registered authz namespace "${authzNamespace}" for plugin "${manifest.pluginId}"`
     )
-  }
-
-  /**
-   * Check whether required enterprise features are globally available.
-   */
-  private async hasEnterpriseFeatures(featureIds: string[]): Promise<boolean> {
-    if (featureIds.length === 0) {
-      return true
-    }
-
-    try {
-      const { default: DeploymentEnterpriseState } =
-        // @ts-ignore - Enterprise feature: module may not exist on public repo
-        await import('#models/deployment_enterprise_state')
-      for (const featureId of featureIds) {
-        const state = await DeploymentEnterpriseState.findByFeatureId(featureId)
-        if (!state || !state.allowed) {
-          return false
-        }
-      }
-      return true
-    } catch {
-      // Enterprise module not available — features not available
-      return false
-    }
   }
 
   /**

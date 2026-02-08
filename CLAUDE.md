@@ -90,21 +90,105 @@ try {
 
 ### Enterprise-Only Files (exist only on `main`)
 
-These files/directories are NOT on `public/main`:
+All enterprise features are gated via `start/routes_enterprise_all.ts`, which dynamically imports each feature's route file. These files/directories are NOT on `public/main`:
+
+**Enterprise gate (consolidated import):**
+- `start/routes_enterprise_all.ts` — imports all enterprise route files below
+- `start/routes_enterprise.ts` — control plane routes
+
+**SSO:**
 - `start/routes_sso.ts`, `start/limiter_sso.ts`
 - `app/constants/permissions_sso.ts`
-- `app/controllers/sso_*.ts`
-- `app/models/sso_*.ts`, `app/models/tenant_sso_config.ts`
+- `app/controllers/sso_controller.ts`, `app/controllers/sso_config_controller.ts`
+- `app/models/tenant_sso_config.ts`, `app/models/sso_user_identity.ts`, `app/models/sso_state.ts`
 - `app/services/sso/*`
 - `app/validators/sso.ts`
 - `commands/cleanup_sso_states.ts`
-- SSO-related migrations and tests
+- SSO-related migrations (`*_sso_*`)
+
+**Control Plane (Enterprise feature management):**
+- `app/constants/permissions_enterprise.ts`
+- `app/controllers/admin_enterprise_controller.ts`, `app/controllers/tenant_enterprise_controller.ts`
+- `app/models/tenant_enterprise_state.ts`, `app/models/deployment_enterprise_state.ts`, `app/models/enterprise_drift_incident.ts`
+- `app/services/enterprise/*`
+- `app/validators/enterprise.ts`
+- Enterprise-related migrations (`*_enterprise_*`, `*_deployment_enterprise_*`)
+- `tests/functional/enterprise.spec.ts`
+
+**Encryption at Rest:**
+- `start/routes_encryption.ts`
+- `app/controllers/encryption_controller.ts`
+- `app/models/encryption_provider.ts`, `app/models/encryption_migration.ts`
+- `app/services/encryption/*`
+- `app/validators/encryption.ts`
+- Encryption-related migrations (`*_encryption_*`)
+- `tests/functional/encryption.spec.ts`
+
+**BYOK (Bring Your Own Key):**
+- `start/routes_byok.ts`
+- `app/controllers/byok_controller.ts`
+- `app/validators/byok.ts`
+- BYOK-related migrations (`*_byok_*`)
+- `tests/functional/byok.spec.ts`
+
+**Vaults:**
+- `start/routes_vaults.ts`
+- `app/controllers/vaults_controller.ts`
+- `app/models/vault.ts`, `app/models/vault_item.ts`
+- `app/services/vaults/*`
+- `app/validators/vaults.ts`
+- Vaults-related migrations (`*_vaults_*`)
+- `tests/functional/vaults.spec.ts`
+
+**Audit Log:**
+- `start/routes_audit_log.ts`
+- `app/controllers/audit_logs_controller.ts`
+- `app/models/audit_log.ts`
+- `app/services/audit_log/*`
+- `app/validators/audit_log.ts`
+- Audit log migrations (`*_audit_logs_*`)
+
+**Audit Sink (export/forward):**
+- `start/routes_audit_sink.ts`
+- `app/controllers/audit_sinks_controller.ts`
+- `app/models/audit_sink.ts`, `app/models/audit_sink_delivery.ts`
+- `app/services/audit_sink/*`
+- `app/validators/audit_sink.ts`
+- Audit sink migrations (`*_audit_sink*`)
+
+**Encrypted Backups:**
+- `start/routes_backup.ts`
+- `app/controllers/encrypted_backups_controller.ts`
+- `app/models/encrypted_backup.ts`
+- `app/services/backup/*`
+- `app/validators/backup.ts`
+- Backup-related migrations (`*_backup*`)
+- `tests/functional/backup.spec.ts`
+
+**RBAC Extensions (rule packs):**
+- `start/routes_rbac_extensions.ts`
+- `app/services/rbac/*`
+- `app/validators/rbac_extensions.ts`
+- `tests/functional/rbac.spec.ts`
+
+**DLP (Data Loss Prevention):**
+- `start/routes_dlp.ts`
+- `app/controllers/dlp_rules_controller.ts`
+- `app/models/dlp_redaction_rule.ts`
+- `app/services/dlp/*`
+- `app/validators/dlp.ts`
+- DLP-related migrations (`*_dlp_*`)
+
+**Shared-file enterprise extensions (dynamic imports from shared code):**
+- `tests/bootstrap_enterprise.ts` — enterprise table list for test truncation
+- `app/services/plugins/plugin_boot_enterprise.ts` — enterprise availability check for plugin boot
+- `database/seeders/test_data_seeder_enterprise.ts` — enterprise test data seeder
 
 ### Adding New Enterprise Features
 
 1. Create feature files in dedicated directories (e.g., `app/services/analytics/`)
 2. Create `start/routes_<feature>.ts` for feature routes
-3. Add dynamic import to `start/routes.ts`: `import('#start/routes_<feature>').catch(() => {})`
+3. Add dynamic import to `start/routes_enterprise_all.ts`: `await import('#start/routes_<feature>').catch(() => {})`
 4. In shared code, use dynamic imports with try/catch
 5. Enterprise files only exist on `main` branch
 

@@ -11,6 +11,7 @@ import Product from '#models/product'
 import Price, { type PriceInterval } from '#models/price'
 import Coupon from '#models/coupon'
 import DiscountCode from '#models/discount_code'
+import { getMainAppPluginId } from '@saas/config/plugins/server'
 
 export default class extends BaseSeeder {
   async run(): Promise<void> {
@@ -45,6 +46,18 @@ export default class extends BaseSeeder {
 
     // Create discount codes
     await this.seedDiscountCodes()
+
+    // Seed enterprise-only test data (vaults, audit, DLP, etc.)
+    try {
+      // @ts-ignore - Enterprise feature: module may not exist on public repo
+      const { seedEnterpriseData } = await import('./test_data_seeder_enterprise.js')
+      await seedEnterpriseData(users)
+    } catch {
+      // Enterprise seeder not available
+    }
+
+    // Enable plugins for tenants
+    await this.seedPluginStates()
 
     console.log('Test data seeding complete!')
   }
@@ -466,5 +479,51 @@ export default class extends BaseSeeder {
       await DiscountCode.create(codeData)
       console.log(`  Created discount code: ${codeData.code}`)
     }
+  }
+
+  private async seedPluginStates(): Promise<void> {
+    console.log('Seeding plugin states...')
+
+    // Get all tenants to enable plugins for
+    const tenants = await Tenant.all()
+
+    // Plugins to enable for all tenants
+    const pluginsToEnable = [getMainAppPluginId(), 'notes']
+
+    for (const tenant of tenants) {
+      for (const pluginId of pluginsToEnable) {
+        // Use raw upsert to avoid any model issues
+        await db.rawQuery(
+          `
+          INSERT INTO plugin_states (tenant_id, plugin_id, version, enabled, config, installed_at, updated_at)
+          VALUES (?, ?, '1.0.0', true, '{}', NOW(), NOW())
+          ON CONFLICT (tenant_id, plugin_id)
+          DO UPDATE SET enabled = true, updated_at = NOW()
+          `,
+          [tenant.id, pluginId]
+        )
+        console.log(`  Enabled plugin ${pluginId} for tenant: ${tenant.slug}`)
+      }
+    }
+
+    // Seed plugin_db_state for plugins with migrations so boot-time
+    // schema checks pass (the migration rows are lost on DB reset)
+    const pluginSchemaVersions = [
+      { pluginId: 'notes', schemaVersion: 1 },
+      { pluginId: 'analytics', schemaVersion: 1 },
+    ]
+
+    for (const { pluginId, schemaVersion } of pluginSchemaVersions) {
+      await db.rawQuery(
+        `
+        INSERT INTO plugin_db_state (plugin_id, schema_version, updated_at)
+        VALUES (?, ?, NOW())
+        ON CONFLICT (plugin_id)
+        DO UPDATE SET schema_version = ?, updated_at = NOW()
+        `,
+        [pluginId, schemaVersion, schemaVersion]
+      )
+    }
+    console.log('  Plugin schema versions seeded')
   }
 }
