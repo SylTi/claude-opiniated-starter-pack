@@ -166,6 +166,26 @@ All tenant routes require authentication. The `X-Tenant-ID` header can be includ
 
 ---
 
+## Notifications (requires auth + tenant context)
+
+Notification routes require authentication and tenant context (`X-Tenant-ID` header).
+Responses are always scoped to the authenticated user as recipient.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/notifications` | List notifications for current user in current tenant |
+| GET | `/notifications/unread-count` | Get unread notifications count for current user |
+| POST | `/notifications/read-all` | Mark all unread notifications as read for current user |
+| GET | `/notifications/:id` | Get one notification (recipient-scoped) |
+| POST | `/notifications/:id/read` | Mark notification as read |
+
+**List query params**
+- `unreadOnly` (`true|false`, optional, default `false`)
+- `limit` (integer `1..100`, optional, default `50`)
+- `beforeId` (positive integer, optional, for cursor-style pagination)
+
+---
+
 ## Admin Routes
 
 All admin routes require authentication and admin role.

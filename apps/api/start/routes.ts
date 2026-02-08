@@ -31,6 +31,7 @@ const DiscountCodesController = () => import('#controllers/discount_codes_contro
 const CouponsController = () => import('#controllers/coupons_controller')
 const NavigationController = () => import('#controllers/navigation_controller')
 const AuthTokensController = () => import('#controllers/auth_tokens_controller')
+const NotificationsController = () => import('#controllers/notifications_controller')
 
 router.get('/', async () => {
   return {
@@ -181,6 +182,18 @@ router
         router.delete('/:id', [AuthTokensController, 'destroy'])
       })
       .prefix('/auth-tokens')
+      .use([middleware.auth(), middleware.tenant(), apiThrottle])
+
+    // Notifications - Protected tenant-scoped routes (per-recipient inbox)
+    router
+      .group(() => {
+        router.get('/', [NotificationsController, 'index'])
+        router.get('/unread-count', [NotificationsController, 'unreadCount'])
+        router.post('/read-all', [NotificationsController, 'markAllRead'])
+        router.get('/:id', [NotificationsController, 'show'])
+        router.post('/:id/read', [NotificationsController, 'markRead'])
+      })
+      .prefix('/notifications')
       .use([middleware.auth(), middleware.tenant(), apiThrottle])
 
     // Users - Protected routes (any logged-in user)
