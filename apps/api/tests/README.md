@@ -22,6 +22,9 @@ tests/
     └── user.spec.ts         # Tests du modèle User
 ```
 
+Plugin API tests live inside each plugin package under `plugins/<pluginId>/tests/api/*.spec.ts`.
+The API functional suite discovers them via a wildcard path (`../plugins/*/tests/api/**/*.spec(.ts|.js)`), so no per-plugin hardcoded path is required.
+
 ## Deux Approches pour Tester les APIs
 
 ### 1. @japa/api-client (Recommandé)

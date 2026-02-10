@@ -12,6 +12,11 @@ import Price, { type PriceInterval } from '#models/price'
 import Coupon from '#models/coupon'
 import DiscountCode from '#models/discount_code'
 import { getMainAppPluginId } from '@saas/config/plugins/server'
+import {
+  resolvePluginMigrationDirsSync,
+  resolvePluginTestSeedersSync,
+} from '@saas/config/plugins/migrations'
+import { runPluginTestSeeders } from '#services/plugins/plugin_test_seed_service'
 
 export default class extends BaseSeeder {
   async run(): Promise<void> {
@@ -58,6 +63,9 @@ export default class extends BaseSeeder {
 
     // Enable plugins for tenants
     await this.seedPluginStates()
+
+    // Seed optional plugin-specific mock data
+    await this.seedPluginTestData()
 
     console.log('Test data seeding complete!')
   }
@@ -507,11 +515,12 @@ export default class extends BaseSeeder {
     }
 
     // Seed plugin_db_state for plugins with migrations so boot-time
-    // schema checks pass (the migration rows are lost on DB reset)
-    const pluginSchemaVersions = [
-      { pluginId: 'notes', schemaVersion: 1 },
-      { pluginId: 'analytics', schemaVersion: 1 },
-    ]
+    // schema checks pass (the migration rows are lost on DB reset).
+    // Source of truth is plugin.meta.json via @saas/config resolver.
+    const pluginSchemaVersions = resolvePluginMigrationDirsSync().map((migration) => ({
+      pluginId: migration.pluginId,
+      schemaVersion: migration.schemaVersion,
+    }))
 
     for (const { pluginId, schemaVersion } of pluginSchemaVersions) {
       await db.rawQuery(
@@ -525,5 +534,20 @@ export default class extends BaseSeeder {
       )
     }
     console.log('  Plugin schema versions seeded')
+  }
+
+  private async seedPluginTestData(): Promise<void> {
+    const seeders = resolvePluginTestSeedersSync()
+
+    if (seeders.length === 0) {
+      console.log('No plugin test seeders found')
+      return
+    }
+
+    console.log(`Seeding plugin test data from ${seeders.length} plugin(s)...`)
+    const { executed, skipped } = await runPluginTestSeeders(seeders, console)
+    console.log(
+      `  Plugin test seeder execution complete (executed=${executed}, skipped=${skipped})`
+    )
   }
 }

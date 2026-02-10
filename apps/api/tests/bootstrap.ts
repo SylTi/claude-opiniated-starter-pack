@@ -5,6 +5,7 @@ import type { Config } from '@japa/runner/types'
 import { pluginAdonisJS } from '@japa/plugin-adonisjs'
 import testUtils from '@adonisjs/core/services/test_utils'
 import db from '@adonisjs/lucid/services/db'
+import { resolvePluginMigrationDirsSync } from '@saas/config/plugins/migrations'
 
 /**
  * This file is imported by the "bin/test.ts" entrypoint file
@@ -16,6 +17,32 @@ import db from '@adonisjs/lucid/services/db'
  */
 function getAdminDb() {
   return db.connection('postgres')
+}
+
+/**
+ * Seed plugin_db_state for plugins that have migrations.
+ * This ensures the schema version check passes during boot.
+ */
+async function seedPluginDbState(): Promise<void> {
+  const adminDb = getAdminDb()
+
+  const pluginSchemaVersions = resolvePluginMigrationDirsSync().map((migration) => ({
+    pluginId: migration.pluginId,
+    schemaVersion: migration.schemaVersion,
+  }))
+
+  for (const { pluginId, schemaVersion } of pluginSchemaVersions) {
+    const existing = await adminDb.from('plugin_db_state').where('plugin_id', pluginId).first()
+    if (existing) {
+      continue
+    }
+
+    await adminDb.table('plugin_db_state').insert({
+      plugin_id: pluginId,
+      schema_version: schemaVersion,
+      updated_at: new Date().toISOString(),
+    })
+  }
 }
 
 /**
@@ -151,6 +178,9 @@ export async function truncateAllTables(): Promise<void> {
 
   // Re-seed base tiers after truncation
   await seedBaseTiers()
+
+  // Re-seed plugin db state so schema version checks pass
+  await seedPluginDbState()
 }
 
 /**

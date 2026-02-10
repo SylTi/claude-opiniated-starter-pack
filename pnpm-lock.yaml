@@ -338,15 +338,30 @@ importers:
 
   packages/config:
     dependencies:
-      '@plugins/analytics':
+      '@plugins/calendar':
         specifier: workspace:*
-        version: link:../../plugins/analytics
+        version: link:../../plugins/calendar
+      '@plugins/collab':
+        specifier: workspace:*
+        version: link:../../plugins/collab
+      '@plugins/files':
+        specifier: workspace:*
+        version: link:../../plugins/files
+      '@plugins/main-app':
+        specifier: workspace:*
+        version: link:../../plugins/main-app
       '@plugins/nav-links':
         specifier: workspace:*
         version: link:../../plugins/nav-links
       '@plugins/notes':
         specifier: workspace:*
         version: link:../../plugins/notes
+      '@plugins/webhooks':
+        specifier: workspace:*
+        version: link:../../plugins/webhooks
+      '@plugins/wiki':
+        specifier: workspace:*
+        version: link:../../plugins/wiki
       '@saas/plugins-core':
         specifier: workspace:*
         version: link:../plugins-core
@@ -390,6 +405,45 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
+  plugins/calendar:
+    dependencies:
+      '@saas/plugins-core':
+        specifier: workspace:*
+        version: link:../../packages/plugins-core
+      '@saas/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
+  plugins/collab:
+    dependencies:
+      '@saas/plugins-core':
+        specifier: workspace:*
+        version: link:../../packages/plugins-core
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
+  plugins/files:
+    dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.978.0
+        version: 3.978.0
+      '@saas/plugins-core':
+        specifier: workspace:*
+        version: link:../../packages/plugins-core
+      '@saas/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
   plugins/main-app:
     dependencies:
       '@saas/plugins-core':
@@ -417,6 +471,32 @@ importers:
         version: 5.9.3
 
   plugins/notes:
+    dependencies:
+      '@saas/plugins-core':
+        specifier: workspace:*
+        version: link:../../packages/plugins-core
+      '@saas/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
+  plugins/webhooks:
+    dependencies:
+      '@saas/plugins-core':
+        specifier: workspace:*
+        version: link:../../packages/plugins-core
+      '@saas/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
+  plugins/wiki:
     dependencies:
       '@saas/plugins-core':
         specifier: workspace:*

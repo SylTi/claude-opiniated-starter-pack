@@ -37,7 +37,7 @@ import {
   ensureMandatoryItems,
   assertNoIdCollisions,
 } from '@saas/plugins-core'
-import { design as mainAppDesign } from '@saas/config/main-app'
+import { loadMainAppDesign } from '@saas/config/main-app'
 import { createDefaultNavModel } from './build-nav-model'
 import { verifyUserFromApi, buildNavContextFromUser } from '@/lib/server/auth'
 import { cookies } from 'next/headers'
@@ -108,10 +108,12 @@ function isSafeMode(): boolean {
  * Ensure design is registered in the server runtime.
  * Lazily registers the main-app design if not already registered.
  */
-function ensureDesignRegistered(): void {
+async function ensureDesignRegistered(): Promise<void> {
   if (!designRegistry.has()) {
-    // Register the main-app design
-    designRegistry.register(mainAppDesign)
+    const design = await loadMainAppDesign()
+    if (!designRegistry.has()) {
+      designRegistry.register(design)
+    }
   }
 }
 
@@ -380,7 +382,7 @@ export async function buildNavigationServerSide(
 
   // Handle unauthenticated users - return guest navigation
   if (apiResult.status === 'unauthenticated') {
-    ensureDesignRegistered()
+    await ensureDesignRegistered()
     const design = designRegistry.get()
 
     // Build guest context with minimal permissions

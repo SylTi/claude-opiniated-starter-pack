@@ -27,12 +27,13 @@ Non-goals (v1):
 `collab` is a Tier C plugin and requests only required core capabilities.
 
 Example requested capabilities:
-- `core.service.users.read`
-- `core.service.resources.read`
-- `core.service.permissions.manage`
-- `core.service.notifications.send` (optional behavior if unavailable)
-- `core.hooks.define`
-- `core.entity.fk.users`
+- `app:authz`
+- `core:service:users:read`
+- `core:service:resources:read`
+- `core:service:permissions:manage`
+- `core:service:notifications:send` (optional behavior if unavailable)
+- `core:hooks:define`
+- `core:entity:fk:users`
 
 ### 1.2 Plugin dependencies
 
@@ -142,6 +143,13 @@ Examples:
 Rules:
 - `grant/revoke` scoped to `collab.` namespace.
 - `check/require` can validate cross-namespace abilities when needed.
+- `collab` exports an `authzResolver` for `collab.*` abilities and requests `app:authz`.
+- Default role policy:
+  - `owner`: comment create/delete + share manage = allowed
+  - `admin`: comment create/delete + share manage = allowed
+  - `member`: comment create = allowed, comment delete/share manage = denied
+- Tenant config may override role booleans under:
+  - `config.rbac.roles.{owner|admin|member}.{comment_create|comment_delete|share_manage}`
 
 ### 5.3 Tenant member primitives
 

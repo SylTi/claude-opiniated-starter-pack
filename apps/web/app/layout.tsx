@@ -8,7 +8,7 @@ import { Providers } from '@/components/providers'
 import { Toaster } from '@/components/ui/sonner'
 import { verifyUserCookie } from '@/lib/cookie-signing'
 import { type Theme, THEME_COOKIE_NAME, DEFAULT_THEME } from '@/lib/theme-config'
-import { design } from '@saas/config/main-app'
+import { loadMainAppDesign } from '@saas/config/main-app'
 
 /**
  * Default metadata fallback.
@@ -22,8 +22,9 @@ const DEFAULT_METADATA: Metadata = {
  * Generate metadata from main-app plugin design.
  * Falls back to defaults if design doesn't provide branding.
  */
-export function generateMetadata(): Metadata {
+export async function generateMetadata(): Promise<Metadata> {
   try {
+    const design = await loadMainAppDesign()
     const tokens = design.appTokens()
     const iconUrl = tokens.faviconUrl ?? tokens.logoUrl
     return {

@@ -1,14 +1,15 @@
 'use client'
 
-import type { ReactNode, ComponentType } from 'react'
+import { useEffect, useState, type ReactNode, type ComponentType } from 'react'
 import type { UserDTO } from '@saas/shared'
+import type { AppDesign } from '@saas/plugins-core'
 import { AuthProvider } from '@/contexts/auth-context'
 import { DesignProvider } from '@/contexts/design-context'
 import { NavigationProvider } from '@/contexts/navigation-context'
 import { FrameworkProvider } from '@/contexts/framework-context'
 import { ShellWrapper } from '@/components/shells/shell-wrapper'
 import { Header } from '@/components/header'
-import { clientDesign } from '@saas/config/main-app/client'
+import { loadMainAppClientDesign } from '@saas/config/main-app/client'
 import { type Theme } from '@/lib/theme-config'
 
 /**
@@ -67,8 +68,36 @@ export function Providers(props: ProvidersProps): React.ReactElement {
     initialUserRole = null,
     serverSafeMode,
   } = props
+
+  const [clientDesign, setClientDesign] = useState<AppDesign | null>(null)
+
+  useEffect(() => {
+    if (serverSafeMode) {
+      return
+    }
+
+    let cancelled = false
+
+    void loadMainAppClientDesign()
+      .then((design) => {
+        if (!cancelled) {
+          setClientDesign(design)
+        }
+      })
+      .catch((error: unknown) => {
+        console.error('[Providers] Failed to load main-app client design:', error)
+        if (!cancelled) {
+          setClientDesign(null)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [serverSafeMode])
+
   // Get plugin's AppProviders if available (cast from unknown to proper React type)
-  const PluginAppProviders = !serverSafeMode && clientDesign.AppProviders
+  const PluginAppProviders = !serverSafeMode && clientDesign?.AppProviders
     ? (clientDesign.AppProviders as PluginAppProvidersComponent)
     : undefined
 

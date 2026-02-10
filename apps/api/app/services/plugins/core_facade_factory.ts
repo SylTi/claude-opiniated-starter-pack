@@ -80,6 +80,13 @@ function ensureAbilityId(ability: string): void {
   }
 }
 
+function toRecord(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return undefined
+  }
+  return value as Record<string, unknown>
+}
+
 function ensureNotificationPayload(pluginId: string, payload: NotificationPayload): void {
   if (!payload.type.startsWith(`${pluginId}.`)) {
     throw new Error(`Notification type "${payload.type}" must be prefixed with "${pluginId}."`)
@@ -241,6 +248,10 @@ function createPermissionsFacade(
               ? tenantWithMembership.membership.role
               : undefined
           })(),
+          extra: {
+            pluginId,
+            pluginConfig: toRecord(boundContext.plugin?.state?.config),
+          },
         },
         {
           ability,

@@ -73,7 +73,14 @@ apps/web/app/app/
 
 # Marketplace plugins (developed in separate repo, not committed here)
 plugins/analytics/
+plugins/calendar/
+plugins/collab/
+plugins/files/
+plugins/webhooks/
+plugins/wiki/
 
 # Custom main-app plugins (local development only)
-# To use a custom main-app, edit packages/config/plugins.config.ts (single file)
-# Use: git update-index --skip-worktree packages/config/plugins.config.ts
+# To keep local plugin registry edits out of commits:
+#   pnpm run plugins:local:on
+#   pnpm run plugins:local:status
+#   pnpm run plugins:local:off   # before pull/rebase

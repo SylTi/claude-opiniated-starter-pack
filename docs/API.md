@@ -26,6 +26,175 @@ All responses follow this format:
 
 ---
 
+## Collab Plugin
+
+Base prefix: `/api/v1/apps/collab`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/comments` | Create comment |
+| GET | `/comments` | List comments for a resource |
+| DELETE | `/comments/:id` | Delete comment |
+| POST | `/shares` | Create or update a share |
+| GET | `/shares` | List shares for a resource |
+| DELETE | `/shares/:id` | Revoke share |
+| GET | `/mentions` | List unresolved mentions |
+| POST | `/mentions/:id/read` | Mark mention as read |
+
+Feature gates:
+- Disabled route features return `403` with `E_FEATURE_DISABLED`.
+- Threaded comments (`parent_id`) require `threads`.
+- Mention side effects require `mentions`.
+
+---
+
+## Files Plugin
+
+Base prefix: `/api/v1/apps/files`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/admin/config/validate` | Validate local/cloud storage config (requires `files.policy.manage`) |
+| GET | `/admin/rbac` | Read tenant RBAC policy for files plugin |
+| PUT | `/admin/rbac` | Update tenant RBAC policy for files plugin |
+| POST | `/upload` | Upload file object |
+| GET | `/objects` | List visible file metadata |
+| GET | `/objects/:id` | Get one file metadata record |
+| GET | `/objects/:id/content` | Download file bytes |
+| DELETE | `/objects/:id` | Soft-delete file |
+
+Feature gates:
+- Disabled route features return `403` with `E_FEATURE_DISABLED`.
+- `admin_config` gates `/admin/config/validate`.
+- `admin_config` gates `/admin/rbac` (GET/PUT).
+- `uploads` gates `/upload`.
+- `downloads` gates all GET object routes.
+- `deletes` gates `DELETE /objects/:id`.
+
+Storage config examples:
+- Local: `{ "storageMode": "local", "local": { "basePath": "/var/app/files" } }`
+- Cloud: `{ "storageMode": "cloud", "cloud": { "provider": "aws_s3", "aws_s3": { "bucket": "...", "region": "...", "accessKeyId": "...", "secretAccessKey": "..." } } }`
+- Supported cloud providers: `aws_s3`, `cloudflare_r2`, `backblaze_b2`, `gcs`, `azure_blob`.
+- RBAC policy: `config.rbac.roles.{owner|admin|member}.{upload|read|delete|manage}`.
+- Abilities enforced through core authz namespace `files.`:
+  - `files.file.upload`
+  - `files.file.read`
+  - `files.file.delete`
+  - `files.policy.manage`
+
+---
+
+## Webhooks Plugin
+
+Base prefix: `/api/v1/apps/webhooks`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin/endpoints` | List tenant webhook endpoints |
+| POST | `/admin/endpoints` | Create webhook endpoint |
+| PUT | `/admin/endpoints/:id` | Update webhook endpoint |
+| DELETE | `/admin/endpoints/:id` | Soft-delete webhook endpoint |
+| GET | `/admin/subscriptions` | List endpoint subscriptions |
+| POST | `/admin/subscriptions` | Create webhook subscription |
+| PUT | `/admin/subscriptions/:id` | Update webhook subscription |
+| POST | `/admin/events` | Queue webhook event for matching subscriptions |
+| GET | `/admin/deliveries` | List webhook deliveries |
+| GET | `/admin/deliveries/:id` | Get one webhook delivery |
+| POST | `/admin/deliveries/:id/replay` | Queue replay for one delivery |
+| POST | `/admin/deliveries/dispatch` | Run delivery dispatch loop for due jobs |
+
+Feature gates:
+- Disabled route features return `403` with `E_FEATURE_DISABLED`.
+- `endpoint_management` gates endpoint CRUD routes.
+- `subscriptions` gates subscription routes and event enqueue route.
+- `deliveries_read` gates delivery read routes.
+- `replay` gates replay and dispatch routes.
+
+Abilities enforced through core authz namespace `webhooks.`:
+- `webhooks.endpoint.manage`
+- `webhooks.subscription.manage`
+- `webhooks.delivery.read`
+- `webhooks.delivery.replay`
+
+---
+
+## Wiki Plugin
+
+Base prefix: `/api/v1/apps/wiki`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/spaces` | List wiki spaces |
+| POST | `/spaces` | Create wiki space |
+| PUT | `/spaces/:id` | Update wiki space |
+| DELETE | `/spaces/:id` | Soft-delete wiki space |
+| GET | `/pages` | List wiki pages |
+| POST | `/pages` | Create wiki page |
+| GET | `/pages/:id` | Get wiki page |
+| PUT | `/pages/:id` | Update wiki page |
+| DELETE | `/pages/:id` | Soft-delete wiki page |
+| POST | `/pages/:id/publish` | Publish page |
+| POST | `/pages/:id/unpublish` | Unpublish page |
+| GET | `/pages/:id/revisions` | List page revisions |
+| POST | `/pages/:id/revisions/:revisionId/restore` | Restore page revision |
+| POST | `/pages/:id/comments` | Optional comments endpoint (collab integration) |
+| POST | `/pages/:id/attachments` | Optional attachment endpoint (files integration) |
+
+Feature gates:
+- Disabled route features return `403` with `E_FEATURE_DISABLED`.
+- `spaces` gates all `/spaces` routes.
+- `pages` gates all `/pages` CRUD routes.
+- `publishing` gates publish/unpublish routes.
+- `history` gates revision routes.
+- `comments` gates comments integration route.
+- `attachments` gates attachment integration route.
+
+Abilities enforced through core authz namespace `wiki.`:
+- `wiki.space.manage`
+- `wiki.page.read`
+- `wiki.page.write`
+- `wiki.page.publish`
+- `wiki.page.delete`
+
+---
+
+## Calendar Plugin
+
+Base prefix: `/api/v1/apps/calendar`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/events` | List calendar events |
+| POST | `/events` | Create event |
+| GET | `/events/:id` | Get one event |
+| PUT | `/events/:id` | Update event |
+| DELETE | `/events/:id` | Soft-delete event |
+| POST | `/events/:id/attendees` | Add attendee |
+| DELETE | `/events/:id/attendees/:userId` | Remove attendee |
+| POST | `/events/:id/rsvp` | RSVP for current user attendee row |
+| POST | `/events/:id/reminders` | Schedule reminder |
+| DELETE | `/events/:id/reminders/:reminderId` | Cancel reminder |
+| POST | `/events/:id/recurrence` | Configure recurrence rule |
+| DELETE | `/events/:id/recurrence` | Clear recurrence rule |
+| POST | `/admin/reminders/dispatch` | Process due reminders |
+
+Feature gates:
+- Disabled route features return `403` with `E_FEATURE_DISABLED`.
+- `events` gates event CRUD routes.
+- `attendees` gates attendee and RSVP routes.
+- `reminders` gates reminder CRUD and dispatch route.
+- `recurrence` gates recurrence set/clear routes.
+
+Abilities enforced through core authz namespace `calendar.`:
+- `calendar.event.create`
+- `calendar.event.read`
+- `calendar.event.update`
+- `calendar.event.delete`
+- `calendar.event.manage_attendees`
+- `calendar.reminder.manage`
+
+---
+
 ## Admin - Subscription Tiers
 
 ### List Subscription Tiers

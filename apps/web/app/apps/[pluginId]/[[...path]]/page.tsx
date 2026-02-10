@@ -119,8 +119,13 @@ export default async function PluginPage({ params }: PluginPageProps): Promise<R
     notFound()
   }
 
-  // Only Tier A, B, and main-app plugins can have UI
-  if (manifest.tier !== 'A' && manifest.tier !== 'B' && manifest.tier !== 'main-app') {
+  // Tier A/B/C and main-app plugins can provide client UI modules.
+  if (
+    manifest.tier !== 'A' &&
+    manifest.tier !== 'B' &&
+    manifest.tier !== 'C' &&
+    manifest.tier !== 'main-app'
+  ) {
     notFound()
   }
 
@@ -138,9 +143,9 @@ export default async function PluginPage({ params }: PluginPageProps): Promise<R
           <p className="text-muted-foreground mb-4">
             This plugin does not provide a standalone UI.
           </p>
-          {manifest.tier === 'B' && (
+          {(manifest.tier === 'B' || manifest.tier === 'C') && (
             <p className="text-sm text-muted-foreground">
-              Tier B plugins typically extend the app via API routes and hooks
+              Platform/app plugins often extend the app via API routes and hooks
               rather than standalone pages.
             </p>
           )}

@@ -21,8 +21,44 @@ export type PluginClientModule = {
 export type PluginConfig = {
   id: string
   packageName: string
+  /**
+   * Server entrypoint package path used by API runtime.
+   * Defaults to packageName when omitted.
+   */
+  serverEntrypoint?: string
   clientImport: () => Promise<PluginClientModule>
   manifestImport: () => Promise<unknown>
+}
+
+type PluginConfigOptions = {
+  packageName?: string
+  serverEntrypoint?: string
+  clientEntrypoint?: string
+  manifestEntrypoint?: string
+}
+
+/**
+ * Create a plugin config using convention-based defaults.
+ *
+ * Defaults:
+ * - packageName: @plugins/{id}
+ * - serverEntrypoint: packageName
+ * - clientEntrypoint: {packageName}/client
+ * - manifestEntrypoint: {packageName}/plugin.meta.json
+ */
+function createPluginConfig(id: string, options: PluginConfigOptions = {}): PluginConfig {
+  const packageName = options.packageName ?? `@plugins/${id}`
+  const serverEntrypoint = options.serverEntrypoint ?? packageName
+  const clientEntrypoint = options.clientEntrypoint ?? `${packageName}/client`
+  const manifestEntrypoint = options.manifestEntrypoint ?? `${packageName}/plugin.meta.json`
+
+  return {
+    id,
+    packageName,
+    serverEntrypoint,
+    clientImport: () => import(clientEntrypoint),
+    manifestImport: () => import(manifestEntrypoint),
+  }
 }
 
 // =============================================================================
@@ -36,30 +72,24 @@ export type PluginConfig = {
 export const MAIN_APP_PLUGIN: PluginConfig = {
   id: 'main-app',
   packageName: '@plugins/main-app',
+  serverEntrypoint: '@plugins/main-app',
   clientImport: () => import('@plugins/main-app/client'),
   manifestImport: () => import('@plugins/main-app/plugin.meta.json'),
 }
 
 // =============================================================================
-// ADDITIONAL PLUGINS (Tier A and Tier B)
+// ADDITIONAL PLUGINS (Tier A, Tier B, Tier C)
 // =============================================================================
 
 /**
  * Additional plugins to load (besides main-app).
  */
 export const ADDITIONAL_PLUGINS: Record<string, PluginConfig> = {
-  'nav-links': {
-    id: 'nav-links',
-    packageName: '@plugins/nav-links',
-    clientImport: () => import('@plugins/nav-links'),
-    manifestImport: () => import('@plugins/nav-links/plugin.meta.json'),
-  },
-  notes: {
-    id: 'notes',
-    packageName: '@plugins/notes',
-    clientImport: () => import('@plugins/notes/client'),
-    manifestImport: () => import('@plugins/notes/plugin.meta.json'),
-  },
+  'nav-links': createPluginConfig('nav-links', {
+    serverEntrypoint: '@plugins/nav-links/server',
+    clientEntrypoint: '@plugins/nav-links',
+  }),
+  notes: createPluginConfig('notes'),
 }
 
 // =============================================================================
@@ -82,13 +112,3 @@ export function extractManifest(imported: unknown): PluginManifest {
   const mod = imported as { default?: PluginManifest } & PluginManifest
   return (mod.default ?? mod) as PluginManifest
 }
-
-// =============================================================================
-// MAIN-APP DESIGN RE-EXPORTS
-// =============================================================================
-
-/** Server-side design export */
-export { design } from '@plugins/main-app'
-
-/** Client-side design export */
-export { clientDesign } from '@plugins/main-app/client'

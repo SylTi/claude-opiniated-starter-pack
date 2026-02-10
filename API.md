@@ -186,6 +186,196 @@ Responses are always scoped to the authenticated user as recipient.
 
 ---
 
+## Collab Plugin (requires auth + tenant context + plugin enabled)
+
+Base prefix: `/api/v1/apps/collab`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/comments` | Create comment |
+| GET | `/comments` | List comments for a resource |
+| DELETE | `/comments/:id` | Delete (soft-delete) comment |
+| POST | `/shares` | Create or update a share |
+| GET | `/shares` | List shares for a resource |
+| DELETE | `/shares/:id` | Revoke share |
+| GET | `/mentions` | List unresolved mentions for current user |
+| POST | `/mentions/:id/read` | Mark mention as read |
+
+Feature-gate behavior:
+- Disabled route feature returns `403` with `{ "error": "E_FEATURE_DISABLED", "message": "Feature <id> is disabled for this tenant" }`
+- Additional in-handler feature checks:
+  - `threads` is required when `parent_id` is set on `POST /comments`
+  - `mentions` is required when comment body contains mention targets
+
+---
+
+## Files Plugin (requires auth + tenant context + plugin enabled)
+
+Base prefix: `/api/v1/apps/files`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/admin/config/validate` | Validate local/cloud storage config (requires `files.policy.manage`) |
+| GET | `/admin/rbac` | Read tenant RBAC policy for files plugin |
+| PUT | `/admin/rbac` | Update tenant RBAC policy for files plugin |
+| POST | `/upload` | Upload a file object |
+| GET | `/objects` | List file metadata visible to current user |
+| GET | `/objects/:id` | Get one file metadata record |
+| GET | `/objects/:id/content` | Download file bytes |
+| DELETE | `/objects/:id` | Soft-delete a file object |
+
+Feature-gate behavior:
+- Disabled route feature returns `403` with `{ "error": "E_FEATURE_DISABLED", "message": "Feature <id> is disabled for this tenant" }`
+- Route to feature mapping:
+  - `admin_config` -> `/admin/config/validate`
+  - `admin_config` -> `/admin/rbac` (GET/PUT)
+  - `uploads` -> `/upload`
+  - `downloads` -> `/objects`, `/objects/:id`, `/objects/:id/content`
+  - `deletes` -> `/objects/:id` (DELETE)
+
+Storage configuration model (tenant plugin config):
+- Local: `{ "storageMode": "local", "local": { "basePath": "/var/app/files" } }`
+- Cloud: `{ "storageMode": "cloud", "cloud": { "provider": "...", ...providerConfig } }`
+  - Providers: `aws_s3`, `cloudflare_r2`, `backblaze_b2`, `gcs`, `azure_blob`
+- RBAC policy (core authz namespace `files.`):
+  - Abilities: `files.file.upload`, `files.file.read`, `files.file.delete`, `files.policy.manage`
+  - Configurable per tenant via `config.rbac.roles.{owner|admin|member}.{upload|read|delete|manage}`
+
+---
+
+## Webhooks Plugin (requires auth + tenant context + plugin enabled)
+
+Base prefix: `/api/v1/apps/webhooks`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin/endpoints` | List tenant webhook endpoints |
+| POST | `/admin/endpoints` | Create webhook endpoint |
+| PUT | `/admin/endpoints/:id` | Update webhook endpoint |
+| DELETE | `/admin/endpoints/:id` | Soft-delete webhook endpoint |
+| GET | `/admin/subscriptions` | List endpoint subscriptions |
+| POST | `/admin/subscriptions` | Create webhook subscription |
+| PUT | `/admin/subscriptions/:id` | Update webhook subscription |
+| POST | `/admin/events` | Queue webhook event for matching subscriptions |
+| GET | `/admin/deliveries` | List webhook deliveries |
+| GET | `/admin/deliveries/:id` | Get one webhook delivery |
+| POST | `/admin/deliveries/:id/replay` | Queue replay for one delivery |
+| POST | `/admin/deliveries/dispatch` | Run delivery dispatch loop for due jobs |
+
+Feature-gate behavior:
+- Disabled route feature returns `403` with `{ "error": "E_FEATURE_DISABLED", "message": "Feature <id> is disabled for this tenant" }`
+- Route to feature mapping:
+  - `endpoint_management` -> `/admin/endpoints` (GET/POST/PUT/DELETE)
+  - `subscriptions` -> `/admin/subscriptions` (GET/POST/PUT), `/admin/events`
+  - `deliveries_read` -> `/admin/deliveries` (GET), `/admin/deliveries/:id` (GET)
+  - `replay` -> `/admin/deliveries/:id/replay`, `/admin/deliveries/dispatch`
+
+Authorization model:
+- Namespace: `webhooks.`
+- Abilities:
+  - `webhooks.endpoint.manage`
+  - `webhooks.subscription.manage`
+  - `webhooks.delivery.read`
+  - `webhooks.delivery.replay`
+
+Delivery model:
+- Event queue tables are plugin-owned and tenant-scoped.
+- Dispatch signs requests with `X-SaaS-Signature` (`sha256=<hex>`) and includes `X-SaaS-Event-ID`.
+- Retry schedule: `1m, 5m, 15m, 1h, 6h`, then dead-letter on max attempts.
+
+---
+
+## Wiki Plugin (requires auth + tenant context + plugin enabled)
+
+Base prefix: `/api/v1/apps/wiki`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/spaces` | List wiki spaces |
+| POST | `/spaces` | Create wiki space |
+| PUT | `/spaces/:id` | Update wiki space |
+| DELETE | `/spaces/:id` | Soft-delete wiki space (and pages in that space) |
+| GET | `/pages` | List wiki pages |
+| POST | `/pages` | Create wiki page (creates revision 1) |
+| GET | `/pages/:id` | Get wiki page (applies `wiki:page.render` filter if registered) |
+| PUT | `/pages/:id` | Update wiki page (creates new revision on title/body changes) |
+| DELETE | `/pages/:id` | Soft-delete wiki page |
+| POST | `/pages/:id/publish` | Publish page |
+| POST | `/pages/:id/unpublish` | Unpublish page |
+| GET | `/pages/:id/revisions` | List page revisions |
+| POST | `/pages/:id/revisions/:revisionId/restore` | Restore revision and append new head revision |
+| POST | `/pages/:id/comments` | Optional collab integration endpoint (feature-gated) |
+| POST | `/pages/:id/attachments` | Optional files integration endpoint (feature-gated) |
+
+Feature-gate behavior:
+- Disabled route feature returns `403` with `{ "error": "E_FEATURE_DISABLED", "message": "Feature <id> is disabled for this tenant" }`
+- Route to feature mapping:
+  - `spaces` -> `/spaces` (GET/POST/PUT/DELETE)
+  - `pages` -> `/pages` (GET/POST), `/pages/:id` (GET/PUT/DELETE)
+  - `publishing` -> `/pages/:id/publish`, `/pages/:id/unpublish`
+  - `history` -> `/pages/:id/revisions`, `/pages/:id/revisions/:revisionId/restore`
+  - `comments` -> `/pages/:id/comments`
+  - `attachments` -> `/pages/:id/attachments`
+
+Authorization model:
+- Namespace: `wiki.`
+- Abilities:
+  - `wiki.space.manage`
+  - `wiki.page.read`
+  - `wiki.page.write`
+  - `wiki.page.publish`
+  - `wiki.page.delete`
+
+Integration behavior:
+- `comments` endpoint requires tenant-enabled `collab` plugin; otherwise returns `E_FEATURE_DISABLED`.
+- `attachments` endpoint requires tenant-enabled `files` plugin; otherwise returns `E_FEATURE_DISABLED`.
+
+---
+
+## Calendar Plugin (requires auth + tenant context + plugin enabled)
+
+Base prefix: `/api/v1/apps/calendar`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/events` | List calendar events |
+| POST | `/events` | Create event |
+| GET | `/events/:id` | Get one event |
+| PUT | `/events/:id` | Update event |
+| DELETE | `/events/:id` | Soft-delete event |
+| POST | `/events/:id/attendees` | Add attendee |
+| DELETE | `/events/:id/attendees/:userId` | Remove attendee by user ID |
+| POST | `/events/:id/rsvp` | RSVP as current user |
+| POST | `/events/:id/reminders` | Create reminder |
+| DELETE | `/events/:id/reminders/:reminderId` | Cancel reminder |
+| POST | `/events/:id/recurrence` | Set recurrence rule (feature-gated) |
+| DELETE | `/events/:id/recurrence` | Clear recurrence rule (feature-gated) |
+| POST | `/admin/reminders/dispatch` | Process due reminders and send notifications |
+
+Feature-gate behavior:
+- Disabled route feature returns `403` with `{ "error": "E_FEATURE_DISABLED", "message": "Feature <id> is disabled for this tenant" }`
+- Route to feature mapping:
+  - `events` -> `/events` CRUD
+  - `attendees` -> attendee and RSVP routes
+  - `reminders` -> reminder create/delete and dispatch route
+  - `recurrence` -> recurrence set/clear routes
+
+Authorization model:
+- Namespace: `calendar.`
+- Abilities:
+  - `calendar.event.create`
+  - `calendar.event.read`
+  - `calendar.event.update`
+  - `calendar.event.delete`
+  - `calendar.event.manage_attendees`
+  - `calendar.reminder.manage`
+
+Reminder model:
+- Reminders are persisted in plugin tables and dispatched from `/admin/reminders/dispatch`.
+- Dispatch writes execution rows, retries transient failures with bounded backoff, and marks terminal failures.
+
+---
+
 ## Admin Routes
 
 All admin routes require authentication and admin role.
