@@ -166,20 +166,12 @@ test.group('LemonSqueezy Provider - Webhook Body Parsing', () => {
     assert.equal(body.meta.event_name, 'subscription_updated')
   })
 
-  test('extracts data id as event identifier', async ({ assert }) => {
-    const body = {
-      meta: {
-        event_name: 'order_created',
-      },
-      data: {
-        id: '99887',
-        type: 'orders',
-        attributes: {},
-      },
-    }
+  test('builds idempotency key from raw payload hash', async ({ assert }) => {
+    const payload =
+      '{"meta":{"event_name":"subscription_updated"},"data":{"id":"sub_123","type":"subscriptions","attributes":{"status":"active"}}}'
+    const eventId = `payload_${crypto.createHash('sha256').update(payload).digest('hex')}`
 
-    const eventId = String(body.data.id)
-    assert.equal(eventId, '99887')
+    assert.match(eventId, /^payload_[a-f0-9]{64}$/)
   })
 
   test('handles missing custom_data gracefully', async ({ assert }) => {

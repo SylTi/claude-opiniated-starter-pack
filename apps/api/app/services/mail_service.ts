@@ -59,7 +59,9 @@ export default class MailService {
       console.log(`To: ${Array.isArray(options.to) ? options.to.join(', ') : options.to}`)
       console.log(`Subject: ${options.subject}`)
       console.log(`From: ${this.fromName} <${this.fromEmail}>`)
-      console.log('HTML:', options.html.substring(0, 500) + '...')
+      console.log(
+        `Body: [redacted] (htmlLength=${options.html.length}, textLength=${options.text?.length ?? 0})`
+      )
       console.log('=== END EMAIL ===')
       return { success: true, id: 'dev-mode' }
     }

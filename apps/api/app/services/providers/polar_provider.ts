@@ -24,6 +24,11 @@ import { setRlsContext, setSystemRlsContext } from '#utils/rls_context'
 import { hookRegistry } from '@saas/plugins-core'
 import { PaymentProviderConfigError, WebhookVerificationError } from '#exceptions/billing_errors'
 
+const WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS = (() => {
+  const parsed = Number.parseInt(process.env.PAYMENT_WEBHOOK_TOLERANCE_SECONDS ?? '', 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 300
+})()
+
 /**
  * Polar webhook event data shape
  * Polar uses the Standard Webhooks (Svix) format for signatures.
@@ -32,6 +37,30 @@ interface PolarWebhookPayload {
   type: string
   timestamp: string
   data: Record<string, unknown>
+}
+
+type ParsedPolarSignature = {
+  webhookId: string
+  timestamp: string
+  signatureHeader: string
+}
+
+/**
+ * Parse pipe-delimited Polar signature payload from controller.
+ * Format: "webhookId|timestamp|signatureHeader"
+ */
+function parsePolarSignature(signature: string): ParsedPolarSignature | null {
+  const parts = signature.split('|')
+  if (parts.length !== 3) {
+    return null
+  }
+
+  const [webhookId, timestamp, signatureHeader] = parts
+  if (!webhookId || !timestamp || !signatureHeader) {
+    return null
+  }
+
+  return { webhookId, timestamp, signatureHeader }
 }
 
 export default class PolarProvider implements PaymentProvider {
@@ -136,15 +165,19 @@ export default class PolarProvider implements PaymentProvider {
     }
 
     try {
-      // Signature format from controller: "webhookId|timestamp|v1,base64sig"
-      const parts = signature.split('|')
-      if (parts.length !== 3) {
+      const parsedSignature = parsePolarSignature(signature)
+      if (!parsedSignature) {
         return false
       }
 
-      const [webhookId, timestamp, signatureHeader] = parts
+      const { webhookId, timestamp, signatureHeader } = parsedSignature
+      const parsedTimestamp = Number.parseInt(timestamp, 10)
+      if (Number.isNaN(parsedTimestamp)) {
+        return false
+      }
 
-      if (!webhookId || !timestamp || !signatureHeader) {
+      const now = Math.floor(Date.now() / 1000)
+      if (Math.abs(now - parsedTimestamp) > WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS) {
         return false
       }
 
@@ -191,14 +224,26 @@ export default class PolarProvider implements PaymentProvider {
       throw new WebhookVerificationError(this.name)
     }
 
+    // Parse and validate signature envelope so we can use webhook-id for idempotency.
+    const parsedSignature = parsePolarSignature(event.signature)
+    if (!parsedSignature) {
+      throw new WebhookVerificationError(this.name, 'Invalid webhook signature envelope')
+    }
+
     // Parse the webhook payload
     const payload: PolarWebhookPayload = JSON.parse(event.rawPayload)
     const eventType = payload.type
     const data = payload.data
 
-    // Generate a unique event ID from the payload data
-    const dataId = (data.id as string) || ''
-    const eventId = `${this.name}_${eventType}_${dataId}`
+    /**
+     * Idempotency key:
+     * Use Standard Webhooks webhook-id (stable across retries, unique per event).
+     *
+     * Prior implementation keyed on `${eventType}_${data.id}`, which incorrectly
+     * collapsed distinct events for the same subscription/resource (for example
+     * repeated `subscription.updated` events), causing legitimate updates to be dropped.
+     */
+    const eventId = parsedSignature.webhookId
 
     // Check idempotency
     const alreadyProcessed = await ProcessedWebhookEvent.hasBeenProcessed(eventId, this.name)

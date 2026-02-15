@@ -19,7 +19,11 @@ type SupportedProvider = 'google' | 'github'
 const OAUTH_CALLBACKS_KEY = 'oauth_callbacks'
 
 // Maximum number of pending OAuth flows to prevent session bloat
-const MAX_PENDING_OAUTH_FLOWS = 10
+// (session store is cookie-based, so total size must stay small).
+const MAX_PENDING_OAUTH_FLOWS = 3
+
+// Maximum callback URL length to prevent session cookie bloat attacks.
+const MAX_CALLBACK_URL_LENGTH = 512
 
 export default class OAuthController {
   private authService = new AuthService()
@@ -64,7 +68,9 @@ export default class OAuthController {
       if (callbackUrl && typeof callbackUrl === 'string') {
         // Security: Only allow relative paths to prevent open redirect
         // Also block backslash to prevent path traversal (matches frontend validation)
+        // Limit length to prevent oversized session cookies (session is cookie-backed).
         if (
+          callbackUrl.length <= MAX_CALLBACK_URL_LENGTH &&
           callbackUrl.startsWith('/') &&
           !callbackUrl.startsWith('//') &&
           !callbackUrl.includes('\\')

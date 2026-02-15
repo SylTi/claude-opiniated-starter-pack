@@ -14,12 +14,12 @@ import {
 import { isDiscountCodeLimitReachedError } from '#exceptions/billing_errors'
 
 /**
- * Validate that a return URL belongs to an allowed host to prevent open redirect attacks.
+ * Validate that a return URL belongs to an allowed origin to prevent open redirect attacks.
  */
-function isValidReturnUrl(url: string, allowedHost: string): boolean {
+export function isValidReturnUrl(url: string, allowedOrigin: string): boolean {
   try {
     const parsed = new URL(url)
-    return parsed.host === allowedHost
+    return parsed.origin === allowedOrigin
   } catch {
     return false
   }
@@ -181,11 +181,11 @@ export default class PaymentController {
     }
 
     const frontendUrl = env.get('FRONTEND_URL', 'http://localhost:3000')
-    const allowedHost = new URL(frontendUrl).host
+    const allowedOrigin = new URL(frontendUrl).origin
 
     // Validate returnUrl to prevent open redirect attacks
     const finalReturnUrl =
-      returnUrl && isValidReturnUrl(returnUrl, allowedHost) ? returnUrl : `${frontendUrl}/billing`
+      returnUrl && isValidReturnUrl(returnUrl, allowedOrigin) ? returnUrl : `${frontendUrl}/billing`
 
     try {
       const paymentService = await PaymentService.create()

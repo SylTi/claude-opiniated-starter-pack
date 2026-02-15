@@ -8,6 +8,7 @@
 import type { PluginManifest } from '@saas/plugins-core'
 import { pluginRegistry, hookRegistry } from '@saas/plugins-core'
 import app from '@adonisjs/core/services/app'
+import { posix as pathPosix } from 'node:path'
 import { serverPluginLoaders } from '@saas/config/plugins/server'
 import { RoutesRegistrar, createRoutesRegistrar } from './routes_registrar.js'
 import { pluginCapabilityService } from './plugin_capability_service.js'
@@ -187,6 +188,40 @@ export interface RouteMountResult {
 }
 
 /**
+ * Validate plugin-declared route prefix.
+ * Prevents path traversal or malformed paths from escaping /api/v1/apps/{pluginId}.
+ */
+export function isValidPluginRoutePrefix(basePrefix: string, declaredPrefix: string): boolean {
+  if (!declaredPrefix.startsWith('/')) {
+    return false
+  }
+
+  if (
+    declaredPrefix.includes('\\') ||
+    declaredPrefix.includes('?') ||
+    declaredPrefix.includes('#')
+  ) {
+    return false
+  }
+
+  const normalized = pathPosix.normalize(declaredPrefix)
+  const normalizedTrimmed =
+    normalized.endsWith('/') && normalized !== '/' ? normalized.slice(0, -1) : normalized
+  const declaredTrimmed =
+    declaredPrefix.endsWith('/') && declaredPrefix !== '/'
+      ? declaredPrefix.slice(0, -1)
+      : declaredPrefix
+
+  // Reject prefixes that change after normalization (e.g. ../, ./, duplicate slashes).
+  if (normalizedTrimmed !== declaredTrimmed) {
+    return false
+  }
+
+  // Must stay within /api/v1/apps/{pluginId}/...
+  return declaredTrimmed.startsWith(basePrefix + '/')
+}
+
+/**
  * Plugin Route Mounter Service.
  */
 export default class PluginRouteMounter {
@@ -249,9 +284,12 @@ export default class PluginRouteMounter {
         prefix = basePrefix
       } else if (declaredPrefix === basePrefix) {
         prefix = declaredPrefix
-      } else if (declaredPrefix.startsWith(basePrefix + '/')) {
+      } else if (isValidPluginRoutePrefix(basePrefix, declaredPrefix)) {
         // Valid subpath (e.g., /api/v1/apps/notes/v2)
-        prefix = declaredPrefix
+        prefix =
+          declaredPrefix.endsWith('/') && declaredPrefix !== '/'
+            ? declaredPrefix.slice(0, -1)
+            : declaredPrefix
       } else {
         // Invalid prefix - doesn't start with the required base
         console.warn(

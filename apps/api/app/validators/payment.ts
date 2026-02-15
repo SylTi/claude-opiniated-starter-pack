@@ -18,7 +18,7 @@ export const createCheckoutValidator = vine.compile(
 export const createPortalValidator = vine.compile(
   vine.object({
     tenantId: vine.number().positive(),
-    returnUrl: vine.string().url().optional(),
+    returnUrl: vine.string().url().maxLength(2048).optional(),
   })
 )
 

@@ -24,6 +24,11 @@ import { AUDIT_EVENT_TYPES } from '#constants/audit_events'
 import { setRlsContext, setSystemRlsContext } from '#utils/rls_context'
 import { hookRegistry } from '@saas/plugins-core'
 
+const WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS = (() => {
+  const parsed = Number.parseInt(process.env.PAYMENT_WEBHOOK_TOLERANCE_SECONDS ?? '', 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 300
+})()
+
 export default class PaddleProvider implements PaymentProvider {
   readonly name = 'paddle'
   private paddle: Paddle
@@ -166,6 +171,16 @@ export default class PaddleProvider implements PaymentProvider {
 
       const timestamp = timestampPart.replace('ts=', '')
       const expectedHash = hashPart.replace('h1=', '')
+      const parsedTimestamp = Number.parseInt(timestamp, 10)
+
+      if (Number.isNaN(parsedTimestamp)) {
+        return false
+      }
+
+      const now = Math.floor(Date.now() / 1000)
+      if (Math.abs(now - parsedTimestamp) > WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS) {
+        return false
+      }
 
       // Compute HMAC-SHA256 of "timestamp:rawPayload"
       const computedHash = crypto

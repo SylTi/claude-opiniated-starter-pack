@@ -204,6 +204,38 @@ test.group('Polar Provider - Webhook Signature Verification (Standard Webhooks)'
 
     assert.isTrue(verified)
   })
+
+  test('rejects stale timestamps outside tolerance window', async ({ assert }) => {
+    const { default: PolarProvider } = await import('#services/providers/polar_provider')
+    const provider = Object.create(PolarProvider.prototype) as {
+      verifyWebhookSignature: (rawPayload: string, signature: string) => boolean
+    }
+
+    const rawSecretBytes = crypto.randomBytes(32)
+    const base64Secret = rawSecretBytes.toString('base64')
+    const webhookSecret = `whsec_${base64Secret}`
+
+    const webhookId = 'msg_01stale'
+    const staleTimestamp = String(Math.floor(Date.now() / 1000) - 3600)
+    const payload = '{"type":"checkout.created","data":{"id":"ch_123","status":"succeeded"}}'
+    const signedContent = `${webhookId}.${staleTimestamp}.${payload}`
+
+    const signatureValue = crypto
+      .createHmac('sha256', rawSecretBytes)
+      .update(signedContent)
+      .digest('base64')
+    const fullSignature = `${webhookId}|${staleTimestamp}|v1,${signatureValue}`
+
+    const previousSecret = process.env.POLAR_WEBHOOK_SECRET
+    process.env.POLAR_WEBHOOK_SECRET = webhookSecret
+
+    try {
+      const isValid = provider.verifyWebhookSignature(payload, fullSignature)
+      assert.isFalse(isValid)
+    } finally {
+      process.env.POLAR_WEBHOOK_SECRET = previousSecret
+    }
+  })
 })
 
 test.group('Polar Provider - Event Type Mapping', () => {
@@ -318,15 +350,16 @@ test.group('Polar Provider - Webhook Payload Parsing', () => {
     assert.equal(subscriptionId, 'sub_01def')
   })
 
-  test('generates deterministic event ID from provider name, type, and data id', async ({
-    assert,
-  }) => {
-    const providerName = 'polar'
-    const eventType = 'checkout.created'
-    const dataId = 'ch_01abc'
+  test('uses webhook-id as idempotency key', async ({ assert }) => {
+    const webhookId = 'msg_01h9x7m5v7q7v7w9'
+    const timestamp = '1739200557'
+    const signatureHeader = 'v1,abc123base64'
 
-    const eventId = `${providerName}_${eventType}_${dataId}`
-    assert.equal(eventId, 'polar_checkout.created_ch_01abc')
+    const fullSignature = `${webhookId}|${timestamp}|${signatureHeader}`
+    const parts = fullSignature.split('|')
+
+    assert.equal(parts.length, 3)
+    assert.equal(parts[0], webhookId)
   })
 
   test('handles missing metadata gracefully', async ({ assert }) => {

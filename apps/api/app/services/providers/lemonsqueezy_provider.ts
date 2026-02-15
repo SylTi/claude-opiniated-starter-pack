@@ -47,6 +47,20 @@ interface LemonSqueezyWebhookBody {
   }
 }
 
+/**
+ * Build an idempotency key for LemonSqueezy webhooks.
+ *
+ * LemonSqueezy payload `data.id` identifies the resource (order/subscription),
+ * not the webhook delivery event. Using resource IDs for dedupe drops legitimate
+ * subsequent events for the same resource (for example repeated
+ * `subscription_updated` events). Hashing the raw payload gives a stable key for
+ * retries while preserving distinct updates.
+ */
+function buildLemonSqueezyEventId(rawPayload: string): string {
+  const payloadHash = crypto.createHash('sha256').update(rawPayload).digest('hex')
+  return `payload_${payloadHash}`
+}
+
 export default class LemonSqueezyProvider implements PaymentProvider {
   readonly name = 'lemonsqueezy'
   private storeId: string
@@ -200,7 +214,7 @@ export default class LemonSqueezyProvider implements PaymentProvider {
 
     // Parse the webhook body
     const body: LemonSqueezyWebhookBody = JSON.parse(event.rawPayload)
-    const eventId = String(body.data.id)
+    const eventId = buildLemonSqueezyEventId(event.rawPayload)
     const eventType = body.meta.event_name
 
     // Check idempotency

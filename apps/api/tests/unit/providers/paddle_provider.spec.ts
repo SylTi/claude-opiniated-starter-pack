@@ -134,6 +134,32 @@ test.group('Paddle Provider - Webhook Signature Verification', () => {
 
     assert.notEqual(shortBuffer.length, longBuffer.length)
   })
+
+  test('rejects stale timestamps outside tolerance window', async ({ assert }) => {
+    const { default: PaddleProvider } = await import('#services/providers/paddle_provider')
+    const provider = Object.create(PaddleProvider.prototype) as {
+      verifyWebhookSignature: (rawPayload: string, signature: string) => boolean
+    }
+
+    const secret = 'pdl_whsec_test_secret_key_12345'
+    const payload = '{"event_type":"transaction.completed","data":{"id":"txn_01"}}'
+    const staleTimestamp = String(Math.floor(Date.now() / 1000) - 3600)
+    const hash = crypto
+      .createHmac('sha256', secret)
+      .update(`${staleTimestamp}:${payload}`)
+      .digest('hex')
+    const signature = `ts=${staleTimestamp};h1=${hash}`
+
+    const previousSecret = process.env.PADDLE_WEBHOOK_SECRET
+    process.env.PADDLE_WEBHOOK_SECRET = secret
+
+    try {
+      const isValid = provider.verifyWebhookSignature(payload, signature)
+      assert.isFalse(isValid)
+    } finally {
+      process.env.PADDLE_WEBHOOK_SECRET = previousSecret
+    }
+  })
 })
 
 test.group('Paddle Provider - Event Type Mapping', () => {
