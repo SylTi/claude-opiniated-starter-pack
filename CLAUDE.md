@@ -182,6 +182,8 @@ All enterprise features are gated via `start/routes_enterprise_all.ts`, which dy
 **Shared-file enterprise extensions (dynamic imports from shared code):**
 - `tests/bootstrap_enterprise.ts` — enterprise table list for test truncation
 - `app/services/plugins/plugin_boot_enterprise.ts` — enterprise availability check for plugin boot
+- `app/services/auth_tokens/auth_token_service_enterprise.ts` — enterprise policy hooks for auth token governance
+- `tests/unit/auth_token_service_enterprise.spec.ts` — enterprise governance policy tests for auth tokens
 - `database/seeders/test_data_seeder_enterprise.ts` — enterprise test data seeder
 
 ### Adding New Enterprise Features
