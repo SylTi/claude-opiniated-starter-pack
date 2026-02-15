@@ -3,9 +3,10 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription } from '@saas/ui/alert'
+import { Button } from '@saas/ui/button'
 import { useAuth } from '@/contexts/auth-context'
+import { useI18n } from '@/contexts/i18n-context'
 
 /**
  * Get safe callback URL from search params.
@@ -48,6 +49,7 @@ function getSafeCallbackUrl(callbackUrl: string | null, isNewUser: boolean): str
 }
 
 function OAuthCallbackContent(): React.ReactElement {
+  const { t } = useI18n('skeleton')
   const router = useRouter()
   const searchParams = useSearchParams()
   const { refreshUser } = useAuth()
@@ -70,26 +72,26 @@ function OAuthCallbackContent(): React.ReactElement {
         })
         .catch((err) => {
           console.error('[OAuthCallback] Failed to refresh user:', err)
-          setRefreshError('Failed to complete authentication. Please try again.')
+          setRefreshError(t('auth.oauth.refreshError'))
         })
     }
-  }, [success, redirectUrl, router, refreshUser])
+  }, [success, redirectUrl, router, refreshUser, t])
 
   // Show error from URL params, refresh failure, or invalid callback status
   const invalidCallback = success !== 'true' && !error
   const displayError =
     error ||
     refreshError ||
-    (invalidCallback ? 'Invalid authentication callback. Please sign in again.' : null)
+    (invalidCallback ? t('auth.oauth.invalidCallback') : null)
   if (displayError) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
         <div className="max-w-md w-full space-y-8 text-center">
-          <h2 className="text-2xl font-bold text-gray-900">Authentication Failed</h2>
+          <h2 className="text-2xl font-bold text-gray-900">{t('auth.oauth.failedTitle')}</h2>
           <Alert variant="destructive">
             <AlertDescription>{displayError}</AlertDescription>
           </Alert>
-          <Button onClick={() => router.push('/login')}>Back to Login</Button>
+          <Button onClick={() => router.push('/login')}>{t('auth.oauth.backToLogin')}</Button>
         </div>
       </div>
     )
@@ -99,7 +101,7 @@ function OAuthCallbackContent(): React.ReactElement {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="text-center">
         <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
-        <p className="mt-4 text-gray-600">Completing authentication...</p>
+        <p className="mt-4 text-gray-600">{t('auth.oauth.completing')}</p>
       </div>
     </div>
   )

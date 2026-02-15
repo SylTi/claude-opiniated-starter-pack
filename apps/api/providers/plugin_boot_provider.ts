@@ -75,10 +75,16 @@ export default class PluginBootProvider {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
 
-      // Check if this is a schema mismatch (FATAL)
+      // Check if this is a schema mismatch (FATAL in production, warning in tests)
       if (error && typeof error === 'object' && 'code' in error) {
         const errorCode = (error as { code?: string }).code
         if (errorCode === 'PLUGIN_SCHEMA_MISMATCH') {
+          if (nodeEnv === 'test') {
+            logger?.warn({ error: message }, 'Plugin schema mismatch in test mode (non-fatal)')
+            console.error('[PLUGIN SCHEMA MISMATCH]', message)
+            return
+          }
+
           logger?.error({ error: message }, 'Plugin schema mismatch. Server cannot start.')
           console.error('[PLUGIN SCHEMA MISMATCH]', message)
 

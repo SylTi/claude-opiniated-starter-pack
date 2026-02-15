@@ -19,6 +19,7 @@ const API_BASE = process.env.API_URL || 'http://localhost:3333'
 const NOTES_API = `/api/v1/apps/notes/notes`
 
 async function login(page: Page, email: string, password: string): Promise<void> {
+  await page.context().clearCookies()
   await page.goto('/login')
   await page.getByLabel(/email address/i).fill(email)
   await page.getByLabel(/password/i).fill(password)
@@ -286,7 +287,7 @@ test.describe('Notes Plugin - UI', () => {
 
   test('enables plugin when not enabled', async ({ page }) => {
     // Navigate to notes plugin page
-    await page.goto('/plugins/notes')
+    await page.goto('/apps/notes')
 
     // If plugin is not enabled, we should see the enable button
     const enableButton = page.getByTestId('enable-plugin-button')
@@ -301,7 +302,7 @@ test.describe('Notes Plugin - UI', () => {
   })
 
   test('creates a new note via UI', async ({ page }) => {
-    await page.goto('/plugins/notes')
+    await page.goto('/apps/notes')
 
     // Enable plugin if needed
     const enableButton = page.getByTestId('enable-plugin-button')
@@ -314,7 +315,7 @@ test.describe('Notes Plugin - UI', () => {
     await page.getByTestId('create-note-button').click()
 
     // Should be on new note page
-    await expect(page).toHaveURL(/\/plugins\/notes\/new/)
+    await expect(page).toHaveURL(/\/apps\/notes\/new/)
 
     // Fill in note details
     const uniqueTitle = `Test Note ${Date.now()}`
@@ -325,14 +326,14 @@ test.describe('Notes Plugin - UI', () => {
     await page.getByTestId('save-note-button').click()
 
     // Should redirect to notes list
-    await expect(page).toHaveURL(/\/plugins\/notes$/)
+    await expect(page).toHaveURL(/\/apps\/notes$/)
 
     // Should see the new note in the list
     await expect(page.getByText(uniqueTitle)).toBeVisible()
   })
 
   test('edits an existing note via UI', async ({ page }) => {
-    await page.goto('/plugins/notes')
+    await page.goto('/apps/notes')
 
     // Enable plugin if needed
     const enableButton = page.getByTestId('enable-plugin-button')
@@ -347,14 +348,14 @@ test.describe('Notes Plugin - UI', () => {
     await page.getByTestId('note-title-input').fill(uniqueTitle)
     await page.getByTestId('note-content-input').fill('Original content')
     await page.getByTestId('save-note-button').click()
-    await expect(page).toHaveURL(/\/plugins\/notes$/)
+    await expect(page).toHaveURL(/\/apps\/notes$/)
 
     // Find and click edit button on the note card
     const noteCard = page.locator(`[data-testid^="note-card-"]`).filter({ hasText: uniqueTitle })
     await noteCard.locator('[data-testid^="edit-note-"]').click()
 
     // Should be on edit page
-    await expect(page).toHaveURL(/\/plugins\/notes\/\d+/)
+    await expect(page).toHaveURL(/\/apps\/notes\/\d+/)
 
     // Update the content
     const updatedTitle = `${uniqueTitle} - Updated`
@@ -363,14 +364,14 @@ test.describe('Notes Plugin - UI', () => {
     await page.getByTestId('save-note-button').click()
 
     // Should redirect to notes list
-    await expect(page).toHaveURL(/\/plugins\/notes$/)
+    await expect(page).toHaveURL(/\/apps\/notes$/)
 
     // Should see the updated title
     await expect(page.getByText(updatedTitle)).toBeVisible()
   })
 
   test('deletes a note via UI', async ({ page }) => {
-    await page.goto('/plugins/notes')
+    await page.goto('/apps/notes')
 
     // Enable plugin if needed
     const enableButton = page.getByTestId('enable-plugin-button')
@@ -385,7 +386,7 @@ test.describe('Notes Plugin - UI', () => {
     await page.getByTestId('note-title-input').fill(uniqueTitle)
     await page.getByTestId('note-content-input').fill('This will be deleted')
     await page.getByTestId('save-note-button').click()
-    await expect(page).toHaveURL(/\/plugins\/notes$/)
+    await expect(page).toHaveURL(/\/apps\/notes$/)
 
     // Find and click delete button on the note card
     const noteCard = page.locator(`[data-testid^="note-card-"]`).filter({ hasText: uniqueTitle })
@@ -416,7 +417,7 @@ test.describe('Notes Plugin - UI', () => {
   })
 
   test('shows validation error for empty title', async ({ page }) => {
-    await page.goto('/plugins/notes')
+    await page.goto('/apps/notes')
 
     // Enable plugin if needed
     const enableButton = page.getByTestId('enable-plugin-button')
@@ -435,6 +436,6 @@ test.describe('Notes Plugin - UI', () => {
     await expect(page.getByText(/title is required/i)).toBeVisible()
 
     // Should still be on the same page
-    await expect(page).toHaveURL(/\/plugins\/notes\/new/)
+    await expect(page).toHaveURL(/\/apps\/notes\/new/)
   })
 })

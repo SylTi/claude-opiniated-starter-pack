@@ -1,7 +1,34 @@
 import type { SubscriptionDTO } from "./subscription.js";
 
 export type TenantType = "personal" | "team";
-export type TenantRole = "owner" | "admin" | "member";
+export type TenantRole = "owner" | "admin" | "member" | "viewer";
+
+export interface TenantQuotaMetricDTO {
+  limit: number | null;
+  used: number;
+  remaining: number | null;
+  exceeded: boolean;
+}
+
+export interface TenantQuotaSnapshotDTO {
+  members: TenantQuotaMetricDTO;
+  pendingInvitations: TenantQuotaMetricDTO;
+  authTokensPerTenant: TenantQuotaMetricDTO;
+  authTokensPerUser: TenantQuotaMetricDTO;
+}
+
+export interface TenantQuotaOverridesDTO {
+  maxPendingInvitations?: number | null;
+  maxAuthTokensPerTenant?: number | null;
+  maxAuthTokensPerUser?: number | null;
+}
+
+export interface TenantEffectiveQuotaLimitsDTO {
+  members: number | null;
+  pendingInvitations: number | null;
+  authTokensPerTenant: number | null;
+  authTokensPerUser: number | null;
+}
 
 export interface TenantDTO {
   id: number;
@@ -12,6 +39,7 @@ export interface TenantDTO {
   ownerId: number | null;
   maxMembers: number | null;
   memberCount?: number;
+  quotas?: TenantQuotaSnapshotDTO;
   balance: number;
   balanceCurrency: string;
   createdAt: string;
@@ -62,7 +90,7 @@ export interface TenantWithMembersDTO extends TenantDTO {
 
 // Tenant Invitation types
 export type InvitationStatus = "pending" | "accepted" | "declined" | "expired";
-export type InvitationRole = "admin" | "member";
+export type InvitationRole = "admin" | "member" | "viewer";
 
 export interface TenantInvitationDTO {
   id: number;
@@ -120,10 +148,19 @@ export interface AdminTenantDTO {
   ownerId: number | null;
   ownerEmail: string | null;
   memberCount: number;
+  maxMembers?: number | null;
+  quotaOverrides?: TenantQuotaOverridesDTO;
   balance: number;
   balanceCurrency: string;
   createdAt: string;
   updatedAt: string | null;
+}
+
+export interface AdminTenantQuotasDTO {
+  tenantId: number;
+  maxMembers: number | null;
+  quotaOverrides: TenantQuotaOverridesDTO;
+  effectiveLimits: TenantEffectiveQuotaLimitsDTO;
 }
 
 // Backward compatibility - deprecated types (use Tenant* instead)

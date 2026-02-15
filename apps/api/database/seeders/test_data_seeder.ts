@@ -496,7 +496,15 @@ export default class extends BaseSeeder {
     const tenants = await Tenant.all()
 
     // Plugins to enable for all tenants
-    const pluginsToEnable = [getMainAppPluginId(), 'notes']
+    const pluginsToEnable = [
+      getMainAppPluginId(),
+      'notes',
+      'chatbot',
+      'notifications',
+      'messaging',
+      'forms',
+      'support',
+    ]
 
     for (const tenant of tenants) {
       for (const pluginId of pluginsToEnable) {

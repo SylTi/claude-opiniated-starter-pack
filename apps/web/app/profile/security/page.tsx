@@ -6,25 +6,27 @@ import  Image from 'next/image'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2, Shield, ShieldCheck, ShieldX, Copy, Check } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@saas/ui/button'
+import { Input } from '@saas/ui/input'
+import { Label } from '@saas/ui/label'
+import { Separator } from '@saas/ui/separator'
+import { Alert, AlertDescription } from '@saas/ui/alert'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from '@saas/ui/card'
 import { useAuth } from '@/contexts/auth-context'
+import { useI18n } from '@/contexts/i18n-context'
 import { mfaApi, authApi } from '@/lib/auth'
 import { ApiError } from '@/lib/api'
 import { mfaCodeSchema, changePasswordSchema, type MfaCodeFormData, type ChangePasswordFormData } from '@/lib/validations'
 import type { MfaSetupDTO, MfaStatusDTO } from '@saas/shared'
 
 export default function SecurityPage(): React.ReactElement {
+  const { t } = useI18n('skeleton')
   const { user, refreshUser } = useAuth()
   const [mfaStatus, setMfaStatus] = useState<MfaStatusDTO | null>(null)
   const [setupData, setSetupData] = useState<MfaSetupDTO | null>(null)
@@ -76,7 +78,7 @@ export default function SecurityPage(): React.ReactElement {
       if (err instanceof ApiError) {
         setError(err.message)
       } else {
-        setError('Failed to start MFA setup')
+        setError(t('security.failedStartMfaSetup'))
       }
     }
   }
@@ -96,12 +98,12 @@ export default function SecurityPage(): React.ReactElement {
       setShowSetup(false)
       setSetupData(null)
       resetMfa()
-      toast.success('Two-factor authentication enabled')
+      toast.success(t('security.mfaEnabledSuccess'))
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message)
       } else {
-        setError('Failed to enable MFA')
+        setError(t('security.failedEnableMfa'))
       }
     }
   }
@@ -114,12 +116,12 @@ export default function SecurityPage(): React.ReactElement {
       setMfaStatus({ mfaEnabled: false, backupCodesRemaining: 0 })
       setShowDisable(false)
       resetMfa()
-      toast.success('Two-factor authentication disabled')
+      toast.success(t('security.mfaDisabledSuccess'))
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message)
       } else {
-        setError('Failed to disable MFA')
+        setError(t('security.failedDisableMfa'))
       }
     }
   }
@@ -133,12 +135,12 @@ export default function SecurityPage(): React.ReactElement {
         newPasswordConfirmation: data.newPasswordConfirmation,
       })
       resetPassword()
-      toast.success('Password changed successfully')
+      toast.success(t('security.passwordChangedSuccess'))
     } catch (err) {
       if (err instanceof ApiError) {
         setPasswordError(err.message)
       } else {
-        setPasswordError('Failed to change password')
+        setPasswordError(t('security.failedChangePassword'))
       }
     }
   }
@@ -148,7 +150,7 @@ export default function SecurityPage(): React.ReactElement {
       navigator.clipboard.writeText(setupData.backupCodes.join('\n'))
       setCopiedCodes(true)
       setTimeout(() => setCopiedCodes(false), 2000)
-      toast.success('Backup codes copied to clipboard')
+      toast.success(t('security.backupCodesCopied'))
     }
   }
 
@@ -158,8 +160,8 @@ export default function SecurityPage(): React.ReactElement {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Security</h1>
-      <p className="text-muted-foreground mt-1">Manage your security settings</p>
+      <h1 className="text-2xl font-bold">{t('security.title')}</h1>
+      <p className="text-muted-foreground mt-1">{t('security.subtitle')}</p>
 
       <Separator className="my-6" />
 
@@ -168,10 +170,10 @@ export default function SecurityPage(): React.ReactElement {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5" />
-            Two-Factor Authentication
+            {t('security.twoFactorTitle')}
           </CardTitle>
           <CardDescription>
-            Add an extra layer of security to your account
+            {t('security.twoFactorDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -185,23 +187,23 @@ export default function SecurityPage(): React.ReactElement {
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-green-600">
                 <ShieldCheck className="h-5 w-5" />
-                <span>Two-factor authentication is enabled</span>
+                <span>{t('security.twoFactorEnabledMessage')}</span>
               </div>
               <p className="text-sm text-muted-foreground">
-                Backup codes remaining: {mfaStatus.backupCodesRemaining}
+                {t('security.backupCodesRemaining', { count: mfaStatus.backupCodesRemaining })}
               </p>
 
               {showDisable ? (
                 <form onSubmit={handleSubmitMfa(handleDisableMfa)} className="space-y-4 max-w-sm">
                   <div>
-                    <Label htmlFor="disableCode">Enter your 2FA code to disable</Label>
+                    <Label htmlFor="disableCode">{t('security.disableCodeLabel')}</Label>
                     <Input
                       id="disableCode"
                       type="text"
                       inputMode="numeric"
                       pattern="[0-9]*"
                       maxLength={6}
-                      placeholder="000000"
+                      placeholder={t('security.mfaCodePlaceholder')}
                       {...registerMfa('code')}
                       className="mt-1"
                     />
@@ -211,36 +213,36 @@ export default function SecurityPage(): React.ReactElement {
                   </div>
                   <div className="flex gap-2">
                     <Button type="submit" variant="destructive" disabled={isSubmittingMfa}>
-                      {isSubmittingMfa ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Disable'}
+                      {isSubmittingMfa ? <Loader2 className="h-4 w-4 animate-spin" /> : t('security.disable')}
                     </Button>
                     <Button type="button" variant="outline" onClick={() => setShowDisable(false)}>
-                      Cancel
+                      {t('security.cancel')}
                     </Button>
                   </div>
                 </form>
               ) : (
                 <Button variant="outline" onClick={() => setShowDisable(true)}>
                   <ShieldX className="mr-2 h-4 w-4" />
-                  Disable 2FA
+                  {t('security.disable2fa')}
                 </Button>
               )}
             </div>
           ) : showSetup && setupData ? (
             <div className="space-y-6">
               <div>
-                <h3 className="font-medium mb-2">1. Scan QR Code</h3>
+                <h3 className="font-medium mb-2">{t('security.step1Title')}</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
+                  {t('security.step1Description')}
                 </p>
                 <div className="bg-card p-4 rounded-lg border inline-block">
-                  <Image src={setupData.qrCode} alt="MFA QR Code" className="w-48 h-48" />
+                  <Image src={setupData.qrCode} alt={t('security.qrCodeAlt')} className="w-48 h-48" />
                 </div>
               </div>
 
               <div>
-                <h3 className="font-medium mb-2">2. Save Backup Codes</h3>
+                <h3 className="font-medium mb-2">{t('security.step2Title')}</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Save these backup codes in a safe place. You can use them to access your account if you lose your authenticator.
+                  {t('security.step2Description')}
                 </p>
                 <div className="bg-muted p-4 rounded-lg border">
                   <div className="grid grid-cols-2 gap-2 font-mono text-sm">
@@ -258,12 +260,12 @@ export default function SecurityPage(): React.ReactElement {
                     {copiedCodes ? (
                       <>
                         <Check className="mr-2 h-4 w-4" />
-                        Copied!
+                        {t('security.copied')}
                       </>
                     ) : (
                       <>
                         <Copy className="mr-2 h-4 w-4" />
-                        Copy codes
+                        {t('security.copyCodes')}
                       </>
                     )}
                   </Button>
@@ -272,14 +274,14 @@ export default function SecurityPage(): React.ReactElement {
 
               <form onSubmit={handleSubmitMfa(handleEnableMfa)} className="space-y-4 max-w-sm">
                 <div>
-                  <Label htmlFor="enableCode">3. Enter verification code</Label>
+                  <Label htmlFor="enableCode">{t('security.step3Label')}</Label>
                   <Input
                     id="enableCode"
                     type="text"
                     inputMode="numeric"
                     pattern="[0-9]*"
                     maxLength={6}
-                    placeholder="000000"
+                    placeholder={t('security.mfaCodePlaceholder')}
                     {...registerMfa('code')}
                     className="mt-1"
                   />
@@ -289,7 +291,7 @@ export default function SecurityPage(): React.ReactElement {
                 </div>
                 <div className="flex gap-2">
                   <Button type="submit" disabled={isSubmittingMfa}>
-                    {isSubmittingMfa ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Enable 2FA'}
+                    {isSubmittingMfa ? <Loader2 className="h-4 w-4 animate-spin" /> : t('security.enable2fa')}
                   </Button>
                   <Button
                     type="button"
@@ -300,7 +302,7 @@ export default function SecurityPage(): React.ReactElement {
                       resetMfa()
                     }}
                   >
-                    Cancel
+                    {t('security.cancel')}
                   </Button>
                 </div>
               </form>
@@ -309,11 +311,11 @@ export default function SecurityPage(): React.ReactElement {
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-amber-600">
                 <ShieldX className="h-5 w-5" />
-                <span>Two-factor authentication is not enabled</span>
+                <span>{t('security.twoFactorDisabledMessage')}</span>
               </div>
               <Button onClick={handleStartSetup}>
                 <Shield className="mr-2 h-4 w-4" />
-                Set up 2FA
+                {t('security.setup2fa')}
               </Button>
             </div>
           )}
@@ -323,9 +325,9 @@ export default function SecurityPage(): React.ReactElement {
       {/* Change Password */}
       <Card>
         <CardHeader>
-          <CardTitle>Change Password</CardTitle>
+          <CardTitle>{t('security.changePasswordTitle')}</CardTitle>
           <CardDescription>
-            Update your password to keep your account secure
+            {t('security.changePasswordDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -337,7 +339,7 @@ export default function SecurityPage(): React.ReactElement {
 
           <form onSubmit={handleSubmitPassword(handleChangePassword)} className="space-y-4 max-w-sm">
             <div>
-              <Label htmlFor="currentPassword">Current password</Label>
+              <Label htmlFor="currentPassword">{t('security.currentPassword')}</Label>
               <Input
                 id="currentPassword"
                 type="password"
@@ -350,7 +352,7 @@ export default function SecurityPage(): React.ReactElement {
             </div>
 
             <div>
-              <Label htmlFor="newPassword">New password</Label>
+              <Label htmlFor="newPassword">{t('security.newPassword')}</Label>
               <Input
                 id="newPassword"
                 type="password"
@@ -363,7 +365,7 @@ export default function SecurityPage(): React.ReactElement {
             </div>
 
             <div>
-              <Label htmlFor="newPasswordConfirmation">Confirm new password</Label>
+              <Label htmlFor="newPasswordConfirmation">{t('security.confirmNewPassword')}</Label>
               <Input
                 id="newPasswordConfirmation"
                 type="password"
@@ -379,10 +381,10 @@ export default function SecurityPage(): React.ReactElement {
               {isSubmittingPassword ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Changing...
+                  {t('security.changing')}
                 </>
               ) : (
-                'Change password'
+                t('security.changePassword')
               )}
             </Button>
           </form>

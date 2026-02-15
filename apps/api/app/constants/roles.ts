@@ -17,6 +17,7 @@ export const TENANT_ROLES = {
   OWNER: 'owner',
   ADMIN: 'admin',
   MEMBER: 'member',
+  VIEWER: 'viewer',
 } as const
 
 export type TenantRole = (typeof TENANT_ROLES)[keyof typeof TENANT_ROLES]
@@ -25,6 +26,7 @@ export type TenantRole = (typeof TENANT_ROLES)[keyof typeof TENANT_ROLES]
 export const INVITATION_ROLES = {
   ADMIN: 'admin',
   MEMBER: 'member',
+  VIEWER: 'viewer',
 } as const
 
 export type InvitationRole = (typeof INVITATION_ROLES)[keyof typeof INVITATION_ROLES]

@@ -6,6 +6,7 @@
  */
 
 export { design } from '../design.js'
+export { translations } from '../translations.js'
 export { MainAppShell } from './components/AppShell.js'
 
 // Re-export the client design with AppShell attached

@@ -71,13 +71,28 @@ apps/web/components/notarium/
 apps/web/public/plugins/
 apps/web/app/app/
 
+# apps/web accidental TS build artifacts (Next.js uses bundler, not tsc)
+apps/web/**/*.d.ts
+apps/web/**/*.d.ts.map
+!apps/web/next-env.d.ts
+apps/web/components/**/*.js
+apps/web/contexts/**/*.js
+apps/web/lib/**/*.js
+
 # Marketplace plugins (developed in separate repo, not committed here)
 plugins/analytics/
 plugins/calendar/
+plugins/chatbot/
 plugins/collab/
+plugins/experiments/
 plugins/files/
+plugins/forms/
+plugins/messaging/
+plugins/notifications/
+plugins/support/
 plugins/webhooks/
 plugins/wiki/
+plugins/workers/
 
 # Custom main-app plugins (local development only)
 # To keep local plugin registry edits out of commits:

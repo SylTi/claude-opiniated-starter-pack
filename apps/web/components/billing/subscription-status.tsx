@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@saas/ui/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@saas/ui/card'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,9 +13,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
+} from '@saas/ui/alert-dialog'
 import type { BillingSubscriptionDTO } from '@saas/shared'
 import { billingApi } from '@/lib/api'
+import { useI18n } from '@/contexts/i18n-context'
 import { CreditCard, ExternalLink } from 'lucide-react'
 
 interface SubscriptionStatusProps {
@@ -27,6 +28,7 @@ export function SubscriptionStatus({
   subscription,
   onUpdate,
 }: SubscriptionStatusProps): React.ReactElement {
+  const { t } = useI18n('skeleton')
   const [isLoading, setIsLoading] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -39,9 +41,9 @@ export function SubscriptionStatus({
     setError(null)
     try {
       const { url } = await billingApi.createPortal(window.location.href)
-      window.location.href = url
+      window.location.assign(url)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to open billing portal')
+      setError(err instanceof Error ? err.message : t('billing.portalOpenError'))
       setIsLoading(false)
     }
   }
@@ -53,7 +55,7 @@ export function SubscriptionStatus({
       await billingApi.cancelSubscription()
       onUpdate?.()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to cancel subscription')
+      setError(err instanceof Error ? err.message : t('billing.cancelSubscriptionError'))
     } finally {
       setIsCancelling(false)
     }
@@ -81,11 +83,11 @@ export function SubscriptionStatus({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          Subscription
+          {t('billing.subscription')}
           {getStatusBadge()}
         </CardTitle>
         <CardDescription>
-          {tier ? `You are currently on the ${tier.name} plan` : 'No active subscription'}
+          {tier ? t('billing.currentlyOnPlan', { tier: tier.name }) : t('billing.noActiveSubscription')}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -101,7 +103,7 @@ export function SubscriptionStatus({
             {sub?.expiresAt && (
               <div className="text-sm">
                 <span className="text-muted-foreground">
-                  {sub.status === 'cancelled' ? 'Access until: ' : 'Renews on: '}
+                  {sub.status === 'cancelled' ? t('billing.accessUntil') : t('billing.renewsOn')}
                 </span>
                 {new Date(sub.expiresAt).toLocaleDateString()}
               </div>
@@ -110,7 +112,7 @@ export function SubscriptionStatus({
             {sub?.providerName && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CreditCard className="h-4 w-4" />
-                Managed via {sub.providerName.charAt(0).toUpperCase() + sub.providerName.slice(1)}
+                {t('billing.managedVia', { provider: sub.providerName.charAt(0).toUpperCase() + sub.providerName.slice(1) })}
               </div>
             )}
           </div>
@@ -130,11 +132,11 @@ export function SubscriptionStatus({
             disabled={isLoading}
           >
             {isLoading ? (
-              'Loading...'
+              t('common.loading')
             ) : (
               <>
                 <ExternalLink className="h-4 w-4 mr-2" />
-                Manage Billing
+                {t('billing.manageBilling')}
               </>
             )}
           </Button>
@@ -144,21 +146,20 @@ export function SubscriptionStatus({
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" disabled={isCancelling}>
-                {isCancelling ? 'Cancelling...' : 'Cancel Subscription'}
+                {isCancelling ? t('billing.cancelling') : t('billing.cancelSubscription')}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Cancel Subscription?</AlertDialogTitle>
+                <AlertDialogTitle>{t('billing.cancelSubscriptionTitle')}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Your subscription will remain active until the end of the current billing period.
-                  After that, you will be downgraded to the free plan.
+                  {t('billing.cancelSubscriptionDescription')}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Keep Subscription</AlertDialogCancel>
+                <AlertDialogCancel>{t('billing.keepSubscription')}</AlertDialogCancel>
                 <AlertDialogAction onClick={handleCancelSubscription}>
-                  Yes, Cancel
+                  {t('billing.confirmCancel')}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

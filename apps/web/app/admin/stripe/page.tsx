@@ -7,6 +7,7 @@ import {
   type StripeProductDTO,
   type StripePriceDTO,
 } from "@/lib/api"
+import { useI18n } from "@/contexts/i18n-context"
 import type { SubscriptionTierDTO } from "@saas/shared"
 import {
   Table,
@@ -15,25 +16,25 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
+} from "@saas/ui/table"
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+} from "@saas/ui/card"
+import { Button } from "@saas/ui/button"
+import { Badge } from "@saas/ui/badge"
+import { Input } from "@saas/ui/input"
+import { Label } from "@saas/ui/label"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@saas/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -41,8 +42,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+} from "@saas/ui/dialog"
+import { Alert, AlertDescription, AlertTitle } from "@saas/ui/alert"
 import {
   Loader2,
   Plus,
@@ -85,6 +86,7 @@ const defaultPriceForm: PriceFormState = {
 }
 
 export default function AdminStripePage(): React.ReactElement {
+  const { locale, t } = useI18n("skeleton")
   // Data state
   const [products, setProducts] = useState<StripeProductDTO[]>([])
   const [prices, setPrices] = useState<StripePriceDTO[]>([])
@@ -119,12 +121,12 @@ export default function AdminStripePage(): React.ReactElement {
       if (error instanceof ApiError) {
         toast.error(error.message)
       } else {
-        toast.error("Failed to fetch data")
+        toast.error(t("adminStripe.fetchError"))
       }
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     fetchData()
@@ -148,7 +150,7 @@ export default function AdminStripePage(): React.ReactElement {
 
   const handleProductSubmit = async (): Promise<void> => {
     if (!productForm.tierId || !productForm.providerProductId.trim()) {
-      toast.error("Tier and Stripe Product ID are required")
+      toast.error(t("adminStripe.productRequiredError"))
       return
     }
 
@@ -158,14 +160,14 @@ export default function AdminStripePage(): React.ReactElement {
         await adminBillingApi.updateProduct(editingProduct.id, {
           providerProductId: productForm.providerProductId.trim(),
         })
-        toast.success("Product updated successfully")
+        toast.success(t("adminStripe.productUpdateSuccess"))
       } else {
         await adminBillingApi.createProduct({
           tierId: Number(productForm.tierId),
           provider: "stripe",
           providerProductId: productForm.providerProductId.trim(),
         })
-        toast.success("Product created successfully")
+        toast.success(t("adminStripe.productCreateSuccess"))
       }
       setIsProductDialogOpen(false)
       fetchData()
@@ -173,7 +175,7 @@ export default function AdminStripePage(): React.ReactElement {
       if (error instanceof ApiError) {
         toast.error(error.message)
       } else {
-        toast.error("Failed to save product")
+        toast.error(t("adminStripe.productSaveError"))
       }
     } finally {
       setActionLoading(false)
@@ -185,24 +187,24 @@ export default function AdminStripePage(): React.ReactElement {
   ): Promise<void> => {
     const productPrices = prices.filter((p) => p.productId === product.id)
     if (productPrices.length > 0) {
-      toast.error("Delete all prices for this product first")
+      toast.error(t("adminStripe.deletePricesFirst"))
       return
     }
 
-    if (!confirm(`Delete product mapping for "${product.tier?.name}"?`)) {
+    if (!confirm(t("adminStripe.confirmDeleteProduct", { name: product.tier?.name ?? "" }))) {
       return
     }
 
     try {
       setActionLoading(true)
       await adminBillingApi.deleteProduct(product.id)
-      toast.success("Product deleted successfully")
+      toast.success(t("adminStripe.productDeleteSuccess"))
       fetchData()
     } catch (error) {
       if (error instanceof ApiError) {
         toast.error(error.message)
       } else {
-        toast.error("Failed to delete product")
+        toast.error(t("adminStripe.productDeleteError"))
       }
     } finally {
       setActionLoading(false)
@@ -225,7 +227,7 @@ export default function AdminStripePage(): React.ReactElement {
       !priceForm.providerPriceId.trim() ||
       !priceForm.unitAmount
     ) {
-      toast.error("Product, Stripe Price ID, and amount are required")
+      toast.error(t("adminStripe.priceRequiredError"))
       return
     }
 
@@ -235,7 +237,7 @@ export default function AdminStripePage(): React.ReactElement {
         await adminBillingApi.updatePrice(editingPrice.id, {
           isActive: priceForm.isActive,
         })
-        toast.success("Price updated successfully")
+        toast.success(t("adminStripe.priceUpdateSuccess"))
       } else {
         await adminBillingApi.createPrice({
           productId: Number(priceForm.productId),
@@ -246,7 +248,7 @@ export default function AdminStripePage(): React.ReactElement {
           taxBehavior: priceForm.taxBehavior,
           isActive: priceForm.isActive,
         })
-        toast.success("Price created successfully")
+        toast.success(t("adminStripe.priceCreateSuccess"))
       }
       setIsPriceDialogOpen(false)
       fetchData()
@@ -254,7 +256,7 @@ export default function AdminStripePage(): React.ReactElement {
       if (error instanceof ApiError) {
         toast.error(error.message)
       } else {
-        toast.error("Failed to save price")
+        toast.error(t("adminStripe.priceSaveError"))
       }
     } finally {
       setActionLoading(false)
@@ -269,13 +271,15 @@ export default function AdminStripePage(): React.ReactElement {
       await adminBillingApi.updatePrice(price.id, {
         isActive: !price.isActive,
       })
-      toast.success(`Price ${price.isActive ? "disabled" : "enabled"}`)
+      toast.success(
+        t(price.isActive ? "adminStripe.priceDisabledSuccess" : "adminStripe.priceEnabledSuccess")
+      )
       fetchData()
     } catch (error) {
       if (error instanceof ApiError) {
         toast.error(error.message)
       } else {
-        toast.error("Failed to update price")
+        toast.error(t("adminStripe.priceUpdateError"))
       }
     } finally {
       setActionLoading(false)
@@ -283,20 +287,20 @@ export default function AdminStripePage(): React.ReactElement {
   }
 
   const handleDeletePrice = async (price: StripePriceDTO): Promise<void> => {
-    if (!confirm("Delete this price mapping?")) {
+    if (!confirm(t("adminStripe.confirmDeletePrice"))) {
       return
     }
 
     try {
       setActionLoading(true)
       await adminBillingApi.deletePrice(price.id)
-      toast.success("Price deleted successfully")
+      toast.success(t("adminStripe.priceDeleteSuccess"))
       fetchData()
     } catch (error) {
       if (error instanceof ApiError) {
         toast.error(error.message)
       } else {
-        toast.error("Failed to delete price")
+        toast.error(t("adminStripe.priceDeleteError"))
       }
     } finally {
       setActionLoading(false)
@@ -305,7 +309,7 @@ export default function AdminStripePage(): React.ReactElement {
 
   // Helpers
   const formatAmount = (amount: number, currency: string): string => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat(locale, {
       style: "currency",
       currency: currency.toUpperCase(),
     }).format(amount / 100)
@@ -313,7 +317,7 @@ export default function AdminStripePage(): React.ReactElement {
 
   const getProductName = (productId: number): string => {
     const product = products.find((p) => p.id === productId)
-    return product?.tier?.name ?? "Unknown"
+    return product?.tier?.name ?? t("adminStripe.unknown")
   }
 
   // Get tiers that don't have a product yet
@@ -335,33 +339,33 @@ export default function AdminStripePage(): React.ReactElement {
       <div>
         <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
           <CreditCard className="h-6 w-6" />
-          Stripe Integration
+          {t("adminStripe.title")}
         </h1>
         <p className="text-muted-foreground mt-1">
-          Link your local subscription tiers to Stripe products and prices
+          {t("adminStripe.subtitle")}
         </p>
       </div>
 
       {/* Info Alert */}
       <Alert>
         <AlertTriangle className="h-4 w-4" />
-        <AlertTitle>How it works</AlertTitle>
+        <AlertTitle>{t("adminStripe.howItWorksTitle")}</AlertTitle>
         <AlertDescription>
           <ol className="list-decimal list-inside mt-2 space-y-1 text-sm">
             <li>
-              Create products and prices in your{" "}
+              {t("adminStripe.stepCreateInStripePrefix")}{" "}
               <a
                 href="https://dashboard.stripe.com/products"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-primary hover:underline inline-flex items-center gap-1"
               >
-                Stripe Dashboard
+                {t("adminStripe.stripeDashboard")}
                 <ExternalLink className="h-3 w-3" />
               </a>
             </li>
-            <li>Link each local tier to its Stripe product ID (prod_xxx)</li>
-            <li>Add price mappings with Stripe price IDs (price_xxx)</li>
+            <li>{t("adminStripe.stepLinkTier")}</li>
+            <li>{t("adminStripe.stepAddPrices")}</li>
           </ol>
         </AlertDescription>
       </Alert>
@@ -371,9 +375,9 @@ export default function AdminStripePage(): React.ReactElement {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Products</CardTitle>
+              <CardTitle>{t("adminStripe.productsTitle")}</CardTitle>
               <CardDescription>
-                Map your local tiers to Stripe products (prod_xxx)
+                {t("adminStripe.productsDescription")}
               </CardDescription>
             </div>
             <Button
@@ -381,7 +385,7 @@ export default function AdminStripePage(): React.ReactElement {
               disabled={availableTiers.length === 0}
             >
               <Plus className="h-4 w-4 mr-2" />
-              Link Product
+              {t("adminStripe.linkProduct")}
             </Button>
           </div>
         </CardHeader>
@@ -389,10 +393,10 @@ export default function AdminStripePage(): React.ReactElement {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Local Tier</TableHead>
-                <TableHead>Stripe Product ID</TableHead>
-                <TableHead>Prices</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("adminStripe.tableLocalTier")}</TableHead>
+                <TableHead>{t("adminStripe.tableStripeProductId")}</TableHead>
+                <TableHead>{t("adminStripe.tablePrices")}</TableHead>
+                <TableHead className="text-right">{t("adminStripe.tableActions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -402,8 +406,7 @@ export default function AdminStripePage(): React.ReactElement {
                     colSpan={4}
                     className="text-center text-muted-foreground py-8"
                   >
-                    No products linked yet. Create products in Stripe first,
-                    then link them here.
+                    {t("adminStripe.noProducts")}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -416,7 +419,7 @@ export default function AdminStripePage(): React.ReactElement {
                       <TableCell>
                         <div>
                           <span className="font-medium">
-                            {product.tier?.name ?? "Unknown"}
+                            {product.tier?.name ?? t("adminStripe.unknown")}
                           </span>
                           <span className="text-sm text-muted-foreground ml-2">
                             ({product.tier?.slug})
@@ -440,7 +443,7 @@ export default function AdminStripePage(): React.ReactElement {
                             disabled={actionLoading}
                           >
                             <Plus className="h-4 w-4 mr-1" />
-                            Add Price
+                            {t("adminStripe.addPrice")}
                           </Button>
                           <Button
                             variant="outline"
@@ -474,10 +477,9 @@ export default function AdminStripePage(): React.ReactElement {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Prices</CardTitle>
+              <CardTitle>{t("adminStripe.pricesTitle")}</CardTitle>
               <CardDescription>
-                Map Stripe prices (price_xxx) to products. Each product can have
-                multiple prices for different intervals/currencies.
+                {t("adminStripe.pricesDescription")}
               </CardDescription>
             </div>
             <Button
@@ -485,7 +487,7 @@ export default function AdminStripePage(): React.ReactElement {
               disabled={products.length === 0}
             >
               <Plus className="h-4 w-4 mr-2" />
-              Add Price
+              {t("adminStripe.addPrice")}
             </Button>
           </div>
         </CardHeader>
@@ -493,13 +495,13 @@ export default function AdminStripePage(): React.ReactElement {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead>Stripe Price ID</TableHead>
-                <TableHead>Interval</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Tax</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("adminStripe.tableProduct")}</TableHead>
+                <TableHead>{t("adminStripe.tableStripePriceId")}</TableHead>
+                <TableHead>{t("adminStripe.tableInterval")}</TableHead>
+                <TableHead>{t("adminStripe.tableAmount")}</TableHead>
+                <TableHead>{t("adminStripe.tableTax")}</TableHead>
+                <TableHead>{t("adminStripe.tableStatus")}</TableHead>
+                <TableHead className="text-right">{t("adminStripe.tableActions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -510,8 +512,8 @@ export default function AdminStripePage(): React.ReactElement {
                     className="text-center text-muted-foreground py-8"
                   >
                     {products.length === 0
-                      ? "Link a product first before adding prices."
-                      : "No prices configured yet."}
+                      ? t("adminStripe.linkProductFirst")
+                      : t("adminStripe.noPrices")}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -536,7 +538,7 @@ export default function AdminStripePage(): React.ReactElement {
                     </TableCell>
                     <TableCell>
                       <Badge variant={price.isActive ? "default" : "outline"}>
-                        {price.isActive ? "Active" : "Inactive"}
+                        {price.isActive ? t("adminStripe.active") : t("adminStripe.inactive")}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -547,7 +549,7 @@ export default function AdminStripePage(): React.ReactElement {
                           onClick={() => handleTogglePriceActive(price)}
                           disabled={actionLoading}
                         >
-                          {price.isActive ? "Disable" : "Enable"}
+                          {price.isActive ? t("adminStripe.disable") : t("adminStripe.enable")}
                         </Button>
                         <Button
                           variant="outline"
@@ -572,15 +574,15 @@ export default function AdminStripePage(): React.ReactElement {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingProduct ? "Edit Product Mapping" : "Link Stripe Product"}
+              {editingProduct ? t("adminStripe.editProductMapping") : t("adminStripe.linkStripeProduct")}
             </DialogTitle>
             <DialogDescription>
-              Connect a local subscription tier to a Stripe product.
+              {t("adminStripe.productDialogDescription")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="product-tier">Local Tier</Label>
+              <Label htmlFor="product-tier">{t("adminStripe.fieldLocalTier")}</Label>
               <Select
                 value={productForm.tierId}
                 onValueChange={(v) =>
@@ -589,7 +591,7 @@ export default function AdminStripePage(): React.ReactElement {
                 disabled={!!editingProduct}
               >
                 <SelectTrigger id="product-tier">
-                  <SelectValue placeholder="Select a tier" />
+                  <SelectValue placeholder={t("adminStripe.selectTier")} />
                 </SelectTrigger>
                 <SelectContent>
                   {(editingProduct
@@ -604,10 +606,10 @@ export default function AdminStripePage(): React.ReactElement {
               </Select>
             </div>
             <div>
-              <Label htmlFor="product-stripe-id">Stripe Product ID</Label>
+              <Label htmlFor="product-stripe-id">{t("adminStripe.fieldStripeProductId")}</Label>
               <Input
                 id="product-stripe-id"
-                placeholder="prod_xxxxxxxxxxxxx"
+                placeholder={t("adminStripe.productIdPlaceholder")}
                 value={productForm.providerProductId}
                 onChange={(e) =>
                   setProductForm((prev) => ({
@@ -617,7 +619,7 @@ export default function AdminStripePage(): React.ReactElement {
                 }
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Find this in your Stripe Dashboard → Products
+                {t("adminStripe.findInStripeProducts")}
               </p>
             </div>
           </div>
@@ -627,13 +629,13 @@ export default function AdminStripePage(): React.ReactElement {
               onClick={() => setIsProductDialogOpen(false)}
               disabled={actionLoading}
             >
-              Cancel
+              {t("adminStripe.cancel")}
             </Button>
             <Button onClick={handleProductSubmit} disabled={actionLoading}>
               {actionLoading && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
-              {editingProduct ? "Update" : "Link Product"}
+              {editingProduct ? t("adminStripe.update") : t("adminStripe.linkProduct")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -644,15 +646,15 @@ export default function AdminStripePage(): React.ReactElement {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {editingPrice ? "Edit Price" : "Add Stripe Price"}
+              {editingPrice ? t("adminStripe.editPrice") : t("adminStripe.addStripePrice")}
             </DialogTitle>
             <DialogDescription>
-              Connect a Stripe price to a product.
+              {t("adminStripe.priceDialogDescription")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="price-product">Product</Label>
+              <Label htmlFor="price-product">{t("adminStripe.fieldProduct")}</Label>
               <Select
                 value={priceForm.productId}
                 onValueChange={(v) =>
@@ -661,22 +663,22 @@ export default function AdminStripePage(): React.ReactElement {
                 disabled={!!editingPrice}
               >
                 <SelectTrigger id="price-product">
-                  <SelectValue placeholder="Select a product" />
+                  <SelectValue placeholder={t("adminStripe.selectProduct")} />
                 </SelectTrigger>
                 <SelectContent>
                   {products.map((product) => (
                     <SelectItem key={product.id} value={String(product.id)}>
-                      {product.tier?.name ?? "Unknown"}
+                      {product.tier?.name ?? t("adminStripe.unknown")}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label htmlFor="price-stripe-id">Stripe Price ID</Label>
+              <Label htmlFor="price-stripe-id">{t("adminStripe.fieldStripePriceId")}</Label>
               <Input
                 id="price-stripe-id"
-                placeholder="price_xxxxxxxxxxxxx"
+                placeholder={t("adminStripe.priceIdPlaceholder")}
                 value={priceForm.providerPriceId}
                 onChange={(e) =>
                   setPriceForm((prev) => ({
@@ -689,7 +691,7 @@ export default function AdminStripePage(): React.ReactElement {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="price-interval">Interval</Label>
+                <Label htmlFor="price-interval">{t("adminStripe.fieldInterval")}</Label>
                 <Select
                   value={priceForm.interval}
                   onValueChange={(v) =>
@@ -704,13 +706,13 @@ export default function AdminStripePage(): React.ReactElement {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="month">Monthly</SelectItem>
-                    <SelectItem value="year">Yearly</SelectItem>
+                    <SelectItem value="month">{t("adminStripe.monthly")}</SelectItem>
+                    <SelectItem value="year">{t("adminStripe.yearly")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label htmlFor="price-currency">Currency</Label>
+                <Label htmlFor="price-currency">{t("adminStripe.fieldCurrency")}</Label>
                 <Select
                   value={priceForm.currency}
                   onValueChange={(v) =>
@@ -722,19 +724,19 @@ export default function AdminStripePage(): React.ReactElement {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="usd">USD</SelectItem>
-                    <SelectItem value="eur">EUR</SelectItem>
+                    <SelectItem value="usd">{t("common.currency.usd")}</SelectItem>
+                    <SelectItem value="eur">{t("common.currency.eur")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="price-amount">Amount (cents)</Label>
+                <Label htmlFor="price-amount">{t("adminStripe.fieldAmountCents")}</Label>
                 <Input
                   id="price-amount"
                   type="number"
-                  placeholder="1999"
+                  placeholder={t("adminStripe.amountPlaceholder")}
                   value={priceForm.unitAmount}
                   onChange={(e) =>
                     setPriceForm((prev) => ({
@@ -746,7 +748,7 @@ export default function AdminStripePage(): React.ReactElement {
                 />
               </div>
               <div>
-                <Label htmlFor="price-tax">Tax Behavior</Label>
+                <Label htmlFor="price-tax">{t("adminStripe.fieldTaxBehavior")}</Label>
                 <Select
                   value={priceForm.taxBehavior}
                   onValueChange={(v) =>
@@ -761,8 +763,8 @@ export default function AdminStripePage(): React.ReactElement {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="exclusive">Exclusive</SelectItem>
-                    <SelectItem value="inclusive">Inclusive</SelectItem>
+                    <SelectItem value="exclusive">{t("adminStripe.taxExclusive")}</SelectItem>
+                    <SelectItem value="inclusive">{t("adminStripe.taxInclusive")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -778,8 +780,8 @@ export default function AdminStripePage(): React.ReactElement {
                     isActive: e.target.checked,
                   }))
                 }
-              />
-              <Label htmlFor="price-active">Active</Label>
+                />
+              <Label htmlFor="price-active">{t("adminStripe.active")}</Label>
             </div>
           </div>
           <DialogFooter>
@@ -788,13 +790,13 @@ export default function AdminStripePage(): React.ReactElement {
               onClick={() => setIsPriceDialogOpen(false)}
               disabled={actionLoading}
             >
-              Cancel
+              {t("adminStripe.cancel")}
             </Button>
             <Button onClick={handlePriceSubmit} disabled={actionLoading}>
               {actionLoading && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
-              {editingPrice ? "Update" : "Add Price"}
+              {editingPrice ? t("adminStripe.update") : t("adminStripe.addPrice")}
             </Button>
           </DialogFooter>
         </DialogContent>

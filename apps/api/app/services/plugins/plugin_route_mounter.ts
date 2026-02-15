@@ -10,12 +10,17 @@ import { pluginRegistry, hookRegistry } from '@saas/plugins-core'
 import app from '@adonisjs/core/services/app'
 import { posix as pathPosix } from 'node:path'
 import { serverPluginLoaders } from '@saas/config/plugins/server'
-import { RoutesRegistrar, createRoutesRegistrar } from './routes_registrar.js'
+import {
+  RoutesRegistrar,
+  createRoutesRegistrar,
+  getTrustedPluginRequestScope,
+} from './routes_registrar.js'
 import { pluginCapabilityService } from './plugin_capability_service.js'
 import { createCoreFacadeFactory } from './core_facade_factory.js'
 import { createPluginFeaturePolicyService } from './plugin_feature_policy_service.js'
 import { authzService } from '#services/authz/authz_service'
 import { auditEventEmitter } from '#services/audit_event_emitter'
+import { TENANT_ROLES } from '#constants/roles'
 import {
   authTokenService,
   type AuthTokenRecordDTO,
@@ -112,58 +117,117 @@ function createAuditAdapter(pluginId: string) {
  * Plugins receive a plugin-scoped contract, never direct DB access to token internals.
  */
 function createAuthTokensAdapter(pluginId: string) {
+  const isPrivilegedTenantRole = (role?: string): boolean =>
+    role === TENANT_ROLES.OWNER || role === TENANT_ROLES.ADMIN
+
+  const assertTargetUserAccess = (
+    actorUserId: number,
+    targetUserId: number,
+    actorRole: string | undefined
+  ): void => {
+    if (targetUserId === actorUserId) {
+      return
+    }
+
+    if (!isPrivilegedTenantRole(actorRole)) {
+      throw new Error('Forbidden: cannot manage auth tokens for another user')
+    }
+  }
+
   return {
-    listTokens: (input: {
-      tenantId: number
-      kind?: string
-      userId?: number
-    }): Promise<AuthTokenRecordDTO[]> => {
+    listTokens: (
+      ctx: unknown,
+      input?: {
+        kind?: string
+        userId?: number
+      }
+    ): Promise<AuthTokenRecordDTO[]> => {
+      const scope = getTrustedPluginRequestScope(ctx)
+      if (!scope) {
+        throw new Error('authTokens operations require trusted plugin route context')
+      }
+      const requestedUserId = input?.userId
+      if (typeof requestedUserId === 'number') {
+        assertTargetUserAccess(scope.actorUserId, requestedUserId, scope.actorRole)
+      }
+
       return authTokenService.listTokens({
-        tenantId: input.tenantId,
+        tenantId: scope.tenantId,
         pluginId,
-        kind: input.kind,
-        userId: input.userId,
+        kind: input?.kind,
+        userId: requestedUserId ?? scope.actorUserId,
+        actorUserId: scope.actorUserId,
       })
     },
-    createToken: (input: {
-      tenantId: number
-      userId: number
-      kind: string
-      name: string
-      scopes: string[]
-      expiresAt?: string | null
-      metadata?: Record<string, unknown> | null
-    }) => {
+    createToken: (
+      ctx: unknown,
+      input: {
+        userId?: number
+        kind: string
+        name: string
+        scopes: string[]
+        expiresAt?: string | null
+        metadata?: Record<string, unknown> | null
+      }
+    ) => {
+      const scope = getTrustedPluginRequestScope(ctx)
+      if (!scope) {
+        throw new Error('authTokens operations require trusted plugin route context')
+      }
+      const tokenOwnerUserId = input.userId ?? scope.actorUserId
+      assertTargetUserAccess(scope.actorUserId, tokenOwnerUserId, scope.actorRole)
+
       return authTokenService.createToken({
-        tenantId: input.tenantId,
-        userId: input.userId,
+        tenantId: scope.tenantId,
+        userId: tokenOwnerUserId,
+        actorUserId: scope.actorUserId,
         pluginId,
         kind: input.kind,
         name: input.name,
         scopes: input.scopes,
         expiresAt: input.expiresAt,
         metadata: input.metadata,
+        requestIp: scope.requestIp,
+        requestUserAgent: scope.requestUserAgent,
       })
     },
-    revokeToken: (input: { tenantId: number; tokenId: string; kind?: string; userId?: number }) => {
+    revokeToken: (ctx: unknown, input: { tokenId: string; kind?: string; userId?: number }) => {
+      const scope = getTrustedPluginRequestScope(ctx)
+      if (!scope) {
+        throw new Error('authTokens operations require trusted plugin route context')
+      }
+      const targetUserId = input.userId ?? scope.actorUserId
+      assertTargetUserAccess(scope.actorUserId, targetUserId, scope.actorRole)
+
       return authTokenService.revokeToken({
-        tenantId: input.tenantId,
+        tenantId: scope.tenantId,
         pluginId,
         tokenId: input.tokenId,
         kind: input.kind,
-        userId: input.userId,
+        userId: targetUserId,
+        actorUserId: scope.actorUserId,
       })
     },
-    validateToken: (input: {
-      tokenValue: string
-      kind?: string
-      requiredScopes?: string[]
-    }): Promise<ValidateAuthTokenResult> => {
+    validateToken: (
+      ctx: unknown,
+      input: {
+        tokenValue: string
+        kind?: string
+        requiredScopes?: string[]
+      }
+    ): Promise<ValidateAuthTokenResult> => {
+      const scope = getTrustedPluginRequestScope(ctx)
+      if (!scope) {
+        throw new Error('authTokens operations require trusted plugin route context')
+      }
       return authTokenService.validateToken({
         pluginId,
         tokenValue: input.tokenValue,
         kind: input.kind,
+        expectedTenantId: scope.tenantId,
         requiredScopes: input.requiredScopes,
+        requestIp: scope.requestIp,
+        requestUserAgent: scope.requestUserAgent,
       })
     },
   }

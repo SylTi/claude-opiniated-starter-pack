@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@saas/plugins-core": [
+        "../../packages/plugins-core/dist/index.d.ts",
+        "../../packages/plugins-core/src/index.ts"
+      ],
+      "@saas/plugins-core/*": [
+        "../../packages/plugins-core/dist/*",
+        "../../packages/plugins-core/src/*"
+      ],
+      "@saas/shared": [
+        "../../packages/shared/dist/index.d.ts",
+        "../../packages/shared/src/index.ts"
+      ],
+      "@saas/shared/*": [
+        "../../packages/shared/dist/*",
+        "../../packages/shared/src/*"
+      ]
+    }
+  },
+  "include": ["src/index.ts", "src/server.ts", "src/types.ts", "src/translations.ts"],
+  "exclude": ["src/client.tsx", "src/client/**", "node_modules", "dist"]
+}

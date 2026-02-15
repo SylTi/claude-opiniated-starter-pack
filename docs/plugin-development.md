@@ -286,15 +286,81 @@ Examples:
 - `notes.note.write`
 - `notes.note.delete`
 
+## UI Components (`@saas/ui`)
+
+All plugins **must** use the `@saas/ui` workspace package for UI components. Do **not** import from `apps/web/components/ui/` or use a `@/*` path alias pointing into `apps/web`.
+
+### Setup
+
+Add the dependency and path aliases:
+
+**`package.json`:**
+```json
+{
+  "dependencies": {
+    "@saas/ui": "workspace:*"
+  }
+}
+```
+
+**`tsconfig.json`:**
+```json
+{
+  "compilerOptions": {
+    "paths": {
+      "@saas/ui": ["../../packages/ui/src/index.ts"],
+      "@saas/ui/*": ["../../packages/ui/src/*"]
+    }
+  }
+}
+```
+
+### Importing Components
+
+```typescript
+import { Button } from '@saas/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@saas/ui/card'
+import { Input } from '@saas/ui/input'
+import { cn } from '@saas/ui/utils'
+```
+
+### Available Components
+
+`alert-dialog`, `alert`, `avatar`, `badge`, `button`, `card`, `dialog`, `dropdown-menu`, `form`, `input`, `label`, `scroll-area`, `select`, `separator`, `sheet`, `switch`, `table`, `tabs`, `textarea`, `utils`
+
+### Plugin Auth
+
+Use `usePluginAuth()` from `@saas/plugins-core/framework` instead of importing `useAuth` from the host app:
+
+```typescript
+import { usePluginAuth } from '@saas/plugins-core/framework'
+
+function MyComponent() {
+  const { user, isLoading, isAuthenticated } = usePluginAuth()
+  // ...
+}
+```
+
 ## Client Entrypoint
 
 Create `src/client.ts` for UI hooks:
 
 ```typescript
+import type { NavItem, PluginTranslations } from '@saas/plugins-core'
+import { translatePlugin } from '@saas/plugins-core'
+
+const text = translatePlugin('my-plugin')
+
+export const translations: PluginTranslations = {
+  en: {
+    nav_label: 'My Plugin',
+  },
+}
+
 export function navItemsFilter(items: NavItem[]): NavItem[] {
   return [
     ...items,
-    { id: 'my-plugin', label: 'My Plugin', href: '/my-plugin' },
+    { id: 'my-plugin', label: text('nav_label', 'My Plugin'), href: '/my-plugin' },
   ]
 }
 
@@ -302,6 +368,18 @@ export function register(context: { config?: unknown }): void {
   console.log('[my-plugin] Client registered')
 }
 ```
+
+## Internationalization (Required)
+
+All plugins must be i18n-ready by default.
+
+- Every plugin **must own its translations** in its own package (do not rely on a central core plugin catalog).
+- Every plugin **must ship a base English (`en`) catalog**.
+- UI text in plugin code must use translation keys (no hardcoded user-facing strings in components/pages).
+- `src/client.ts` must export a `translations` object so the plugin loader can register catalogs.
+- Use plugin-scoped keys with `translatePlugin('<plugin-id>')` to avoid key collisions.
+
+Optional language packs can be delivered as separate Tier A plugins that add or override locales for one or many plugins (for example, `@plugins/lang-fr`).
 
 ## Server Action Hooks
 
@@ -476,3 +554,8 @@ Before releasing a plugin, verify:
 - [ ] Server entrypoint exports `register` function
 - [ ] If using authz, exports `authzResolver` function
 - [ ] Plugin is added to loader maps in @saas/config
+- [ ] UI components imported from `@saas/ui/*` (not `@/components/ui/*`)
+- [ ] Plugin auth uses `usePluginAuth()` from `@saas/plugins-core/framework`
+- [ ] Client entrypoint exports plugin `translations`
+- [ ] Base `en` catalog exists in plugin package
+- [ ] No hardcoded user-facing strings in plugin UI code

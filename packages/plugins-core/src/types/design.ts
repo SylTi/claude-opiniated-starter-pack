@@ -188,6 +188,19 @@ export interface HeaderOverrideProps {
 }
 
 /**
+ * Widget descriptor for the `ui:header:actions` filter hook.
+ * Plugins register these to inject components into the header action area.
+ */
+export interface HeaderActionWidget {
+  /** Unique widget ID (e.g., 'notifications-bell') */
+  id: string
+  /** React component to render */
+  component: () => unknown // React.ReactElement on frontend
+  /** Sort order (lower = further left). Default: 50 */
+  order?: number
+}
+
+/**
  * Named slots available for declarative header layout.
  */
 export type HeaderLayoutSlot =

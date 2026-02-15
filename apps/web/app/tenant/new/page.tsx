@@ -8,16 +8,18 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@saas/ui/card";
+import { Button } from "@saas/ui/button";
+import { Input } from "@saas/ui/input";
+import { Label } from "@saas/ui/label";
 import { useAuth } from "@/contexts/auth-context";
+import { useI18n } from "@/contexts/i18n-context";
 import { tenantsApi, ApiError } from "@/lib/api";
 import { toast } from "sonner";
 import { Building2, Loader2 } from "lucide-react";
 
 export default function NewTenantPage(): React.ReactElement {
+  const { t } = useI18n("skeleton");
   const router = useRouter();
   const { user, refreshUser } = useAuth();
   const [name, setName] = useState("");
@@ -27,7 +29,7 @@ export default function NewTenantPage(): React.ReactElement {
     e.preventDefault();
 
     if (!name.trim()) {
-      toast.error("Please enter a team name");
+      toast.error(t("tenantNew.enterTeamName"));
       return;
     }
 
@@ -37,13 +39,13 @@ export default function NewTenantPage(): React.ReactElement {
       // Switch to the new tenant
       await tenantsApi.switch(tenant.id);
       await refreshUser();
-      toast.success("Team created successfully");
+      toast.success(t("tenantNew.teamCreatedSuccess"));
       router.push("/dashboard");
     } catch (error) {
       if (error instanceof ApiError) {
         toast.error(error.message);
       } else {
-        toast.error("Failed to create team");
+        toast.error(t("tenantNew.teamCreateError"));
       }
     } finally {
       setIsLoading(false);
@@ -62,19 +64,19 @@ export default function NewTenantPage(): React.ReactElement {
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
             <Building2 className="h-6 w-6 text-blue-600" />
           </div>
-          <CardTitle>Create a new team</CardTitle>
+          <CardTitle>{t("tenantNew.title")}</CardTitle>
           <CardDescription>
-            Teams allow you to collaborate with others and share a subscription.
+            {t("tenantNew.description")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Team name</Label>
+              <Label htmlFor="name">{t("tenantNew.teamName")}</Label>
               <Input
                 id="name"
                 type="text"
-                placeholder="My Awesome Team"
+                placeholder={t("tenantNew.teamNamePlaceholder")}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={isLoading}
@@ -89,16 +91,16 @@ export default function NewTenantPage(): React.ReactElement {
                 disabled={isLoading}
                 className="flex-1"
               >
-                Cancel
+                {t("tenantNew.cancel")}
               </Button>
               <Button type="submit" disabled={isLoading} className="flex-1">
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
+                    {t("tenantNew.creating")}
                   </>
                 ) : (
-                  "Create team"
+                  t("tenantNew.createTeam")
                 )}
               </Button>
             </div>

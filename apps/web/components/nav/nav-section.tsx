@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@saas/ui/utils'
 import type { NavSectionWithIcons } from '@/lib/nav/types'
 import { NavItem } from './nav-item'
 

@@ -12,6 +12,7 @@ import PluginState from '#models/plugin_state'
 import { updatePluginConfigValidator, validatePluginConfigSize } from '#validators/plugin'
 import { apiThrottle } from '#start/limiter'
 import { TENANT_ROLES } from '#constants/roles'
+import { redactSensitiveConfig } from '#services/plugins/config_redaction'
 
 /**
  * Check if user has plugin management permission.
@@ -60,13 +61,14 @@ router
         .where('plugin_id', pluginId)
         .first()
 
+      const canViewConfig = canManagePlugins(tenant!.membership.role)
       return response.json({
         data: {
           pluginId,
           enabled: state?.enabled ?? false,
           version: plugin.manifest.version,
           installedAt: state?.installedAt,
-          config: state?.config,
+          config: canViewConfig ? redactSensitiveConfig(state?.config) : undefined,
         },
       })
     })
@@ -205,7 +207,7 @@ router
       return response.json({
         data: {
           pluginId,
-          config: state.config,
+          config: redactSensitiveConfig(state.config),
           message: 'Plugin config updated successfully',
         },
       })

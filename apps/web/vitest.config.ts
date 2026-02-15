@@ -41,6 +41,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './'),
+      '@saas/plugins-core': path.resolve(__dirname, '../../packages/plugins-core/src/index.ts'),
+      '@saas/shared': path.resolve(__dirname, '../../packages/shared/src/index.ts'),
+      '@plugins': path.resolve(__dirname, '../../plugins'),
     },
   },
 })

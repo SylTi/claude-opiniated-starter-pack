@@ -310,6 +310,15 @@ Do not use a global DB connection in handlers.
 - filter: e.g. `dashboard.main.top`
 - return `SlotWidget[]` describing component + props
 
+### 7.4 Internationalization rules (mandatory)
+- Every plugin must own its own translations in its package.
+- Every plugin must provide a base English (`en`) catalog.
+- User-facing strings in plugin UI code must be key-based (no hardcoded literals in components/pages).
+- Client entrypoint must export `translations` so catalogs are auto-registered by the host.
+- Use plugin-scoped keys (for example via `translatePlugin('<plugin-id>')`) to prevent collisions.
+
+Optional extra locales should be delivered as language-pack plugins (Tier A) that add/override locale catalogs.
+
 ---
 
 ## 8) Tier B plugin guide (App plugins)
@@ -427,6 +436,8 @@ Never auto-delete tenant data on disable.
 - [ ] No client secrets / no global interceptors
 - [ ] Filters are pure + non-mutating
 - [ ] Hooks are fast and resilient
+- [ ] Plugin ships base `en` translations and exports `translations` from client entrypoint
+- [ ] No hardcoded user-facing strings in plugin UI (keys + catalogs only)
 
 ---
 

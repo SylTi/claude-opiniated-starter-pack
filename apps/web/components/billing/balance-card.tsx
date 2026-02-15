@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@saas/ui/card'
+import { useI18n } from '@/contexts/i18n-context'
 import { billingApi, ApiError } from '@/lib/api'
 import type { BalanceDTO } from '@saas/shared'
 import { Loader2, Wallet } from 'lucide-react'
@@ -20,6 +21,7 @@ function formatBalance(amount: number, currency: string): string {
 }
 
 export function BalanceCard({ teamId }: BalanceCardProps): React.ReactElement {
+  const { t } = useI18n('skeleton')
   const [balance, setBalance] = useState<BalanceDTO | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -34,12 +36,12 @@ export function BalanceCard({ teamId }: BalanceCardProps): React.ReactElement {
       if (err instanceof ApiError) {
         setError(err.message)
       } else {
-        setError('Failed to load balance')
+        setError(t('billing.balanceLoadError'))
       }
     } finally {
       setIsLoading(false)
     }
-  }, [teamId])
+  }, [teamId, t])
 
   useEffect(() => {
     fetchBalance()
@@ -51,7 +53,7 @@ export function BalanceCard({ teamId }: BalanceCardProps): React.ReactElement {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Wallet className="h-5 w-5" />
-            Account Balance
+            {t('billing.accountBalance')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -69,7 +71,7 @@ export function BalanceCard({ teamId }: BalanceCardProps): React.ReactElement {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Wallet className="h-5 w-5" />
-            Account Balance
+            {t('billing.accountBalance')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -84,10 +86,10 @@ export function BalanceCard({ teamId }: BalanceCardProps): React.ReactElement {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Wallet className="h-5 w-5" />
-          Account Balance
+          {t('billing.accountBalance')}
         </CardTitle>
         <CardDescription>
-          Your available credit balance
+          {t('billing.availableCreditBalance')}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -95,7 +97,7 @@ export function BalanceCard({ teamId }: BalanceCardProps): React.ReactElement {
           {balance ? formatBalance(balance.balance, balance.currency) : '$0.00'}
         </div>
         <p className="text-sm text-muted-foreground mt-2">
-          This balance will be applied to your next invoice.
+          {t('billing.balanceAppliedToInvoice')}
         </p>
       </CardContent>
     </Card>

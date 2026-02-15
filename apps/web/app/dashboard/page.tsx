@@ -9,10 +9,11 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+} from "@saas/ui/card";
+import { Button } from "@saas/ui/button";
+import { Badge } from "@saas/ui/badge";
 import { useAuth } from "@/contexts/auth-context";
+import { useI18n } from "@/contexts/i18n-context";
 import { api, ApiError, billingApi } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -84,6 +85,7 @@ function formatTierFeatures(
 }
 
 export default function DashboardPage(): React.ReactElement {
+  const { t } = useI18n("skeleton");
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const [stats, setStats] = useState<UserStats | null>(null);
@@ -108,12 +110,12 @@ export default function DashboardPage(): React.ReactElement {
         }
         toast.error(error.message);
       } else {
-        toast.error("Failed to fetch dashboard stats");
+        toast.error(t("dashboard.fetchError"));
       }
     } finally {
       setIsLoading(false);
     }
-  }, [router]);
+  }, [router, t]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -146,7 +148,7 @@ export default function DashboardPage(): React.ReactElement {
   const hasPaidTier = user.effectiveSubscriptionTier.level > freeTierLevel;
 
   function formatDate(dateString: string | null): string {
-    if (!dateString) return "Never";
+    if (!dateString) return t("dashboard.never");
     return new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
@@ -157,21 +159,21 @@ export default function DashboardPage(): React.ReactElement {
   }
 
   function formatAccountAge(days: number): string {
-    if (days === 0) return "Today";
-    if (days === 1) return "1 day";
-    if (days < 30) return `${days} days`;
-    if (days < 365) return `${Math.floor(days / 30)} months`;
-    return `${Math.floor(days / 365)} years`;
+    if (days === 0) return t("dashboard.today");
+    if (days === 1) return t("dashboard.daysSingle");
+    if (days < 30) return t("dashboard.days", { count: days });
+    if (days < 365) return t("dashboard.months", { count: Math.floor(days / 30) });
+    return t("dashboard.years", { count: Math.floor(days / 365) });
   }
 
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">
-          Welcome back, {user.fullName || user.email.split("@")[0]}
+          {t("dashboard.welcomeBack", { name: user.fullName || user.email.split("@")[0] })}
         </h1>
         <p className="text-muted-foreground">
-          Here&apos;s an overview of your account
+          {t("dashboard.overview")}
         </p>
       </div>
 
@@ -179,31 +181,31 @@ export default function DashboardPage(): React.ReactElement {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Account Age</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("dashboard.accountAge")}</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {stats ? formatAccountAge(stats.accountAgeDays) : "-"}
             </div>
-            <p className="text-xs text-muted-foreground">Member since signup</p>
+            <p className="text-xs text-muted-foreground">{t("dashboard.memberSinceSignup")}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Logins</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("dashboard.totalLogins")}</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.totalLogins ?? 0}</div>
-            <p className="text-xs text-muted-foreground">Successful sign-ins</p>
+            <p className="text-xs text-muted-foreground">{t("dashboard.successfulSignIns")}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Email Status</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("dashboard.emailStatus")}</CardTitle>
             {user.emailVerified ? (
               <CheckCircle className="h-4 w-4 text-green-600" />
             ) : (
@@ -212,7 +214,7 @@ export default function DashboardPage(): React.ReactElement {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {user.emailVerified ? "Verified" : "Unverified"}
+              {user.emailVerified ? t("dashboard.verified") : t("dashboard.unverified")}
             </div>
             <p className="text-xs text-muted-foreground">{user.email}</p>
           </CardContent>
@@ -220,15 +222,15 @@ export default function DashboardPage(): React.ReactElement {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Security</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("dashboard.security")}</CardTitle>
             <Shield className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {user.mfaEnabled ? "Protected" : "Basic"}
+              {user.mfaEnabled ? t("dashboard.protected") : t("dashboard.basic")}
             </div>
             <p className="text-xs text-muted-foreground">
-              {user.mfaEnabled ? "2FA enabled" : "2FA not enabled"}
+              {user.mfaEnabled ? t("dashboard.twoFactorEnabled") : t("dashboard.twoFactorDisabled")}
             </p>
           </CardContent>
         </Card>
@@ -241,10 +243,10 @@ export default function DashboardPage(): React.ReactElement {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Building2 className="h-5 w-5 text-blue-600" />
-              <CardTitle>Subscription & Team</CardTitle>
+              <CardTitle>{t("dashboard.subscriptionAndTeam")}</CardTitle>
             </div>
             <CardDescription>
-              Your current subscription and team information
+              {t("dashboard.subscriptionAndTeamDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -252,11 +254,11 @@ export default function DashboardPage(): React.ReactElement {
               <div className="p-4 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <Crown className="h-4 w-4 text-yellow-500" />
-                  <span className="font-medium">Subscription</span>
+                  <span className="font-medium">{t("dashboard.subscription")}</span>
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Plan:</span>
+                    <span className="text-sm text-muted-foreground">{t("dashboard.planLabel")}</span>
                     <Badge
                       variant={getTierBadgeVariant(
                         user.effectiveSubscriptionTier.level,
@@ -267,7 +269,7 @@ export default function DashboardPage(): React.ReactElement {
                   </div>
                   {user.currentTenant?.subscription?.expiresAt && (
                     <div className="text-sm text-muted-foreground">
-                      Expires:{" "}
+                      {t("dashboard.expiresLabel")}{" "}
                       {new Date(
                         user.currentTenant.subscription.expiresAt,
                       ).toLocaleDateString()}
@@ -279,19 +281,19 @@ export default function DashboardPage(): React.ReactElement {
                 <div className="p-4 bg-gray-50 rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
                     <Users className="h-4 w-4 text-blue-500" />
-                    <span className="font-medium">Team</span>
+                    <span className="font-medium">{t("dashboard.team")}</span>
                   </div>
                   <div className="space-y-1">
                     <div className="text-sm font-medium">
                       {user.currentTenant.name}
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      Slug: {user.currentTenant.slug}
+                      {t("dashboard.slugLabel")} {user.currentTenant.slug}
                     </div>
                     {hasPaidTier && (
                       <Link href="/team">
                         <Button variant="link" size="sm" className="p-0 h-auto">
-                          Manage Team <ArrowRight className="h-3 w-3 ml-1" />
+                          {t("dashboard.manageTeam")} <ArrowRight className="h-3 w-3 ml-1" />
                         </Button>
                       </Link>
                     )}
@@ -307,15 +309,15 @@ export default function DashboardPage(): React.ReactElement {
         {/* Quick Actions */}
         <Card>
           <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Manage your account settings</CardDescription>
+            <CardTitle>{t("dashboard.quickActions")}</CardTitle>
+            <CardDescription>{t("dashboard.quickActionsDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <Link href="/profile" className="block">
               <Button variant="outline" className="w-full justify-between">
                 <span className="flex items-center gap-2">
                   <User className="h-4 w-4" />
-                  Edit Profile
+                  {t("dashboard.editProfile")}
                 </span>
                 <ArrowRight className="h-4 w-4" />
               </Button>
@@ -324,7 +326,7 @@ export default function DashboardPage(): React.ReactElement {
               <Button variant="outline" className="w-full justify-between">
                 <span className="flex items-center gap-2">
                   <Shield className="h-4 w-4" />
-                  Security Settings
+                  {t("dashboard.securitySettings")}
                 </span>
                 <ArrowRight className="h-4 w-4" />
               </Button>
@@ -333,7 +335,7 @@ export default function DashboardPage(): React.ReactElement {
               <Button variant="outline" className="w-full justify-between">
                 <span className="flex items-center gap-2">
                   <LinkIcon className="h-4 w-4" />
-                  Connected Accounts
+                  {t("dashboard.connectedAccounts")}
                   {stats && stats.connectedOAuthAccounts > 0 && (
                     <Badge variant="secondary" className="ml-2">
                       {stats.connectedOAuthAccounts}
@@ -347,7 +349,7 @@ export default function DashboardPage(): React.ReactElement {
               <Button variant="outline" className="w-full justify-between">
                 <span className="flex items-center gap-2">
                   <Settings className="h-4 w-4" />
-                  Account Settings
+                  {t("dashboard.accountSettings")}
                 </span>
                 <ArrowRight className="h-4 w-4" />
               </Button>
@@ -358,8 +360,8 @@ export default function DashboardPage(): React.ReactElement {
         {/* Recent Activity */}
         <Card>
           <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Your latest login attempts</CardDescription>
+            <CardTitle>{t("dashboard.recentActivity")}</CardTitle>
+            <CardDescription>{t("dashboard.recentActivityDescription")}</CardDescription>
           </CardHeader>
           <CardContent>
             {stats && stats.recentActivity.length > 0 ? (
@@ -385,7 +387,7 @@ export default function DashboardPage(): React.ReactElement {
               </div>
             ) : (
               <p className="text-muted-foreground text-sm text-center py-4">
-                No recent activity
+                {t("dashboard.noRecentActivity")}
               </p>
             )}
           </CardContent>
@@ -396,9 +398,9 @@ export default function DashboardPage(): React.ReactElement {
       <div className="mt-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-2xl font-bold">Features by Subscription</h2>
+            <h2 className="text-2xl font-bold">{t("dashboard.featuresBySubscription")}</h2>
             <p className="text-muted-foreground">
-              Your current plan:{" "}
+              {t("dashboard.currentPlanLabel")}{" "}
               <Badge
                 variant={getTierBadgeVariant(
                   user.effectiveSubscriptionTier.level,
@@ -408,7 +410,7 @@ export default function DashboardPage(): React.ReactElement {
               </Badge>
               {user.currentTenant && (
                 <span className="ml-2 text-sm">
-                  (via {user.currentTenant.name})
+                  {t("dashboard.viaTenant", { tenant: user.currentTenant.name })}
                 </span>
               )}
             </p>
@@ -418,9 +420,9 @@ export default function DashboardPage(): React.ReactElement {
         {sortedTiers.length === 0 ? (
           <Card className="border-2 border-gray-200">
             <CardHeader>
-              <CardTitle>Subscription tiers unavailable</CardTitle>
+              <CardTitle>{t("dashboard.tiersUnavailableTitle")}</CardTitle>
               <CardDescription>
-                We couldn&apos;t load tier details right now. Please refresh.
+                {t("dashboard.tiersUnavailableDescription")}
               </CardDescription>
             </CardHeader>
           </Card>
@@ -461,14 +463,14 @@ export default function DashboardPage(): React.ReactElement {
                                 : "text-gray-500"
                           }`}
                         />
-                        <CardTitle>{tier.name} Features</CardTitle>
+                        <CardTitle>{t("dashboard.tierFeaturesTitle", { tier: tier.name })}</CardTitle>
                       </div>
                       <Badge variant={getTierBadgeVariant(tier.level)}>
                         {tier.name}
                       </Badge>
                     </div>
                     <CardDescription>
-                      {tier.description ?? `${tier.name} tier features`}
+                      {tier.description ?? t("dashboard.tierFeaturesDescription", { tier: tier.name })}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -482,7 +484,7 @@ export default function DashboardPage(): React.ReactElement {
                             >
                               <h4 className="font-medium mb-2">{feature}</h4>
                               <p className="text-sm text-muted-foreground">
-                                Included with {tier.name}.
+                                {t("dashboard.includedWithTier", { tier: tier.name })}
                               </p>
                             </div>
                           ))}
@@ -491,7 +493,7 @@ export default function DashboardPage(): React.ReactElement {
                         <div className="flex flex-col items-center justify-center py-8 text-center">
                           <CheckCircle className="h-12 w-12 text-green-600 mb-4" />
                           <p className="text-muted-foreground">
-                            You have access to {tier.name}.
+                            {t("dashboard.haveAccessToTier", { tier: tier.name })}
                           </p>
                         </div>
                       )
@@ -499,10 +501,10 @@ export default function DashboardPage(): React.ReactElement {
                       <div className="flex flex-col items-center justify-center py-8 text-center">
                         <Lock className="h-12 w-12 text-muted-foreground mb-4" />
                         <p className="text-muted-foreground mb-4">
-                          Upgrade to {tier.name} to unlock
+                          {t("dashboard.upgradeToUnlock", { tier: tier.name })}
                         </p>
                         <Button variant="outline" size="sm">
-                          Upgrade
+                          {t("dashboard.upgrade")}
                         </Button>
                       </div>
                     )}

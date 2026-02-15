@@ -7,7 +7,7 @@ import User from '#models/user'
 import { randomBytes } from 'node:crypto'
 
 export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'expired'
-export type InvitationRole = 'admin' | 'member'
+export type InvitationRole = 'admin' | 'member' | 'viewer'
 
 export default class TenantInvitation extends BaseModel {
   static table = 'tenant_invitations'

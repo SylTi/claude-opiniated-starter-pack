@@ -6,3 +6,4 @@
  */
 
 export { design } from './design.js'
+export { translations } from './translations.js'

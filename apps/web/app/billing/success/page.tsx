@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@saas/ui/card'
+import { Button } from '@saas/ui/button'
+import { useI18n } from '@/contexts/i18n-context'
 import { CheckCircle } from 'lucide-react'
 
 export default function BillingSuccessPage(): React.ReactElement {
+  const { t } = useI18n('skeleton')
   const router = useRouter()
   const [countdown, setCountdown] = useState(5)
 
@@ -32,19 +34,19 @@ export default function BillingSuccessPage(): React.ReactElement {
           <div className="flex justify-center mb-4">
             <CheckCircle className="h-16 w-16 text-green-500" />
           </div>
-          <CardTitle className="text-2xl">Payment Successful!</CardTitle>
+          <CardTitle className="text-2xl">{t('billingSuccess.title')}</CardTitle>
           <CardDescription>
-            Thank you for your subscription. Your account has been upgraded.
+            {t('billingSuccess.description')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground">
-            You will be redirected to the billing page in {countdown} seconds.
+            {t('billingSuccess.redirectMessage', { seconds: countdown })}
           </p>
         </CardContent>
         <CardFooter className="justify-center">
           <Button onClick={() => router.push('/billing')}>
-            Go to Billing Now
+            {t('billingSuccess.goNow')}
           </Button>
         </CardFooter>
       </Card>

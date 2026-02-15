@@ -1,26 +1,29 @@
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@saas/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@saas/ui/card'
+import { getServerI18n } from '@/lib/i18n/server'
 
-export default function Home() {
+export default async function Home(): Promise<React.ReactElement> {
+  const { t } = await getServerI18n('skeleton')
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <main className="container px-4 py-16">
         <div className="mx-auto max-w-4xl text-center">
           <h1 className="text-5xl font-bold tracking-tight mb-4">
-            SaaS Monorepo Starter
+            {t('home.title')}
           </h1>
           <p className="text-xl text-muted-foreground mb-8">
-            A production-ready monorepo setup with Next.js, AdonisJS, and TypeScript.
+            {t('home.subtitle')}
           </p>
 
           <div className="flex justify-center gap-4 mb-12">
             <Button asChild size="lg">
-              <Link href="/dashboard">View Dashboard</Link>
+              <Link href="/dashboard">{t('home.viewDashboard')}</Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <a href="https://github.com" target="_blank" rel="noopener noreferrer">
-                GitHub
+                {t('home.github')}
               </a>
             </Button>
           </div>
@@ -28,36 +31,36 @@ export default function Home() {
           <div className="grid gap-6 md:grid-cols-3 mt-16">
             <Card>
               <CardHeader>
-                <CardTitle>Next.js Frontend</CardTitle>
-                <CardDescription>App Router with TypeScript</CardDescription>
+                <CardTitle>{t('home.nextTitle')}</CardTitle>
+                <CardDescription>{t('home.nextDesc')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Modern React framework with server components and optimized routing.
+                  {t('home.nextBody')}
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle>AdonisJS Backend</CardTitle>
-                <CardDescription>TypeScript-first Node.js framework</CardDescription>
+                <CardTitle>{t('home.adonisTitle')}</CardTitle>
+                <CardDescription>{t('home.adonisDesc')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Full-featured MVC framework with Lucid ORM and built-in authentication.
+                  {t('home.adonisBody')}
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle>Shared Types</CardTitle>
-                <CardDescription>End-to-end type safety</CardDescription>
+                <CardTitle>{t('home.sharedTitle')}</CardTitle>
+                <CardDescription>{t('home.sharedDesc')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Shared TypeScript types between frontend and backend for consistency.
+                  {t('home.sharedBody')}
                 </p>
               </CardContent>
             </Card>

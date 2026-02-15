@@ -1,8 +1,9 @@
-"use client";
+"use client"
 
-import { useCallback, useEffect, useState } from "react";
-import { adminDiscountCodesApi, ApiError } from "@/lib/api";
-import type { DiscountCodeDTO } from "@saas/shared";
+import { useCallback, useEffect, useState } from "react"
+import { adminDiscountCodesApi, ApiError } from "@/lib/api"
+import { useI18n } from "@/contexts/i18n-context"
+import type { DiscountCodeDTO } from "@saas/shared"
 import {
   Table,
   TableBody,
@@ -10,18 +11,18 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@saas/ui/table"
+import { Button } from "@saas/ui/button"
+import { Badge } from "@saas/ui/badge"
+import { Input } from "@saas/ui/input"
+import { Label } from "@saas/ui/label"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@saas/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -29,16 +30,17 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { Loader2, Plus, Pencil, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+} from "@saas/ui/dialog"
+import { Loader2, Plus, Pencil, Trash2 } from "lucide-react"
+import { toast } from "sonner"
 
 export default function AdminDiscountCodesPage(): React.ReactElement {
-  const [discountCodes, setDiscountCodes] = useState<DiscountCodeDTO[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingCode, setEditingCode] = useState<DiscountCodeDTO | null>(null);
+  const { locale, t } = useI18n("skeleton")
+  const [discountCodes, setDiscountCodes] = useState<DiscountCodeDTO[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState<number | null>(null)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingCode, setEditingCode] = useState<DiscountCodeDTO | null>(null)
   const [formData, setFormData] = useState({
     code: "",
     description: "",
@@ -50,24 +52,24 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
     maxUsesPerTenant: "",
     expiresAt: "",
     isActive: true,
-  });
+  })
 
   const fetchDiscountCodes = useCallback(async (): Promise<void> => {
     try {
-      const data = await adminDiscountCodesApi.list();
-      setDiscountCodes(data);
+      const data = await adminDiscountCodesApi.list()
+      setDiscountCodes(data)
     } catch (error) {
       if (error instanceof ApiError) {
-        toast.error(error.message);
+        toast.error(error.message)
       }
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    fetchDiscountCodes();
-  }, [fetchDiscountCodes]);
+    fetchDiscountCodes()
+  }, [fetchDiscountCodes])
 
   const resetForm = (): void => {
     setFormData({
@@ -81,17 +83,17 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
       maxUsesPerTenant: "",
       expiresAt: "",
       isActive: true,
-    });
-    setEditingCode(null);
-  };
+    })
+    setEditingCode(null)
+  }
 
   const openCreateDialog = (): void => {
-    resetForm();
-    setIsDialogOpen(true);
-  };
+    resetForm()
+    setIsDialogOpen(true)
+  }
 
   const openEditDialog = (code: DiscountCodeDTO): void => {
-    setEditingCode(code);
+    setEditingCode(code)
     setFormData({
       code: code.code,
       description: code.description || "",
@@ -105,13 +107,13 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
         : "",
       expiresAt: code.expiresAt ? code.expiresAt.split("T")[0] : "",
       isActive: code.isActive,
-    });
-    setIsDialogOpen(true);
-  };
+    })
+    setIsDialogOpen(true)
+  }
 
   const handleSubmit = async (): Promise<void> => {
     try {
-      setActionLoading(-1);
+      setActionLoading(-1)
       const payload = {
         code: formData.code,
         description: formData.description || undefined,
@@ -126,106 +128,111 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
           : undefined,
         expiresAt: formData.expiresAt || undefined,
         isActive: formData.isActive,
-      };
+      }
 
       if (editingCode) {
-        await adminDiscountCodesApi.update(editingCode.id, payload);
-        toast.success("Discount code updated successfully");
+        await adminDiscountCodesApi.update(editingCode.id, payload)
+        toast.success(t("adminDiscountCodes.updateSuccess"))
       } else {
-        await adminDiscountCodesApi.create(payload);
-        toast.success("Discount code created successfully");
+        await adminDiscountCodesApi.create(payload)
+        toast.success(t("adminDiscountCodes.createSuccess"))
       }
 
-      setIsDialogOpen(false);
-      resetForm();
-      fetchDiscountCodes();
+      setIsDialogOpen(false)
+      resetForm()
+      fetchDiscountCodes()
     } catch (error) {
       if (error instanceof ApiError) {
-        toast.error(error.message);
+        toast.error(error.message)
       }
     } finally {
-      setActionLoading(null);
+      setActionLoading(null)
     }
-  };
+  }
 
   const handleDelete = async (id: number): Promise<void> => {
-    if (!confirm("Are you sure you want to delete this discount code?")) {
-      return;
+    if (!confirm(t("adminDiscountCodes.confirmDelete"))) {
+      return
     }
 
     try {
-      setActionLoading(id);
-      await adminDiscountCodesApi.delete(id);
-      toast.success("Discount code deleted successfully");
-      fetchDiscountCodes();
+      setActionLoading(id)
+      await adminDiscountCodesApi.delete(id)
+      toast.success(t("adminDiscountCodes.deleteSuccess"))
+      fetchDiscountCodes()
     } catch (error) {
       if (error instanceof ApiError) {
-        toast.error(error.message);
+        toast.error(error.message)
       }
     } finally {
-      setActionLoading(null);
+      setActionLoading(null)
     }
-  };
+  }
 
   const handleToggleActive = async (code: DiscountCodeDTO): Promise<void> => {
     try {
-      setActionLoading(code.id);
-      await adminDiscountCodesApi.update(code.id, { isActive: !code.isActive });
-      toast.success(`Discount code ${code.isActive ? "disabled" : "enabled"}`);
-      fetchDiscountCodes();
+      setActionLoading(code.id)
+      await adminDiscountCodesApi.update(code.id, { isActive: !code.isActive })
+      toast.success(
+        t(code.isActive ? "adminDiscountCodes.disabledSuccess" : "adminDiscountCodes.enabledSuccess"),
+      )
+      fetchDiscountCodes()
     } catch (error) {
       if (error instanceof ApiError) {
-        toast.error(error.message);
+        toast.error(error.message)
       }
     } finally {
-      setActionLoading(null);
+      setActionLoading(null)
     }
-  };
+  }
 
   const formatDate = (dateString: string | null): string => {
-    if (!dateString) return "-";
-    return new Date(dateString).toLocaleDateString();
-  };
+    if (!dateString) return t("adminDiscountCodes.notAvailable")
+    return new Date(dateString).toLocaleDateString(locale)
+  }
 
   const formatDiscount = (code: DiscountCodeDTO): string => {
     if (code.discountType === "percent") {
-      return `${code.discountValue}%`;
+      return `${code.discountValue}%`
     }
-    return `$${(code.discountValue / 100).toFixed(2)}`;
-  };
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: (code.currency || "usd").toUpperCase(),
+    }).format(code.discountValue / 100)
+  }
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
-    );
+    )
   }
 
   return (
     <div className="bg-card text-card-foreground rounded-lg border p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Discount Codes</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t("adminDiscountCodes.title")}</h1>
           <p className="text-muted-foreground">
-            Manage discount codes for subscriptions
+            {t("adminDiscountCodes.subtitle")}
           </p>
         </div>
         <Button onClick={openCreateDialog}>
           <Plus className="h-4 w-4 mr-2" />
-          Add Discount Code
+          {t("adminDiscountCodes.addDiscountCode")}
         </Button>
       </div>
 
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Code</TableHead>
-            <TableHead>Discount</TableHead>
-            <TableHead>Usage</TableHead>
-            <TableHead>Expires</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Actions</TableHead>
+            <TableHead>{t("adminDiscountCodes.tableCode")}</TableHead>
+            <TableHead>{t("adminDiscountCodes.tableDiscount")}</TableHead>
+            <TableHead>{t("adminDiscountCodes.tableUsage")}</TableHead>
+            <TableHead>{t("adminDiscountCodes.tableExpires")}</TableHead>
+            <TableHead>{t("adminDiscountCodes.tableStatus")}</TableHead>
+            <TableHead>{t("adminDiscountCodes.tableActions")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -249,7 +256,7 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
               <TableCell>{formatDate(code.expiresAt)}</TableCell>
               <TableCell>
                 <Badge variant={code.isActive ? "default" : "secondary"}>
-                  {code.isActive ? "Active" : "Inactive"}
+                  {code.isActive ? t("adminDiscountCodes.active") : t("adminDiscountCodes.inactive")}
                 </Badge>
               </TableCell>
               <TableCell>
@@ -271,9 +278,9 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
                     {actionLoading === code.id ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : code.isActive ? (
-                      "Disable"
+                      t("adminDiscountCodes.disable")
                     ) : (
-                      "Enable"
+                      t("adminDiscountCodes.enable")
                     )}
                   </Button>
                   <Button
@@ -291,7 +298,7 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
           {discountCodes.length === 0 && (
             <TableRow>
               <TableCell colSpan={6} className="text-center text-muted-foreground">
-                No discount codes found
+                {t("adminDiscountCodes.noDiscountCodes")}
               </TableCell>
             </TableRow>
           )}
@@ -302,17 +309,17 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {editingCode ? "Edit Discount Code" : "Create Discount Code"}
+              {editingCode ? t("adminDiscountCodes.editDiscountCode") : t("adminDiscountCodes.createDiscountCode")}
             </DialogTitle>
             <DialogDescription>
               {editingCode
-                ? "Update details for this discount code."
-                : "Create a new discount code for subscriptions."}
+                ? t("adminDiscountCodes.editDescription")
+                : t("adminDiscountCodes.createDescription")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="code">Code</Label>
+              <Label htmlFor="code">{t("adminDiscountCodes.fieldCode")}</Label>
               <Input
                 id="code"
                 value={formData.code}
@@ -322,23 +329,23 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
                     code: e.target.value.toUpperCase(),
                   })
                 }
-                placeholder="e.g., SUMMER20"
+                placeholder={t("adminDiscountCodes.codePlaceholder")}
               />
             </div>
             <div>
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">{t("adminDiscountCodes.fieldDescription")}</Label>
               <Input
                 id="description"
                 value={formData.description}
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
                 }
-                placeholder="Optional description"
+                placeholder={t("adminDiscountCodes.descriptionPlaceholder")}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="discountType">Type</Label>
+                <Label htmlFor="discountType">{t("adminDiscountCodes.fieldType")}</Label>
                 <Select
                   value={formData.discountType}
                   onValueChange={(v: "percent" | "fixed") =>
@@ -349,16 +356,16 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="percent">Percentage</SelectItem>
-                    <SelectItem value="fixed">Fixed Amount</SelectItem>
+                    <SelectItem value="percent">{t("adminDiscountCodes.typePercentage")}</SelectItem>
+                    <SelectItem value="fixed">{t("adminDiscountCodes.typeFixedAmount")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label htmlFor="discountValue">
                   {formData.discountType === "percent"
-                    ? "Percentage (%)"
-                    : "Amount (cents)"}
+                    ? t("adminDiscountCodes.fieldPercentage")
+                    : t("adminDiscountCodes.fieldAmountCents")}
                 </Label>
                 <Input
                   id="discountValue"
@@ -368,14 +375,16 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
                     setFormData({ ...formData, discountValue: e.target.value })
                   }
                   placeholder={
-                    formData.discountType === "percent" ? "20" : "1000"
+                    formData.discountType === "percent"
+                      ? t("adminDiscountCodes.percentagePlaceholder")
+                      : t("adminDiscountCodes.amountPlaceholder")
                   }
                 />
               </div>
             </div>
             {formData.discountType === "fixed" && (
               <div>
-                <Label htmlFor="currency">Currency</Label>
+                <Label htmlFor="currency">{t("adminDiscountCodes.fieldCurrency")}</Label>
                 <Select
                   value={formData.currency}
                   onValueChange={(v) =>
@@ -386,15 +395,15 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="usd">USD</SelectItem>
-                    <SelectItem value="eur">EUR</SelectItem>
+                    <SelectItem value="usd">{t("common.currency.usd")}</SelectItem>
+                    <SelectItem value="eur">{t("common.currency.eur")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             )}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="maxUses">Max Uses (total)</Label>
+                <Label htmlFor="maxUses">{t("adminDiscountCodes.fieldMaxUsesTotal")}</Label>
                 <Input
                   id="maxUses"
                   type="number"
@@ -402,11 +411,11 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
                   onChange={(e) =>
                     setFormData({ ...formData, maxUses: e.target.value })
                   }
-                  placeholder="Unlimited"
+                  placeholder={t("adminDiscountCodes.unlimited")}
                 />
               </div>
               <div>
-                <Label htmlFor="maxUsesPerTenant">Max Uses (per tenant)</Label>
+                <Label htmlFor="maxUsesPerTenant">{t("adminDiscountCodes.fieldMaxUsesPerTenant")}</Label>
                 <Input
                   id="maxUsesPerTenant"
                   type="number"
@@ -417,12 +426,12 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
                       maxUsesPerTenant: e.target.value,
                     })
                   }
-                  placeholder="Unlimited"
+                  placeholder={t("adminDiscountCodes.unlimited")}
                 />
               </div>
             </div>
             <div>
-              <Label htmlFor="expiresAt">Expiration Date</Label>
+              <Label htmlFor="expiresAt">{t("adminDiscountCodes.fieldExpirationDate")}</Label>
               <Input
                 id="expiresAt"
                 type="date"
@@ -435,17 +444,17 @@ export default function AdminDiscountCodesPage(): React.ReactElement {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-              Cancel
+              {t("adminDiscountCodes.cancel")}
             </Button>
             <Button onClick={handleSubmit} disabled={actionLoading === -1}>
               {actionLoading === -1 && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
-              {editingCode ? "Update" : "Create"}
+              {editingCode ? t("adminDiscountCodes.update") : t("adminDiscountCodes.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
-  );
+  )
 }

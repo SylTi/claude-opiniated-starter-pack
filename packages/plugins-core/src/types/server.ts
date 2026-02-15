@@ -33,6 +33,7 @@ export interface PluginHttpContext {
 
 export type RouteFeatureOptions = {
   requiredFeatures?: string[]
+  public?: boolean
 }
 
 /**

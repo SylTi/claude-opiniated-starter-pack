@@ -1,10 +1,15 @@
 import { test } from '@japa/runner'
 import sinon from 'sinon'
 import AuthTokensController from '#controllers/auth_tokens_controller'
-import { authTokenService } from '#services/auth_tokens/auth_token_service'
+import {
+  authTokenService,
+  AuthTokenPolicyViolationError,
+} from '#services/auth_tokens/auth_token_service'
 import { serverPluginManifests } from '@saas/config/plugins/server'
 import type { ManifestLoader } from '@saas/config/plugins/server'
 import type { PluginManifest } from '@saas/plugins-core'
+import Tenant from '#models/tenant'
+import { tenantQuotaService } from '#services/tenant_quota_service'
 
 test.group('AuthTokensController', (group) => {
   const sandbox = sinon.createSandbox()
@@ -61,6 +66,8 @@ test.group('AuthTokensController', (group) => {
       request: {
         input: sandbox.stub().callsFake((key: string) => inputs[key]),
         validateUsing: sandbox.stub().resolves(body),
+        ip: sandbox.stub().returns('127.0.0.1'),
+        header: sandbox.stub().returns(null),
       },
       auth: {
         user: {
@@ -79,8 +86,19 @@ test.group('AuthTokensController', (group) => {
         created: sandbox.stub().returnsThis(),
         badRequest: sandbox.stub().returnsThis(),
         notFound: sandbox.stub().returnsThis(),
+        forbidden: sandbox.stub().returnsThis(),
       },
     }
+  }
+
+  function stubQuotaChecksPass(): void {
+    sandbox.stub(Tenant, 'find').resolves({ id: 7 } as Tenant)
+    sandbox.stub(tenantQuotaService, 'getSnapshot').resolves({
+      members: { limit: null, used: 1, remaining: null, exceeded: false },
+      pendingInvitations: { limit: null, used: 0, remaining: null, exceeded: false },
+      authTokensPerTenant: { limit: 10, used: 0, remaining: 10, exceeded: false },
+      authTokensPerUser: { limit: 10, used: 0, remaining: 10, exceeded: false },
+    })
   }
 
   test('index returns 400 when pluginId is missing', async ({ assert }) => {
@@ -123,6 +141,7 @@ test.group('AuthTokensController', (group) => {
         pluginId: 'notarium',
         kind: 'integration',
         userId: 42,
+        actorUserId: 42,
       })
     )
     assert.isTrue(ctx.response.json.calledOnce)
@@ -153,6 +172,7 @@ test.group('AuthTokensController', (group) => {
         scopes: ['mcp:read'],
       },
     })
+    stubQuotaChecksPass()
     const controller = new AuthTokensController()
 
     await controller.store(ctx as never)
@@ -161,11 +181,14 @@ test.group('AuthTokensController', (group) => {
       createStub.calledWith({
         tenantId: 7,
         userId: 42,
+        actorUserId: 42,
         pluginId: 'notarium',
         kind: 'integration',
         name: 'Claude',
         scopes: ['mcp:read'],
         expiresAt: null,
+        requestIp: '127.0.0.1',
+        requestUserAgent: null,
       })
     )
     assert.isTrue(ctx.response.created.calledOnce)
@@ -195,11 +218,52 @@ test.group('AuthTokensController', (group) => {
         scopes: ['mcp:unknown'],
       },
     })
+    stubQuotaChecksPass()
     const controller = new AuthTokensController()
 
     await controller.store(ctx as never)
 
     assert.isTrue(ctx.response.badRequest.calledOnce)
+    assert.isTrue(createStub.notCalled)
+  })
+
+  test('store returns 400 when tenant auth token quota is reached', async ({ assert }) => {
+    const createStub = sandbox.stub(authTokenService, 'createToken').resolves({
+      token: {
+        id: 'token-1',
+        kind: 'integration',
+        name: 'Claude',
+        scopes: ['mcp:read'],
+        metadata: null,
+        lastUsedAt: null,
+        expiresAt: null,
+        createdAt: new Date().toISOString(),
+      },
+      tokenValue: 'secret-token',
+    })
+
+    sandbox.stub(Tenant, 'find').resolves({ id: 7 } as Tenant)
+    sandbox.stub(tenantQuotaService, 'getSnapshot').resolves({
+      members: { limit: null, used: 1, remaining: null, exceeded: false },
+      pendingInvitations: { limit: null, used: 0, remaining: null, exceeded: false },
+      authTokensPerTenant: { limit: 1, used: 1, remaining: 0, exceeded: false },
+      authTokensPerUser: { limit: 10, used: 0, remaining: 10, exceeded: false },
+    })
+
+    const ctx = createMockContext({
+      body: {
+        pluginId: 'notarium',
+        kind: 'integration',
+        name: 'Claude',
+        scopes: ['mcp:read'],
+      },
+    })
+    const controller = new AuthTokensController()
+
+    await controller.store(ctx as never)
+
+    assert.isTrue(ctx.response.badRequest.calledOnce)
+    assert.equal(ctx.response.badRequest.firstCall.args[0].error, 'LimitReached')
     assert.isTrue(createStub.notCalled)
   })
 
@@ -217,11 +281,39 @@ test.group('AuthTokensController', (group) => {
         expiresAt: 'bad-date',
       },
     })
+    stubQuotaChecksPass()
     const controller = new AuthTokensController()
 
     await controller.store(ctx as never)
 
     assert.isTrue(ctx.response.badRequest.calledOnce)
+  })
+
+  test('store returns 403 when policy blocks issuance', async ({ assert }) => {
+    sandbox
+      .stub(authTokenService, 'createToken')
+      .rejects(
+        new AuthTokenPolicyViolationError(
+          'admin_only_issuance',
+          'Only tenant admins can issue auth tokens under current policy'
+        )
+      )
+
+    const ctx = createMockContext({
+      body: {
+        pluginId: 'notarium',
+        kind: 'integration',
+        name: 'Claude',
+        scopes: ['mcp:read'],
+      },
+    })
+    stubQuotaChecksPass()
+    const controller = new AuthTokensController()
+
+    await controller.store(ctx as never)
+
+    assert.isTrue(ctx.response.forbidden.calledOnce)
+    assert.equal(ctx.response.forbidden.firstCall.args[0].error, 'PolicyViolation')
   })
 
   test('destroy returns 404 when token does not exist', async ({ assert }) => {
@@ -267,6 +359,7 @@ test.group('AuthTokensController', (group) => {
         tokenId: 'token-2',
         kind: 'browser_ext',
         userId: 42,
+        actorUserId: 42,
       })
     )
     assert.isTrue(ctx.response.json.calledOnce)

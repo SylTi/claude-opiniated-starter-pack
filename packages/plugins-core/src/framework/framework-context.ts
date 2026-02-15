@@ -68,6 +68,19 @@ export interface ThemeBridge {
 }
 
 /**
+ * Auth bridge interface.
+ * Lets the skeleton expose authentication state to plugins in a framework-agnostic way.
+ */
+export interface AuthBridge {
+  /** Current authenticated user, or null if not logged in / still loading. */
+  user: { id: number; email: string; fullName: string | null; role: string } | null
+  /** Whether the auth state is still being resolved. */
+  isLoading: boolean
+  /** Convenience flag: true when user is non-null. */
+  isAuthenticated: boolean
+}
+
+/**
  * Framework context value.
  * Provided by skeleton, consumed by plugins.
  */
@@ -80,6 +93,8 @@ export interface FrameworkContextValue {
   Image: ComponentType<FrameworkImageProps>
   /** Theme bridge adapter */
   theme: ThemeBridge
+  /** Auth bridge adapter (optional — absent in standalone / safe-mode) */
+  auth?: AuthBridge
 }
 
 /**
@@ -109,4 +124,18 @@ export function useFrameworkRequired(): FrameworkContextValue {
     throw new Error('useFrameworkRequired must be used within a FrameworkProvider')
   }
   return context
+}
+
+/**
+ * Hook to access auth state from the framework context.
+ * Returns a safe default (loading, no user) when outside a FrameworkProvider.
+ *
+ * Plugins should use this instead of importing the host app's auth context directly.
+ */
+export function usePluginAuth(): AuthBridge {
+  const fw = useContext(FrameworkContext)
+  if (!fw?.auth) {
+    return { user: null, isLoading: true, isAuthenticated: false }
+  }
+  return fw.auth
 }

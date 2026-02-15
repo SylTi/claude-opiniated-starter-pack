@@ -114,6 +114,8 @@ router
         router.delete('/users/:id', [AdminController, 'deleteUser'])
         router.get('/tenants', [AdminController, 'listTenants'])
         router.put('/tenants/:id/tier', [AdminController, 'updateTenantTier'])
+        router.get('/tenants/:id/quotas', [AdminController, 'getTenantQuotas'])
+        router.put('/tenants/:id/quotas', [AdminController, 'updateTenantQuotas'])
 
         // Subscription Tiers Management
         router.get('/tiers', [AdminTiersController, 'index'])
@@ -216,7 +218,10 @@ router
         router.put('/:id', [TenantsController, 'update'])
         router.post('/:id/switch', [TenantsController, 'switchTenant'])
         router.post('/:id/members', [TenantsController, 'addMember'])
+        router.put('/:id/members/:userId/role', [TenantsController, 'updateMemberRole'])
         router.delete('/:id/members/:userId', [TenantsController, 'removeMember'])
+        router.get('/:id/quotas', [TenantsController, 'getQuotas'])
+        router.put('/:id/quotas', [TenantsController, 'updateQuotas'])
         router.post('/:id/leave', [TenantsController, 'leave'])
         router.delete('/:id', [TenantsController, 'destroy'])
         // Invitations

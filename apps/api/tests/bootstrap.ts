@@ -129,7 +129,37 @@ export async function truncateAllTables(): Promise<void> {
   }
 
   // Plugin tables (may have data from plugin tests)
-  const pluginTables = ['plugin_permission_grants', 'plugin_states', 'plugin_db_state']
+  const pluginTables = [
+    'plugin_experiments_events',
+    'plugin_experiments_assignments',
+    'plugin_experiments_variants',
+    'plugin_experiments_experiments',
+    'plugin_experiments_role_resource_grants',
+    'plugin_experiments_role_abilities',
+    'plugin_experiments_role_members',
+    'plugin_experiments_roles',
+    'plugin_forms_form_analytics',
+    'plugin_forms_responses',
+    'plugin_forms_forms',
+    'plugin_forms_role_resource_grants',
+    'plugin_forms_role_abilities',
+    'plugin_forms_role_members',
+    'plugin_forms_roles',
+    'plugin_support_activity_log',
+    'plugin_support_comments',
+    'plugin_support_tickets',
+    'plugin_chatbot_messages',
+    'plugin_chatbot_conversations',
+    'plugin_chatbot_knowledge_docs',
+    'plugin_chatbot_provider_configs',
+    'plugin_messaging_messages',
+    'plugin_messaging_participants',
+    'plugin_messaging_conversations',
+    'plugin_notifications_preferences',
+    'plugin_permission_grants',
+    'plugin_states',
+    'plugin_db_state',
+  ]
 
   // Core tables (always exist)
   const coreTables = [

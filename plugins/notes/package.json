@@ -20,12 +20,13 @@
     }
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch"
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch"
   },
   "dependencies": {
     "@saas/plugins-core": "workspace:*",
-    "@saas/shared": "workspace:*"
+    "@saas/shared": "workspace:*",
+    "@saas/ui": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.6.3"

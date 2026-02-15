@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@saas/ui/card'
+import { Input } from '@saas/ui/input'
+import { Button } from '@saas/ui/button'
+import { useI18n } from '@/contexts/i18n-context'
 import { billingApi, ApiError } from '@/lib/api'
 import { Loader2, Gift, CheckCircle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -23,13 +24,14 @@ function formatAmount(amount: number, currency: string): string {
 }
 
 export function CouponRedemption({ teamId, onRedeemed }: CouponRedemptionProps): React.ReactElement {
+  const { t } = useI18n('skeleton')
   const [code, setCode] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState<{ amount: string; newBalance: string } | null>(null)
 
   const handleRedeem = async (): Promise<void> => {
     if (!code.trim()) {
-      toast.error('Please enter a coupon code')
+      toast.error(t('billing.enterCouponCodeError'))
       return
     }
 
@@ -43,7 +45,7 @@ export function CouponRedemption({ teamId, onRedeemed }: CouponRedemptionProps):
         newBalance: formatAmount(result.newBalance, result.currency),
       })
       setCode('')
-      toast.success(result.message ?? 'Coupon redeemed successfully!')
+      toast.success(result.message ?? t('billing.couponRedeemedSuccess'))
 
       if (onRedeemed) {
         onRedeemed()
@@ -52,7 +54,7 @@ export function CouponRedemption({ teamId, onRedeemed }: CouponRedemptionProps):
       if (err instanceof ApiError) {
         toast.error(err.message)
       } else {
-        toast.error('Failed to redeem coupon')
+        toast.error(t('billing.redeemCouponError'))
       }
     } finally {
       setIsLoading(false)
@@ -70,10 +72,10 @@ export function CouponRedemption({ teamId, onRedeemed }: CouponRedemptionProps):
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Gift className="h-5 w-5" />
-          Redeem Coupon
+          {t('billing.redeemCoupon')}
         </CardTitle>
         <CardDescription>
-          Enter a coupon code to add credit to your account
+          {t('billing.redeemCouponDescription')}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -81,26 +83,26 @@ export function CouponRedemption({ teamId, onRedeemed }: CouponRedemptionProps):
           <div className="flex items-start gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
             <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
             <div>
-              <p className="font-medium text-green-800">Coupon Redeemed!</p>
+              <p className="font-medium text-green-800">{t('billing.couponRedeemed')}</p>
               <p className="text-sm text-green-700">
-                {success.amount} has been added to your account.
+                {t('billing.amountAdded', { amount: success.amount })}
               </p>
               <p className="text-sm text-green-700">
-                New balance: {success.newBalance}
+                {t('billing.newBalance', { balance: success.newBalance })}
               </p>
               <Button
                 variant="link"
                 className="p-0 h-auto text-green-700"
                 onClick={() => setSuccess(null)}
               >
-                Redeem another coupon
+                {t('billing.redeemAnotherCoupon')}
               </Button>
             </div>
           </div>
         ) : (
           <div className="flex gap-2">
             <Input
-              placeholder="Enter coupon code"
+              placeholder={t('billing.enterCouponCode')}
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               onKeyDown={handleKeyDown}
@@ -111,10 +113,10 @@ export function CouponRedemption({ teamId, onRedeemed }: CouponRedemptionProps):
               {isLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Redeeming...
+                  {t('billing.redeeming')}
                 </>
               ) : (
-                'Redeem'
+                t('billing.redeem')
               )}
             </Button>
           </div>

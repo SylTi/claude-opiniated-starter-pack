@@ -16,25 +16,24 @@ Transformer le template actuel en une solution SaaS complète avec :
 ### 1. 🔐 Système d'Authentification et Autorisation Complet
 
 - [x] Authentification multi-facteurs (MFA) avec TOTP
-- [x] OAuth 2.0 / OpenID Connect (Google, GitHub, Microsoft, etc.)
-- [x] RBAC (Role-Based Access Control) avec rôles personnalisables
+- [~] OAuth 2.0 / OpenID Connect (Google, GitHub, Microsoft, etc.)
+- [~] RBAC (Role-Based Access Control) avec rôles personnalisables
 - [x] Gestion des permissions fines (par ressource)
 - [x] Invitations d'équipe avec liens sécurisés
 - [x] SSO (Single Sign-On) pour les entreprises
-- [x] Récupération de compte avancée
+- [~] Récupération de compte avancée
 - [~] Vérification d'email et téléphone
 
 ### 2. 💰 Facturation et Abonnements
 
 - [x] Système de plans (Free, Pro, Enterprise, Custom)
 - [x] Intégration Stripe complet (Payment Intents, Subscriptions)
-- [ ] Intégration lemonsqueezy complet (Payment Intents, Subscriptions)
-- [ ] Intégration paypal complet (Payment Intents, Subscriptions)
+- [~] Intégration lemonsqueezy complet (Payment Intents, Subscriptions)
 - [~] Factures PDF générées automatiquement
-- [x] Reçus et historique de paiements
-- [x] Gestion des essais gratuits (7/14/30 jours)
+- [~] Reçus et historique de paiements
+- [~] Gestion des essais gratuits (7/14/30 jours)
 - [x] Mises à niveau/downgrade de plans
-- [x] Proration des paiements
+- [~] Proration des paiements
 - [x] Coupons et promotions
 - [x] Webhooks pour les événements de paiement
 - [~] Dunning management (relances de paiement)
@@ -53,79 +52,81 @@ Transformer le template actuel en une solution SaaS complète avec :
 
 ### 4. 🤝 Fonctionnalités de Collaboration
 
-- [ ] Partage de ressources entre utilisateurs/organisations
-- [ ] Commentaires et mentions (@utilisateur)
+- [x] Partage de ressources entre utilisateurs/organisations
+- [x] Commentaires et mentions (@utilisateur)
+- [x] Agenda multi-tenant + page publique de réservation (type Calendly)
 - [x] Activité et historique des changements (audit trail)
 - [ ] Notifications en temps réel (WebSockets)
-- [ ] Système de mentions et tags
+- [x] Système de mentions et tags
 - [ ] Workflows d'approbation
 - [ ] Versioning des ressources
 - [ ] Comparaison de versions
 
 ### 5. 🔌 API Publique et Marketplace
 
-- [ ] Génération et gestion de clés API
+- [~] Génération et gestion de clés API
 - [ ] Documentation API interactive (Swagger/OpenAPI)
 - [~] Rate limiting et quotas API
 - [ ] Webhooks pour les intégrations tierces
 - [ ] SDKs clients (JavaScript, Python, etc.)
-- [ ] Marketplace d'intégrations
-- [x] Authentification API (JWT, OAuth2)
-- [ ] Versioning d'API
+- [~] Marketplace d'intégrations
+- [~] Authentification API (JWT, OAuth2)
+- [~] Versioning d'API
 - [ ] Dépréciations progressives
 
 ### 6. 📊 Analytique et Reporting
 
-- [~] Tableau de bord d'utilisation (MAU, DAU)
-- [~] Metrics clés (MRR, ARR, Churn Rate)
-- [ ] Export de données (CSV, Excel, PDF)
+- [x] Tableau de bord d'utilisation (MAU, DAU)
+- [x] Metrics clés (MRR, ARR, Churn Rate)
+- [x] Export de données (CSV, Excel, PDF)
 - [ ] Intégration avec Segment/Mixpanel
-- [ ] Rapports personnalisables
-- [ ] Alertes et seuils
-- [ ] Data visualization avancée
-- [ ] Cohort analysis
-- [ ] Funnel analysis
+- [x] Rapports personnalisables
+- [x] Alertes et seuils
+- [x] Data visualization avancée
+- [x] Cohort analysis
+- [x] Funnel analysis
 
 ### 7. 🛡️ Sécurité Avancée
 
 - [x] Audit logs complets (qui a fait quoi, quand)
-- [x] Gestion des appareils et sessions
-- [x] Politiques de mot de passe avancées
-- [ ] Détection des activités suspectes
-- [ ] IP whitelisting/blacklisting
+- [~] Gestion des appareils et sessions
+- [~] Politiques de mot de passe avancées
+- [~] Détection des activités suspectes
+- [~] IP whitelisting/blacklisting
 - [ ] Geo-restrictions
-- [~] Security headers (CSP, HSTS)
+- [x] Security headers (CSP, HSTS)
 - [ ] Scan de vulnérabilités régulier
 - [x] Chiffrement des données sensibles
 
 ### 8. 🌍 Internationalisation et Localisation
 
-- [ ] Support multi-langues (i18n)
+- [x] Support multi-langues (i18n)
+- [x] Packs EN/FR pour plugins (main-app, forms, support, wiki, webhooks, experiments, etc.)
 - [~] Support multi-devises
 - [~] Fuseaux horaires
 - [~] Formats de date/heure locaux
 - [ ] Traduction automatique (optionnelle)
-- [ ] Détection automatique de langue
-- [ ] Contenu localisé
+- [x] Détection automatique de langue
+- [x] Contenu localisé
 
 ### 9. 🎛️ Gestion des Fonctionnalités (Feature Flags)
 
 - [x] Activation/désactivation de fonctionnalités
 - [ ] A/B testing framework
 - [ ] Déploiement progressif (canary releases)
-- [x] Feature flags par utilisateur/organisation
+- [~] Feature flags par utilisateur/organisation
 - [ ] Analytics des feature flags
 - [x] Gestion des dépendances entre features
 
 ### 10. 🆘 Support Client Intégré
 
-- [ ] Système de tickets avec priorités
+- [x] Système de tickets avec priorités
 - [ ] Chat en direct (intégration ou custom)
 - [ ] Centre d'aide et documentation
 - [ ] Base de connaissances
 - [ ] FAQ dynamique
-- [ ] Système de feedback
-- [ ] Enquêtes de satisfaction
+- [x] Système de feedback
+- [x] Enquêtes de satisfaction
 - [ ] Knowledge base search
 
 ## 🏗️ Améliorations d'Architecture
@@ -159,27 +160,26 @@ Transformer le template actuel en une solution SaaS complète avec :
 
 ### 4. 🚀 Files d'Attente et Workers
 
-- [ ] Traitement asynchrone des tâches longues
-- [ ] Intégration avec Bull ou Agenda
-- [ ] Retry mechanisms
-- [ ] Dead letter queues
-- [ ] Monitoring des jobs
-- [ ] Priorisation des tâches
+- [x] Traitement asynchrone des tâches longues
+- [x] Retry mechanisms
+- [x] Dead letter queues
+- [x] Monitoring des jobs
+- [x] Priorisation des tâches
 
 ### 5. 📦 CDN et Optimisation des Assets
 
 - [ ] Upload et gestion des fichiers
-- [ ] Optimisation des images (resizing, compression)
+- [~] Optimisation des images (resizing, compression)
 - [ ] CDN integration (Cloudflare, AWS CloudFront)
 - [ ] Asset versioning
-- [ ] Lazy loading
+- [~] Lazy loading
 - [ ] Preloading stratégique
 
 ## 📅 Roadmap Recommandée
 
 ### Phase 1 - Fondations (1-2 semaines)
-- [x] Authentification avancée (OAuth, MFA)
-- [x] RBAC et gestion des rôles
+- [~] Authentification avancée (OAuth, MFA)
+- [~] RBAC et gestion des rôles
 - [x] Multi-tenancy de base
 - [x] Audit logs complets
 - [x] Feature flags basiques
@@ -188,36 +188,37 @@ Transformer le template actuel en une solution SaaS complète avec :
 - [x] Intégration Stripe/Paddle complète
 - [x] Plans et abonnements
 - [~] Factures et reçus
-- [x] Essais gratuits et coupons
+- [~] Essais gratuits et coupons
 - [x] Webhooks de paiement
 - [~] Dunning management
 
 ### Phase 3 - Collaboration (2 semaines)
-- [x] Gestion complète des organisations
-- [ ] Partage et commentaires
+- [~] Gestion complète des organisations
+- [x] Partage et commentaires
+- [x] Agenda interne + réservation publique (durée fixe configurable)
 - [ ] Notifications en temps réel
 - [x] Activité et historique
 - [ ] Workflows d'approbation
 
 ### Phase 4 - API et Intégrations (1-2 semaines)
 - [ ] API publique avec documentation
-- [ ] Génération de clés API
+- [~] Génération de clés API
 - [ ] Webhooks pour intégrations
 - [~] Rate limiting
-- [ ] Versioning d'API
+- [~] Versioning d'API
 
 ### Phase 5 - Évolutivité (1-2 semaines)
 - [ ] Caching Redis avancé
-- [ ] Files d'attente et workers
-- [ ] Optimisation des performances
+- [x] Files d'attente et workers
+- [~] Optimisation des performances
 - [~] Monitoring avancé
 - [ ] Alertes proactives
 
 ### Phase 6 - Expérience Utilisateur (1 semaine)
-- [ ] Internationalisation complète
+- [x] Internationalisation complète
 - [~] Support multi-devises
 - [ ] Centre d'aide intégré
-- [ ] Système de feedback
+- [x] Système de feedback
 - [ ] Onboarding amélioré
 
 ## 🎯 Priorités Critiques

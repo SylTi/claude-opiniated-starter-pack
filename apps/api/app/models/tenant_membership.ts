@@ -5,7 +5,7 @@ import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import User from '#models/user'
 import Tenant from '#models/tenant'
 
-export type TenantRole = 'owner' | 'admin' | 'member'
+export type TenantRole = 'owner' | 'admin' | 'member' | 'viewer'
 
 export default class TenantMembership extends BaseModel {
   static table = 'tenant_memberships'

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import '@fontsource/geist'
 import '@fontsource/geist-mono'
 import './globals.css'
@@ -8,6 +8,7 @@ import { Providers } from '@/components/providers'
 import { Toaster } from '@/components/ui/sonner'
 import { verifyUserCookie } from '@/lib/cookie-signing'
 import { type Theme, THEME_COOKIE_NAME, DEFAULT_THEME } from '@/lib/theme-config'
+import { LOCALE_COOKIE_NAME } from '@/lib/i18n/constants'
 import { loadMainAppDesign } from '@saas/config/main-app'
 
 /**
@@ -16,6 +17,29 @@ import { loadMainAppDesign } from '@saas/config/main-app'
 const DEFAULT_METADATA: Metadata = {
   title: 'SaaS App',
   description: 'A modern SaaS application',
+}
+
+function normalizeLocale(value: string | undefined): string {
+  const normalized = (value ?? '').trim().toLowerCase()
+  return normalized.length > 0 ? normalized : 'en'
+}
+
+function resolveAcceptLanguageLocale(value: string | null): string | null {
+  if (!value) {
+    return null
+  }
+
+  const first = value
+    .split(',')
+    .map((chunk) => chunk.trim())
+    .find((chunk) => chunk.length > 0)
+
+  if (!first) {
+    return null
+  }
+
+  const language = first.split(';')[0]?.trim()
+  return language ? normalizeLocale(language) : null
 }
 
 /**
@@ -56,8 +80,10 @@ export default async function RootLayout({
   children: React.ReactNode
 }>): Promise<React.ReactElement> {
   const cookieStore = await cookies()
+  const headerStore = await headers()
   const userInfoCookie = cookieStore.get('user-info')
   const themeCookie = cookieStore.get(THEME_COOKIE_NAME)
+  const localeCookie = cookieStore.get(LOCALE_COOKIE_NAME)
 
   let hasVerifiedUserCookie = false
   let initialUserRole: UserDTO['role'] | null = null
@@ -67,6 +93,9 @@ export default async function RootLayout({
   const initialTheme: Theme = (themeCookie?.value === 'light' || themeCookie?.value === 'dark')
     ? themeCookie.value
     : DEFAULT_THEME
+  const initialLocale = localeCookie?.value
+    ? normalizeLocale(localeCookie.value)
+    : (resolveAcceptLanguageLocale(headerStore.get('accept-language')) ?? 'en')
 
   if (userInfoCookie?.value) {
     const userInfo = await verifyUserCookie(userInfoCookie.value)
@@ -77,11 +106,12 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="en" className={initialTheme === 'dark' ? 'dark' : ''}>
+    <html lang={initialLocale} className={initialTheme === 'dark' ? 'dark' : ''}>
       <body className="antialiased">
         <Providers
           initialHasUserInfoCookie={hasVerifiedUserCookie}
           initialUserRole={initialUserRole}
+          initialLocale={initialLocale}
           serverSafeMode={serverSafeMode}
           initialTheme={initialTheme}
         >

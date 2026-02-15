@@ -1,11 +1,13 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@saas/ui/card'
+import { Button } from '@saas/ui/button'
+import { useI18n } from '@/contexts/i18n-context'
 import { XCircle } from 'lucide-react'
 
 export default function BillingCancelPage(): React.ReactElement {
+  const { t } = useI18n('skeleton')
   const router = useRouter()
 
   return (
@@ -15,22 +17,22 @@ export default function BillingCancelPage(): React.ReactElement {
           <div className="flex justify-center mb-4">
             <XCircle className="h-16 w-16 text-muted-foreground" />
           </div>
-          <CardTitle className="text-2xl">Checkout Cancelled</CardTitle>
+          <CardTitle className="text-2xl">{t('billingCancel.title')}</CardTitle>
           <CardDescription>
-            Your checkout was cancelled. No charges have been made.
+            {t('billingCancel.description')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground">
-            If you have any questions about our plans or pricing, please contact our support team.
+            {t('billingCancel.helpText')}
           </p>
         </CardContent>
         <CardFooter className="justify-center gap-2">
           <Button variant="outline" onClick={() => router.push('/billing')}>
-            View Plans
+            {t('billingCancel.viewPlans')}
           </Button>
           <Button onClick={() => router.push('/dashboard')}>
-            Go to Dashboard
+            {t('common.goToDashboard')}
           </Button>
         </CardFooter>
       </Card>

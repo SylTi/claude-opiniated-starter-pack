@@ -5,13 +5,14 @@
  * Supports modules exporting either `clientDesign` or `design`.
  */
 
-import { isAppDesign, type AppDesign } from '@saas/plugins-core'
+import { isAppDesign, registerPluginTranslations, type AppDesign, type PluginTranslations } from '@saas/plugins-core'
 import { getMainAppPluginId } from './plugins.config.js'
 import { clientPluginLoaders } from './plugins.client.js'
 
 type MainAppClientModule = {
   clientDesign?: unknown
   design?: unknown
+  translations?: PluginTranslations
 }
 
 let cachedClientDesignPromise: Promise<AppDesign> | null = null
@@ -25,6 +26,10 @@ async function resolveMainAppClientDesign(): Promise<AppDesign> {
   }
 
   const module = (await loader()) as MainAppClientModule
+
+  if (module.translations) {
+    registerPluginTranslations(pluginId, module.translations)
+  }
 
   if (isAppDesign(module.clientDesign)) {
     return module.clientDesign

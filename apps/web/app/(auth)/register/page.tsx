@@ -7,18 +7,20 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import { GoogleIcon, GitHubIcon } from "@/components/oauth-icons";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Separator } from "@/components/ui/separator";
+import { Button } from "@saas/ui/button";
+import { Input } from "@saas/ui/input";
+import { Label } from "@saas/ui/label";
+import { Alert, AlertDescription } from "@saas/ui/alert";
+import { Separator } from "@saas/ui/separator";
 import { useAuth } from "@/contexts/auth-context";
+import { useI18n } from "@/contexts/i18n-context";
 import { authApi } from "@/lib/auth";
 import { oauthApi } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 import { registerSchema, type RegisterFormData } from "@/lib/validations";
 
 export default function RegisterPage(): React.ReactElement {
+  const { t } = useI18n("skeleton");
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +55,7 @@ export default function RegisterPage(): React.ReactElement {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError("An unexpected error occurred");
+        setError(t("common.unexpectedError"));
       }
     }
   };
@@ -67,14 +69,13 @@ export default function RegisterPage(): React.ReactElement {
       <>
         <div className="text-center">
           <h2 className="text-3xl font-bold tracking-tight text-foreground">
-            Check your email
+            {t("auth.register.checkEmailTitle")}
           </h2>
           <p className="mt-4 text-muted-foreground">
-            We&apos;ve sent you a verification link. Please check your email to
-            verify your account.
+            {t("auth.register.checkEmailMessage")}
           </p>
           <Button className="mt-6" onClick={() => router.push("/login")}>
-            Go to Login
+            {t("common.goToLogin")}
           </Button>
         </div>
       </>
@@ -85,15 +86,15 @@ export default function RegisterPage(): React.ReactElement {
     <>
       <div className="text-center">
         <h2 className="text-3xl font-bold tracking-tight text-foreground">
-          Create your account
+          {t("auth.register.title")}
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Already have an account?{" "}
+          {t("auth.register.alreadyHaveAccount")}{" "}
           <Link
             href="/login"
             className="font-medium text-primary hover:text-primary/80"
           >
-            Sign in
+            {t("auth.register.signInLink")}
           </Link>
         </p>
       </div>
@@ -107,7 +108,7 @@ export default function RegisterPage(): React.ReactElement {
 
         <div className="space-y-4">
           <div>
-            <Label htmlFor="fullName">Full name (optional)</Label>
+            <Label htmlFor="fullName">{t("auth.register.fullNameOptional")}</Label>
             <Input
               id="fullName"
               type="text"
@@ -123,7 +124,7 @@ export default function RegisterPage(): React.ReactElement {
           </div>
 
           <div>
-            <Label htmlFor="email">Email address</Label>
+            <Label htmlFor="email">{t("auth.register.emailLabel")}</Label>
             <Input
               id="email"
               type="email"
@@ -139,7 +140,7 @@ export default function RegisterPage(): React.ReactElement {
           </div>
 
           <div>
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{t("auth.register.passwordLabel")}</Label>
             <Input
               id="password"
               type="password"
@@ -155,7 +156,7 @@ export default function RegisterPage(): React.ReactElement {
           </div>
 
           <div>
-            <Label htmlFor="passwordConfirmation">Confirm password</Label>
+            <Label htmlFor="passwordConfirmation">{t("auth.register.confirmPasswordLabel")}</Label>
             <Input
               id="passwordConfirmation"
               type="password"
@@ -175,10 +176,10 @@ export default function RegisterPage(): React.ReactElement {
           {isSubmitting ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Creating account...
+              {t("auth.register.creatingAccount")}
             </>
           ) : (
-            "Create account"
+            t("auth.register.createAccountButton")
           )}
         </Button>
 
@@ -188,7 +189,7 @@ export default function RegisterPage(): React.ReactElement {
           </div>
           <div className="relative flex justify-center text-sm">
             <span className="bg-background px-2 text-muted-foreground">
-              Or continue with
+              {t("auth.login.orContinueWith")}
             </span>
           </div>
         </div>

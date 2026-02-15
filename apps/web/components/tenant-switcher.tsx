@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, Check, ChevronsUpDown, Plus, User } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@saas/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,8 +11,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@saas/ui/dropdown-menu";
 import { useAuth } from "@/contexts/auth-context";
+import { useI18n } from "@/contexts/i18n-context";
 import { tenantsApi, ApiError } from "@/lib/api";
 import { toast } from "sonner";
 import type { TenantDTO } from "@saas/shared";
@@ -24,6 +25,7 @@ interface TenantSwitcherProps {
 export function TenantSwitcher({
   className,
 }: TenantSwitcherProps): React.ReactElement | null {
+  const { t } = useI18n("skeleton");
   const router = useRouter();
   const { user, refreshUser } = useAuth();
   const [tenants, setTenants] = useState<TenantDTO[]>([]);
@@ -61,13 +63,13 @@ export function TenantSwitcher({
     try {
       await tenantsApi.switch(tenantId);
       await refreshUser();
-      toast.success("Switched workspace");
+      toast.success(t("tenantSwitcher.switchedWorkspace"));
       router.refresh();
     } catch (error) {
       if (error instanceof ApiError) {
         toast.error(error.message);
       } else {
-        toast.error("Failed to switch workspace");
+        toast.error(t("tenantSwitcher.failedSwitchWorkspace"));
       }
     } finally {
       setIsSwitching(false);
@@ -101,7 +103,7 @@ export function TenantSwitcher({
             <Building2 className="mr-2 h-4 w-4" />
           )}
           <span className="truncate max-w-[150px]">
-            {currentTenant?.name || "Select workspace"}
+            {currentTenant?.name || t("tenantSwitcher.selectWorkspace")}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -110,7 +112,7 @@ export function TenantSwitcher({
         {personalTenants.length > 0 && (
           <>
             <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Personal
+              {t("tenantSwitcher.personal")}
             </DropdownMenuLabel>
             {personalTenants.map((tenant) => (
               <DropdownMenuItem
@@ -132,7 +134,7 @@ export function TenantSwitcher({
           <>
             {personalTenants.length > 0 && <DropdownMenuSeparator />}
             <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Teams
+              {t("tenantSwitcher.teams")}
             </DropdownMenuLabel>
             {teamTenants.map((tenant) => (
               <DropdownMenuItem
@@ -156,7 +158,7 @@ export function TenantSwitcher({
           className="cursor-pointer"
         >
           <Plus className="mr-2 h-4 w-4" />
-          <span>Create team</span>
+          <span>{t("tenantSwitcher.createTeam")}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

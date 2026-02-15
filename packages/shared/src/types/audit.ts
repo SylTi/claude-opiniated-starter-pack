@@ -67,6 +67,46 @@ export const AUDIT_EVENT_TYPES = {
   SSO_LOGIN_FAILURE: 'sso.login.failure',
   SSO_USER_PROVISIONED: 'sso.user.provisioned',
 
+  // Encryption
+  ENCRYPTION_ENABLE: 'encryption.enable',
+  ENCRYPTION_KEY_ROTATE: 'encryption.key.rotate',
+
+  // BYOK (Bring Your Own Key)
+  BYOK_VALIDATE: 'byok.validate',
+  BYOK_CONFIGURE: 'byok.configure',
+  BYOK_MIGRATE_START: 'byok.migrate.start',
+  BYOK_MIGRATE_COMPLETE: 'byok.migrate.complete',
+  BYOK_MIGRATE_FAIL: 'byok.migrate.fail',
+  BYOK_ROLLBACK_START: 'byok.rollback.start',
+  BYOK_ROLLBACK_COMPLETE: 'byok.rollback.complete',
+
+  // E2EE Vaults
+  VAULT_CREATE: 'vault.create',
+  VAULT_DELETE: 'vault.delete',
+  VAULT_RECOVERY_CONFIRMED: 'vault.recovery.confirmed',
+  VAULT_RECOVERY_BYPASSED: 'vault.recovery.bypassed',
+  VAULT_ITEM_CREATE: 'vault.item.create',
+  VAULT_ITEM_READ: 'vault.item.read',
+  VAULT_ITEM_UPDATE: 'vault.item.update',
+  VAULT_ITEM_DELETE: 'vault.item.delete',
+
+  // Encrypted Backups
+  BACKUP_CREATE: 'backup.create',
+  BACKUP_DOWNLOAD: 'backup.download',
+  BACKUP_RESTORE_START: 'backup.restore.start',
+  BACKUP_RESTORE_COMPLETE: 'backup.restore.complete',
+  BACKUP_RESTORE_FAIL: 'backup.restore.fail',
+  BACKUP_DELETE: 'backup.delete',
+
+  // DLP (Data Loss Prevention)
+  DLP_ENABLE: 'dlp.enable',
+  DLP_DISABLE: 'dlp.disable',
+  DLP_RULE_CREATED: 'dlp.rule.created',
+  DLP_RULE_UPDATED: 'dlp.rule.updated',
+  DLP_RULE_DELETED: 'dlp.rule.deleted',
+  DLP_REDACTION_APPLIED: 'dlp.redaction.applied',
+  DLP_FAIL_CLOSED: 'dlp.fail_closed',
+
   // Authorization
   AUTHZ_DENIED: 'authz.denied',
   AUTHZ_GRANTED: 'authz.granted',
@@ -89,6 +129,13 @@ export const AUDIT_EVENT_TYPES = {
 
   // Plugin Custom Events (plugin-specific audit events)
   PLUGIN_CUSTOM: 'plugin.custom',
+
+  // Auth Token Governance
+  AUTH_TOKEN_POLICY_CREATE: 'auth_token.policy.create',
+  AUTH_TOKEN_POLICY_UPDATE: 'auth_token.policy.update',
+  AUTH_TOKEN_POLICY_DELETE: 'auth_token.policy.delete',
+  AUTH_TOKEN_ISSUANCE_DENIED_POLICY: 'auth_token.issuance.denied_policy',
+  AUTH_TOKEN_USAGE_DENIED_POLICY: 'auth_token.usage.denied_policy',
 
   // UI Incidents (Design/Navigation)
   UI_SHELL_CRASH: 'ui.shell.crash',

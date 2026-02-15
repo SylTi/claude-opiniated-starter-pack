@@ -7,12 +7,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import { GoogleIcon, GitHubIcon } from "@/components/oauth-icons";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Separator } from "@/components/ui/separator";
+import { Button } from "@saas/ui/button";
+import { Input } from "@saas/ui/input";
+import { Label } from "@saas/ui/label";
+import { Alert, AlertDescription } from "@saas/ui/alert";
+import { Separator } from "@saas/ui/separator";
 import { useAuth } from "@/contexts/auth-context";
+import { useI18n } from "@/contexts/i18n-context";
 import { oauthApi } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 import { loginSchema, type LoginFormData } from "@/lib/validations";
@@ -62,6 +63,7 @@ function getSafeCallbackUrl(callbackUrl: string | null): string {
 }
 
 export default function LoginPage(): React.ReactElement {
+  const { t } = useI18n("skeleton");
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login, refreshUser, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -86,8 +88,8 @@ export default function LoginPage(): React.ReactElement {
 
   // Set page title
   useEffect(() => {
-    document.title = "Sign In | SaaS";
-  }, []);
+    document.title = t("auth.login.pageTitle");
+  }, [t]);
 
   // Redirect authenticated users to callback URL or dashboard
   useEffect(() => {
@@ -108,7 +110,7 @@ export default function LoginPage(): React.ReactElement {
 
       const refreshedUser = await refreshUser();
       if (!refreshedUser) {
-        setError("Login succeeded but your session could not be verified. Please try again.");
+        setError(t("auth.login.sessionVerifyError"));
         return;
       }
 
@@ -120,7 +122,7 @@ export default function LoginPage(): React.ReactElement {
       } else if (err instanceof Error && err.message) {
         setError(err.message);
       } else {
-        setError("An unexpected error occurred");
+        setError(t("common.unexpectedError"));
       }
     }
   };
@@ -135,15 +137,15 @@ export default function LoginPage(): React.ReactElement {
     <>
       <div className="text-center">
         <h2 className="text-3xl font-bold tracking-tight text-foreground">
-          Sign in to your account
+          {t("auth.login.title")}
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Or{" "}
+          {t("auth.login.createAccountPrefix")}{" "}
           <Link
             href="/register"
             className="font-medium text-primary hover:text-primary/80"
           >
-            create a new account
+            {t("auth.login.createAccountLink")}
           </Link>
         </p>
       </div>
@@ -157,7 +159,7 @@ export default function LoginPage(): React.ReactElement {
 
         <div className="space-y-4">
           <div>
-            <Label htmlFor="email">Email address</Label>
+            <Label htmlFor="email">{t("auth.login.emailLabel")}</Label>
             <Input
               id="email"
               type="email"
@@ -175,7 +177,7 @@ export default function LoginPage(): React.ReactElement {
           </div>
 
           <div>
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{t("auth.login.passwordLabel")}</Label>
             <Input
               id="password"
               type="password"
@@ -192,7 +194,7 @@ export default function LoginPage(): React.ReactElement {
 
           {requiresMfa && (
             <div>
-              <Label htmlFor="mfaCode">Two-Factor Authentication Code</Label>
+              <Label htmlFor="mfaCode">{t("auth.login.mfaLabel")}</Label>
               <Input
                 id="mfaCode"
                 type="text"
@@ -200,7 +202,7 @@ export default function LoginPage(): React.ReactElement {
                 pattern="[0-9]*"
                 maxLength={6}
                 autoComplete="one-time-code"
-                placeholder="Enter 6-digit code"
+                placeholder={t("auth.login.mfaPlaceholder")}
                 {...register("mfaCode")}
                 className="mt-1"
               />
@@ -219,7 +221,7 @@ export default function LoginPage(): React.ReactElement {
               href="/forgot-password"
               className="font-medium text-primary hover:text-primary/80"
             >
-              Forgot your password?
+              {t("auth.login.forgotPassword")}
             </Link>
           </div>
         </div>
@@ -228,10 +230,10 @@ export default function LoginPage(): React.ReactElement {
           {isSubmitting ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Signing in...
+              {t("auth.login.signingIn")}
             </>
           ) : (
-            "Sign in"
+            t("auth.login.signInButton")
           )}
         </Button>
 
@@ -241,7 +243,7 @@ export default function LoginPage(): React.ReactElement {
           </div>
           <div className="relative flex justify-center text-sm">
             <span className="bg-background px-2 text-muted-foreground">
-              Or continue with
+              {t("auth.login.orContinueWith")}
             </span>
           </div>
         </div>

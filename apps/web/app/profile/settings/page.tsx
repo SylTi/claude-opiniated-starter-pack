@@ -5,20 +5,28 @@ import Link from "next/link";
 import { Loader2, Link as LinkIcon, Unlink } from "lucide-react";
 import { toast } from "sonner";
 import { GoogleIcon, GitHubIcon } from "@/components/oauth-icons";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@saas/ui/button";
+import { Separator } from "@saas/ui/separator";
+import { Alert, AlertDescription } from "@saas/ui/alert";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@saas/ui/card";
 import { useAuth } from "@/contexts/auth-context";
+import { useI18n, useLocale } from "@/contexts/i18n-context";
 import { oauthApi, authApi } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 import type { OAuthAccountDTO, LoginHistoryDTO } from "@saas/shared";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@saas/ui/select";
 
 const providers = [
   { id: "google" as const, name: "Google", icon: GoogleIcon },
@@ -26,6 +34,8 @@ const providers = [
 ];
 
 export default function SettingsPage(): React.ReactElement {
+  const { t } = useI18n("skeleton");
+  const { locale, setLocale } = useLocale();
   const { user } = useAuth();
   const [linkedAccounts, setLinkedAccounts] = useState<OAuthAccountDTO[]>([]);
   const [loginHistory, setLoginHistory] = useState<LoginHistoryDTO[]>([]);
@@ -49,13 +59,13 @@ export default function SettingsPage(): React.ReactElement {
         setLinkedAccounts(accounts);
         setLoginHistory(history);
       } catch {
-        setError("Failed to load settings");
+        setError(t("settings.loadError"));
       } finally {
         setLoading(false);
       }
     };
     loadData();
-  }, [user]);
+  }, [user, t]);
 
   const handleLink = (provider: "google" | "github"): void => {
     window.location.href = oauthApi.getLinkUrl(provider);
@@ -67,12 +77,12 @@ export default function SettingsPage(): React.ReactElement {
       setError(null);
       await oauthApi.unlink(provider);
       setLinkedAccounts((prev) => prev.filter((a) => a.provider !== provider));
-      toast.success(`${provider} account unlinked`);
+      toast.success(t("settings.accountUnlinked", { provider }));
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError("Failed to unlink account");
+        setError(t("settings.unlinkError"));
       }
     } finally {
       setUnlinkingProvider(null);
@@ -91,6 +101,9 @@ export default function SettingsPage(): React.ReactElement {
     return <></>;
   }
 
+  const currentLanguageLabel =
+    locale === "fr" ? t("settings.languageFr") : t("settings.languageEn");
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -101,9 +114,9 @@ export default function SettingsPage(): React.ReactElement {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Settings</h1>
+      <h1 className="text-2xl font-bold">{t("settings.title")}</h1>
       <p className="text-muted-foreground mt-1">
-        Manage your linked accounts and preferences
+        {t("settings.subtitle")}
       </p>
 
       <Separator className="my-6" />
@@ -117,24 +130,58 @@ export default function SettingsPage(): React.ReactElement {
       {/* Integrations */}
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Integrations</CardTitle>
+          <CardTitle>{t("settings.integrationsTitle")}</CardTitle>
           <CardDescription>
-            Manage API tokens for MCP and browser extension access.
+            {t("settings.integrationsDescription")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Button asChild>
-            <Link href="/profile/settings/integrations">Open integration tokens</Link>
+            <Link href="/profile/settings/integrations">{t("settings.openIntegrationTokens")}</Link>
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Language */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>{t("settings.languageTitle")}</CardTitle>
+          <CardDescription>{t("settings.languageDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2 max-w-xs">
+            <label className="text-sm font-medium" htmlFor="language-select">
+              {t("settings.languageLabel")}
+            </label>
+            <Select
+              value={locale.startsWith("fr") ? "fr" : "en"}
+              onValueChange={(value: string): void => {
+                setLocale(value);
+                const languageLabel =
+                  value === "fr" ? t("settings.languageFr") : t("settings.languageEn");
+                toast.success(
+                  t("settings.languageUpdated", { language: languageLabel }),
+                );
+              }}
+            >
+              <SelectTrigger id="language-select">
+                <SelectValue placeholder={currentLanguageLabel} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="en">{t("settings.languageEn")}</SelectItem>
+                <SelectItem value="fr">{t("settings.languageFr")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 
       {/* Linked Accounts */}
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Linked Accounts</CardTitle>
+          <CardTitle>{t("settings.linkedAccountsTitle")}</CardTitle>
           <CardDescription>
-            Connect your social accounts for easier sign-in
+            {t("settings.linkedAccountsDescription")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -169,7 +216,7 @@ export default function SettingsPage(): React.ReactElement {
                     ) : (
                       <>
                         <Unlink className="mr-2 h-4 w-4" />
-                        Unlink
+                        {t("settings.unlink")}
                       </>
                     )}
                   </Button>
@@ -180,7 +227,7 @@ export default function SettingsPage(): React.ReactElement {
                     onClick={() => handleLink(provider.id)}
                   >
                     <LinkIcon className="mr-2 h-4 w-4" />
-                    Link
+                    {t("settings.link")}
                   </Button>
                 )}
               </div>
@@ -192,13 +239,13 @@ export default function SettingsPage(): React.ReactElement {
       {/* Login History */}
       <Card>
         <CardHeader>
-          <CardTitle>Recent Login Activity</CardTitle>
-          <CardDescription>Your recent sign-in history</CardDescription>
+          <CardTitle>{t("settings.recentLoginActivityTitle")}</CardTitle>
+          <CardDescription>{t("settings.recentLoginActivityDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           {loginHistory.length === 0 ? (
             <p className="text-muted-foreground text-center py-4">
-              No login history available
+              {t("settings.noLoginHistory")}
             </p>
           ) : (
             <div className="space-y-3">
@@ -210,12 +257,12 @@ export default function SettingsPage(): React.ReactElement {
                   <div>
                     <p className="font-medium capitalize">
                       {entry.loginMethod === "mfa"
-                        ? "Password + 2FA"
+                        ? t("settings.loginMethodMfa")
                         : entry.loginMethod}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {entry.ipAddress || "Unknown IP"} •{" "}
-                      {new Date(entry.createdAt).toLocaleString()}
+                      {entry.ipAddress || t("settings.unknownIp")} •{" "}
+                      {new Date(entry.createdAt).toLocaleString(locale)}
                     </p>
                   </div>
                   <span
@@ -225,7 +272,7 @@ export default function SettingsPage(): React.ReactElement {
                         : "bg-red-100 text-red-800"
                     }`}
                   >
-                    {entry.success ? "Success" : "Failed"}
+                    {entry.success ? t("settings.loginSuccess") : t("settings.loginFailed")}
                   </span>
                 </div>
               ))}

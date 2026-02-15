@@ -1,10 +1,10 @@
 'use client'
 
-import { Component, useContext, type ErrorInfo, type ReactNode } from 'react'
+import { Component, lazy, Suspense, useContext, type ErrorInfo, type ReactNode } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { Button } from '@/components/ui/button'
+import { Button } from '@saas/ui/button'
 import { UserMenu } from '@/components/user-menu'
 import { DynamicUserMenu } from '@/components/nav/dynamic-user-menu'
 import { TenantSwitcher } from '@/components/tenant-switcher'
@@ -16,6 +16,21 @@ import { NavigationContext } from '@/contexts/navigation-context'
 import type { NavSectionWithIcons } from '@/lib/nav/types'
 import { detectShellArea } from '@/lib/routing/area'
 import type { HeaderOverrideProps, HeaderLayoutModel, HeaderLayoutSlot } from '@saas/plugins-core'
+import { useI18n } from '@/contexts/i18n-context'
+
+/**
+ * Lazily load the NotificationBell from the notifications plugin.
+ * This decouples the header from the plugin's component directory.
+ * Falls back to an empty component when the plugin is not available.
+ */
+const EmptyComponent = (): null => null
+const NotificationBell = lazy(() =>
+  import('@plugins/notifications/client')
+    .then((mod: Record<string, unknown>) => ({
+      default: mod.NotificationBell as React.ComponentType,
+    }))
+    .catch(() => ({ default: EmptyComponent }))
+)
 
 /**
  * Hook to safely get navigation context.
@@ -79,6 +94,7 @@ function renderLayoutSlots(
 }
 
 export function Header(): React.ReactElement {
+  const { t } = useI18n('skeleton')
   const pathname = usePathname()
   const area = detectShellArea(pathname)
   const { user, hasUserInfoCookie, userRole } = useAuth()
@@ -96,7 +112,7 @@ export function Header(): React.ReactElement {
   const hasDynamicUserMenu = navContext && navContext.userMenu.length > 0
 
   // Use plugin's appName and logo if available, fallback to default
-  const appName = themeTokens.appName ?? 'SaaS App'
+  const appName = themeTokens.appName ?? t('home.title', undefined, 'SaaS App')
   const logoUrl = themeTokens.logoUrl
 
   const brandNode = (
@@ -119,17 +135,17 @@ export function Header(): React.ReactElement {
   ) : (
     <>
       <Link href="/dashboard">
-        <Button variant="ghost">Dashboard</Button>
+        <Button variant="ghost">{t('header.dashboard')}</Button>
       </Link>
       {user?.currentTenantId && (
         // Use /apps/* route which has proper access control checks
         <Link href="/apps/notes">
-          <Button variant="ghost">Notes</Button>
+          <Button variant="ghost">{t('header.notes')}</Button>
         </Link>
       )}
       {user?.role === 'admin' && (
         <Link href="/admin/dashboard">
-          <Button variant="ghost">Admin</Button>
+          <Button variant="ghost">{t('header.admin')}</Button>
         </Link>
       )}
     </>
@@ -150,11 +166,11 @@ export function Header(): React.ReactElement {
   const pendingNavigationNode = (
     <>
       <Link href="/dashboard">
-        <Button variant="ghost">Dashboard</Button>
+        <Button variant="ghost">{t('header.dashboard')}</Button>
       </Link>
       {userRole === 'admin' && (
         <Link href="/admin/dashboard">
-          <Button variant="ghost">Admin</Button>
+          <Button variant="ghost">{t('header.admin')}</Button>
         </Link>
       )}
       <div
@@ -167,10 +183,10 @@ export function Header(): React.ReactElement {
   const authActionsNode = (
     <>
       <Link href="/login">
-        <Button variant="ghost">Sign in</Button>
+        <Button variant="ghost">{t('header.signIn')}</Button>
       </Link>
       <Link href="/register">
-        <Button>Get started</Button>
+        <Button>{t('header.getStarted')}</Button>
       </Link>
     </>
   )
@@ -184,6 +200,9 @@ export function Header(): React.ReactElement {
           {showAuthenticatedHeader ? (
             <>
               {mainNavigationNode}
+              <Suspense fallback={null}>
+                <NotificationBell />
+              </Suspense>
               {tenantSwitcherNode}
               {userMenuNode}
             </>
@@ -202,9 +221,9 @@ export function Header(): React.ReactElement {
       variant="ghost"
       size="sm"
       onClick={() => framework.theme.toggleTheme?.()}
-      aria-label="Toggle theme"
+      aria-label={t('header.toggleTheme')}
     >
-      Theme
+      {t('header.themeButton')}
     </Button>
   ) : null
 

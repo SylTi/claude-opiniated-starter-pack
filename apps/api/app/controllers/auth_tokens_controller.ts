@@ -1,9 +1,14 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import { authTokenService } from '#services/auth_tokens/auth_token_service'
+import {
+  authTokenService,
+  AuthTokenPolicyViolationError,
+} from '#services/auth_tokens/auth_token_service'
 import { createAuthTokenValidator } from '#validators/auth_tokens'
 import { loadPluginManifest } from '@saas/config/plugins/server'
 import type { PluginAuthTokenKind } from '@saas/plugins-core'
 import { TENANT_ROLES } from '#constants/roles'
+import Tenant from '#models/tenant'
+import { tenantQuotaService } from '#services/tenant_quota_service'
 
 function isPrivilegedTenantRole(role?: string): boolean {
   return role === TENANT_ROLES.OWNER || role === TENANT_ROLES.ADMIN
@@ -117,6 +122,7 @@ export default class AuthTokensController {
       pluginId: pluginId.trim(),
       kind,
       userId,
+      actorUserId: auth.user.id,
     })
 
     response.json({ data: tokens })
@@ -148,6 +154,42 @@ export default class AuthTokensController {
       return
     }
 
+    const tenantModel = await Tenant.find(tenant!.id)
+    if (!tenantModel) {
+      return response.notFound({
+        error: 'NotFound',
+        message: 'Tenant not found',
+      })
+    }
+
+    const quotaSnapshot = await tenantQuotaService.getSnapshot(tenantModel, auth.user.id)
+
+    if (
+      tenantQuotaService.willExceed(
+        quotaSnapshot.authTokensPerTenant.limit,
+        quotaSnapshot.authTokensPerTenant.used,
+        1
+      )
+    ) {
+      return response.badRequest({
+        error: 'LimitReached',
+        message: `Tenant auth token quota reached (${quotaSnapshot.authTokensPerTenant.limit}).`,
+      })
+    }
+
+    if (
+      tenantQuotaService.willExceed(
+        quotaSnapshot.authTokensPerUser.limit,
+        quotaSnapshot.authTokensPerUser.used,
+        1
+      )
+    ) {
+      return response.badRequest({
+        error: 'LimitReached',
+        message: `User auth token quota reached (${quotaSnapshot.authTokensPerUser.limit}).`,
+      })
+    }
+
     const allowedScopes = new Set(config.kindConfig.scopes.map((scope) => scope.id))
     if (!areScopesAllowed(payload.scopes, allowedScopes)) {
       return response.badRequest({
@@ -160,15 +202,26 @@ export default class AuthTokensController {
       const created = await authTokenService.createToken({
         tenantId: tenant!.id,
         userId: auth.user.id,
+        actorUserId: auth.user.id,
         pluginId: payload.pluginId,
         kind: payload.kind,
         name: payload.name,
         scopes: payload.scopes,
         expiresAt: payload.expiresAt ?? null,
+        requestIp: request.ip() ?? null,
+        requestUserAgent: request.header('user-agent') ?? null,
       })
 
       response.created({ data: created })
     } catch (error) {
+      if (error instanceof AuthTokenPolicyViolationError) {
+        return response.forbidden({
+          error: 'PolicyViolation',
+          message: error.message,
+          errors: [{ rule: error.rule, message: error.message }],
+        })
+      }
+
       const message = error instanceof Error ? error.message : 'Could not create token'
       if (message.toLowerCase().includes('expiration date')) {
         return response.badRequest({
@@ -238,6 +291,7 @@ export default class AuthTokensController {
       tokenId: tokenId.trim(),
       kind,
       userId,
+      actorUserId: auth.user.id,
     })
 
     if (!deleted) {

@@ -24,7 +24,7 @@ export const updateTenantValidator = vine.compile(
 export const addMemberValidator = vine.compile(
   vine.object({
     email: vine.string().email().normalizeEmail(),
-    role: vine.enum(['admin', 'member']).optional(),
+    role: vine.enum(['admin', 'member', 'viewer']).optional(),
   })
 )
 
@@ -33,7 +33,7 @@ export const addMemberValidator = vine.compile(
  */
 export const updateMemberRoleValidator = vine.compile(
   vine.object({
-    role: vine.enum(['admin', 'member']),
+    role: vine.enum(['admin', 'member', 'viewer']),
   })
 )
 
@@ -43,6 +43,18 @@ export const updateMemberRoleValidator = vine.compile(
 export const sendInvitationValidator = vine.compile(
   vine.object({
     email: vine.string().email().normalizeEmail(),
-    role: vine.enum(['admin', 'member']).optional(),
+    role: vine.enum(['admin', 'member', 'viewer']).optional(),
+  })
+)
+
+/**
+ * Validator for updating tenant quota overrides
+ */
+export const updateTenantQuotasValidator = vine.compile(
+  vine.object({
+    maxMembers: vine.number().min(1).nullable().optional(),
+    maxPendingInvitations: vine.number().min(1).nullable().optional(),
+    maxAuthTokensPerTenant: vine.number().min(1).nullable().optional(),
+    maxAuthTokensPerUser: vine.number().min(1).nullable().optional(),
   })
 )

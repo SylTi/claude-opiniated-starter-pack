@@ -3,7 +3,7 @@
 import { Moon, Sun } from 'lucide-react'
 import { useState, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@saas/ui/avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,12 +11,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+} from '@saas/ui/dropdown-menu'
 import { useAuth } from '@/contexts/auth-context'
 import { useFramework } from '@/contexts/framework-context'
+import { useI18n } from '@/contexts/i18n-context'
 import { useUserMenuNav } from '@/contexts/navigation-context'
 import { THEME_COOKIE_NAME } from '@/lib/theme-config'
-import { cn } from '@/lib/utils'
+import { cn } from '@saas/ui/utils'
 import type { NavSectionWithIcons } from '@/lib/nav/types'
 
 interface DynamicUserMenuProps {
@@ -55,6 +56,7 @@ function writeThemeCookie(theme: ThemeMode): void {
 }
 
 function ThemeToggleMenuItem(): React.ReactElement {
+  const { t } = useI18n('skeleton')
   const framework = useFramework()
   const frameworkTheme = useSyncExternalStore(
     (onStoreChange) => framework?.theme.subscribe(onStoreChange) ?? (() => {}),
@@ -95,12 +97,12 @@ function ThemeToggleMenuItem(): React.ReactElement {
   return (
     <div className="px-2 py-1.5">
       <div className="flex items-center justify-between gap-3 rounded-sm px-1 text-sm">
-        <span className="font-medium">Theme</span>
+        <span className="font-medium">{t('header.themeLabel')}</span>
         <button
           type="button"
           role="switch"
           aria-checked={isDark}
-          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-label={isDark ? t('header.switchToLight') : t('header.switchToDark')}
           onClick={toggleTheme}
           className={cn(
             'relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border border-border bg-muted transition-colors',
@@ -141,6 +143,7 @@ function ThemeToggleMenuItem(): React.ReactElement {
 export function DynamicUserMenu({ sections }: DynamicUserMenuProps): React.ReactElement {
   const router = useRouter()
   const { user, logout } = useAuth()
+  const { t } = useI18n('skeleton')
 
   if (!user) {
     return <></>
@@ -206,7 +209,7 @@ export function DynamicUserMenu({ sections }: DynamicUserMenuProps): React.React
         <DropdownMenuLabel>
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">
-              {user.fullName || 'User'}
+              {user.fullName || t('user.defaultName')}
             </p>
             <p className="text-xs leading-none text-muted-foreground">
               {user.email}

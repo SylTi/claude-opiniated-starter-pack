@@ -5,18 +5,20 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Separator } from '@/components/ui/separator'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@saas/ui/button'
+import { Input } from '@saas/ui/input'
+import { Label } from '@saas/ui/label'
+import { Avatar, AvatarFallback, AvatarImage } from '@saas/ui/avatar'
+import { Separator } from '@saas/ui/separator'
+import { Alert, AlertDescription } from '@saas/ui/alert'
 import { useAuth } from '@/contexts/auth-context'
+import { useI18n } from '@/contexts/i18n-context'
 import { authApi } from '@/lib/auth'
 import { ApiError } from '@/lib/api'
 import { profileSchema, type ProfileFormData } from '@/lib/validations'
 
 export default function ProfilePage(): React.ReactElement {
+  const { t } = useI18n('skeleton')
   const { user, refreshUser } = useAuth()
   const [error, setError] = useState<string | null>(null)
 
@@ -41,12 +43,12 @@ export default function ProfilePage(): React.ReactElement {
         avatarUrl: data.avatarUrl || null,
       })
       await refreshUser()
-      toast.success('Profile updated successfully')
+      toast.success(t('profile.updateSuccess'))
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message)
       } else {
-        setError('An unexpected error occurred')
+        setError(t('common.unexpectedError'))
       }
     }
   }
@@ -66,8 +68,8 @@ export default function ProfilePage(): React.ReactElement {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Profile</h1>
-      <p className="text-muted-foreground mt-1">Manage your account information</p>
+      <h1 className="text-2xl font-bold">{t('profile.title')}</h1>
+      <p className="text-muted-foreground mt-1">{t('profile.subtitle')}</p>
 
       <Separator className="my-6" />
 
@@ -85,16 +87,16 @@ export default function ProfilePage(): React.ReactElement {
             <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
           </Avatar>
           <div>
-            <p className="font-medium">{user.fullName || 'No name set'}</p>
+            <p className="font-medium">{user.fullName || t('profile.noNameSet')}</p>
             <p className="text-sm text-muted-foreground">{user.email}</p>
             {!user.emailVerified && (
-              <p className="text-sm text-amber-600">Email not verified</p>
+              <p className="text-sm text-amber-600">{t('profile.emailNotVerified')}</p>
             )}
           </div>
         </div>
 
         <div>
-          <Label htmlFor="fullName">Full name</Label>
+          <Label htmlFor="fullName">{t('profile.fullName')}</Label>
           <Input
             id="fullName"
             type="text"
@@ -107,7 +109,7 @@ export default function ProfilePage(): React.ReactElement {
         </div>
 
         <div>
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">{t('profile.email')}</Label>
           <Input
             id="email"
             type="email"
@@ -116,16 +118,16 @@ export default function ProfilePage(): React.ReactElement {
             className="mt-1 bg-muted"
           />
           <p className="mt-1 text-sm text-muted-foreground">
-            Email cannot be changed
+            {t('profile.emailCannotBeChanged')}
           </p>
         </div>
 
         <div>
-          <Label htmlFor="avatarUrl">Avatar URL</Label>
+          <Label htmlFor="avatarUrl">{t('profile.avatarUrl')}</Label>
           <Input
             id="avatarUrl"
             type="url"
-            placeholder="https://example.com/avatar.jpg"
+            placeholder={t('profile.avatarUrlPlaceholder')}
             {...register('avatarUrl')}
             className="mt-1"
           />
@@ -138,10 +140,10 @@ export default function ProfilePage(): React.ReactElement {
           {isSubmitting ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving...
+              {t('profile.saving')}
             </>
           ) : (
-            'Save changes'
+            t('profile.saveChanges')
           )}
         </Button>
       </form>

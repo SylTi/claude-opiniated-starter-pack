@@ -19,6 +19,71 @@ type RouteMiddleware = MiddlewareEntry
 // Cache for lazily loaded middleware collection
 let cachedMiddleware: MiddlewareCollection | null = null
 
+export type TrustedPluginRequestScope = {
+  tenantId: number
+  actorUserId: number
+  actorRole: string | undefined
+  requestIp: string | null
+  requestUserAgent: string | null
+}
+
+const trustedPluginRequestScopes = new WeakMap<object, TrustedPluginRequestScope>()
+
+type PluginAwareHttpContext = HttpContext & {
+  tenant?: { id?: number; membership?: { role?: string } }
+  auth?: { user?: { id?: number } }
+  request: HttpContext['request'] & {
+    ip?: () => string | null | undefined
+    header?: (name: string) => string | null | undefined
+  }
+  response?: {
+    response?: {
+      once?: (event: 'finish' | 'close', listener: () => void) => void
+    }
+  }
+}
+
+function captureTrustedPluginRequestScope(ctx: HttpContext): void {
+  const pluginCtx = ctx as PluginAwareHttpContext
+  const tenantId = pluginCtx.tenant?.id
+  const actorUserId = pluginCtx.auth?.user?.id
+
+  if (typeof tenantId !== 'number' || typeof actorUserId !== 'number') {
+    return
+  }
+
+  const requestIp =
+    typeof pluginCtx.request.ip === 'function' ? (pluginCtx.request.ip() ?? null) : null
+  const requestUserAgent =
+    typeof pluginCtx.request.header === 'function'
+      ? (pluginCtx.request.header('user-agent') ?? null)
+      : null
+
+  trustedPluginRequestScopes.set(ctx, {
+    tenantId,
+    actorUserId,
+    actorRole: pluginCtx.tenant?.membership?.role,
+    requestIp,
+    requestUserAgent,
+  })
+
+  const response = pluginCtx.response?.response
+  if (response && typeof response.once === 'function') {
+    const cleanup = () => {
+      trustedPluginRequestScopes.delete(ctx)
+    }
+    response.once('finish', cleanup)
+    response.once('close', cleanup)
+  }
+}
+
+export function getTrustedPluginRequestScope(ctx: unknown): TrustedPluginRequestScope | null {
+  if (typeof ctx !== 'object' || ctx === null) {
+    return null
+  }
+  return trustedPluginRequestScopes.get(ctx) ?? null
+}
+
 /**
  * Lazily get the middleware collection from kernel.
  * This avoids circular dependency issues during boot.
@@ -39,6 +104,7 @@ export type RouteHandler = (ctx: HttpContext) => Promise<void> | void
 export type RouteOptions = {
   middleware?: RouteMiddleware[]
   requiredFeatures?: string[]
+  public?: boolean
 }
 
 type RouteRegistrationOptions = RouteOptions | RouteMiddleware[]
@@ -160,6 +226,11 @@ export class RoutesRegistrar {
 
     // Ensure path starts with /
     const normalizedPath = path.startsWith('/') ? path : `/${path}`
+    if (normalizedOptions.public && !normalizedPath.startsWith('/public/')) {
+      throw new Error(
+        `Plugin "${this.pluginId}" public route "${normalizedPath}" must be under "/public/"`
+      )
+    }
     const fullPath = `${this.prefix}${normalizedPath}`
 
     // Get the middleware collection (lazy loaded to avoid circular deps)
@@ -172,19 +243,30 @@ export class RoutesRegistrar {
     // - state: from database (tenant-specific)
     // - grantedCapabilities: from registry
     // We don't modify ctx.plugin here - the middleware handles it securely.
-    const route = this.router[method](fullPath, handler)
+    const wrappedHandler: RouteHandler = async (ctx: HttpContext) => {
+      captureTrustedPluginRequestScope(ctx)
+      await handler(ctx)
+    }
+    const route = this.router[method](fullPath, wrappedHandler)
 
     // Apply default middleware (auth, tenant, plugin enforcement)
     // Use the middleware collection functions which properly resolve the middleware
     const pluginId = this.pluginId
-    const defaultMiddleware: RouteMiddleware[] = [
-      middleware.auth(),
-      middleware.tenant(),
-      middleware.pluginEnforcement({
-        guards: [pluginId],
-        requiredFeatures: normalizedOptions.requiredFeatures,
-      }),
-    ]
+    const defaultMiddleware: RouteMiddleware[] = normalizedOptions.public
+      ? [
+          middleware.pluginPublicEnforcement({
+            guards: [pluginId],
+            requiredFeatures: normalizedOptions.requiredFeatures,
+          }),
+        ]
+      : [
+          middleware.auth(),
+          middleware.tenant(),
+          middleware.pluginEnforcement({
+            guards: [pluginId],
+            requiredFeatures: normalizedOptions.requiredFeatures,
+          }),
+        ]
     const allMiddleware = [...defaultMiddleware, ...(normalizedOptions.middleware || [])]
     route.use(allMiddleware)
 
@@ -224,6 +306,7 @@ export class RoutesRegistrar {
     return {
       middleware: options?.middleware ?? [],
       requiredFeatures,
+      public: options?.public ?? false,
     }
   }
 }

@@ -229,6 +229,10 @@ import type {
   AcceptInvitationResponseDTO,
   TenantRole,
   InvitationRole,
+  TenantQuotaSnapshotDTO,
+  TenantQuotaOverridesDTO,
+  AdminTenantDTO,
+  AdminTenantQuotasDTO,
 } from "@saas/shared"
 
 /**
@@ -302,6 +306,17 @@ export const tenantsApi = {
   },
 
   /**
+   * Update a member role
+   */
+  async updateMemberRole(
+    tenantId: number,
+    userId: number,
+    data: { role: TenantRole },
+  ): Promise<void> {
+    await api.put(`/api/v1/tenants/${tenantId}/members/${userId}/role`, data)
+  },
+
+  /**
    * Remove a member from a tenant
    */
   async removeMember(tenantId: number, userId: number): Promise<void> {
@@ -347,6 +362,60 @@ export const tenantsApi = {
    */
   async cancelInvitation(tenantId: number, invitationId: number): Promise<void> {
     await api.delete(`/api/v1/tenants/${tenantId}/invitations/${invitationId}`)
+  },
+
+  /**
+   * Get tenant quota usage and limits
+   */
+  async getQuotas(tenantId: number): Promise<{
+    tenantId: number;
+    maxMembers: number | null;
+    quotaOverrides: TenantQuotaOverridesDTO;
+    quotas: TenantQuotaSnapshotDTO;
+  }> {
+    const response = await api.get<{
+      tenantId: number;
+      maxMembers: number | null;
+      quotaOverrides: TenantQuotaOverridesDTO;
+      quotas: TenantQuotaSnapshotDTO;
+    }>(`/api/v1/tenants/${tenantId}/quotas`)
+
+    if (!response.data) {
+      throw new Error("Failed to fetch tenant quotas")
+    }
+
+    return response.data
+  },
+
+  /**
+   * Update tenant quota overrides
+   */
+  async updateQuotas(
+    tenantId: number,
+    data: {
+      maxMembers?: number | null;
+      maxPendingInvitations?: number | null;
+      maxAuthTokensPerTenant?: number | null;
+      maxAuthTokensPerUser?: number | null;
+    },
+  ): Promise<{
+    tenantId: number;
+    maxMembers: number | null;
+    quotaOverrides: TenantQuotaOverridesDTO;
+    quotas: TenantQuotaSnapshotDTO;
+  }> {
+    const response = await api.put<{
+      tenantId: number;
+      maxMembers: number | null;
+      quotaOverrides: TenantQuotaOverridesDTO;
+      quotas: TenantQuotaSnapshotDTO;
+    }>(`/api/v1/tenants/${tenantId}/quotas`, data)
+
+    if (!response.data) {
+      throw new Error("Failed to update tenant quotas")
+    }
+
+    return response.data
   },
 }
 
@@ -734,13 +803,45 @@ export const adminTenantsApi = {
   ): Promise<void> {
     await api.put(`/api/v1/admin/tenants/${id}/tier`, data)
   },
+
+  /**
+   * Get tenant quotas and effective limits (admin)
+   */
+  async getQuotas(id: number): Promise<AdminTenantQuotasDTO> {
+    const response = await api.get<AdminTenantQuotasDTO>(
+      `/api/v1/admin/tenants/${id}/quotas`,
+    )
+    if (!response.data) {
+      throw new Error("Failed to fetch tenant quotas")
+    }
+    return response.data
+  },
+
+  /**
+   * Update tenant quotas (admin)
+   */
+  async updateQuotas(
+    id: number,
+    data: {
+      maxMembers?: number | null;
+      maxPendingInvitations?: number | null;
+      maxAuthTokensPerTenant?: number | null;
+      maxAuthTokensPerUser?: number | null;
+    },
+  ): Promise<AdminTenantQuotasDTO> {
+    const response = await api.put<AdminTenantQuotasDTO>(
+      `/api/v1/admin/tenants/${id}/quotas`,
+      data,
+    )
+    if (!response.data) {
+      throw new Error("Failed to update tenant quotas")
+    }
+    return response.data
+  },
 }
 
 /** @deprecated Use adminTenantsApi instead */
 export const adminTeamsApi = adminTenantsApi
-
-// Import admin tenant type
-import type { AdminTenantDTO } from "@saas/shared"
 
 /**
  * Admin API for managing discount codes
@@ -918,3 +1019,4 @@ export const authTokensApi = {
     await api.delete(`/api/v1/auth-tokens/${id}?${search.toString()}`);
   },
 }
+

@@ -118,6 +118,42 @@ Abilities enforced through core authz namespace `webhooks.`:
 
 ---
 
+## Workers Plugin
+
+Base prefix: `/api/v1/apps/workers`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin/stats` | Read worker queue counters |
+| GET | `/admin/tasks` | List worker tasks |
+| GET | `/admin/tasks/:id` | Get one worker task |
+| GET | `/admin/tasks/:id/attempts` | List attempt history for one task |
+| POST | `/admin/tasks` | Enqueue worker task |
+| POST | `/admin/tasks/:id/cancel` | Cancel pending/failed/processing task |
+| POST | `/admin/tasks/:id/requeue` | Requeue terminal task |
+| POST | `/admin/dispatch` | Run worker dispatch loop for due jobs |
+
+Feature gates:
+- Disabled route features return `403` with `E_FEATURE_DISABLED`.
+- `monitoring` gates stats/list/read/attempt routes.
+- `enqueue` gates `POST /admin/tasks`.
+- `manage` gates `POST /admin/tasks/:id/cancel`.
+- `replay` gates `POST /admin/tasks/:id/requeue`.
+- `dispatch` gates `POST /admin/dispatch`.
+
+Abilities enforced through core authz namespace `workers.`:
+- `workers.task.enqueue`
+- `workers.task.read`
+- `workers.task.dispatch`
+- `workers.task.manage`
+
+Execution model:
+- Generic queue with retries and dead-letter state.
+- Handlers: `noop`, `fail_test`, `http_request`, `hook_action`, `webhooks_event`.
+- `webhooks_event` is optional integration; it only succeeds if the `webhooks` plugin is enabled for the tenant.
+
+---
+
 ## Wiki Plugin
 
 Base prefix: `/api/v1/apps/wiki`
@@ -176,7 +212,11 @@ Base prefix: `/api/v1/apps/calendar`
 | DELETE | `/events/:id/reminders/:reminderId` | Cancel reminder |
 | POST | `/events/:id/recurrence` | Configure recurrence rule |
 | DELETE | `/events/:id/recurrence` | Clear recurrence rule |
+| GET | `/admin/booking/config` | Read booking page config |
+| PUT | `/admin/booking/config` | Update booking page config |
 | POST | `/admin/reminders/dispatch` | Process due reminders |
+| GET | `/public/booking/:tenantId/:pageSlug/slots` | Public: list available slots for a date |
+| POST | `/public/booking/:tenantId/:pageSlug/reservations` | Public: reserve one slot |
 
 Feature gates:
 - Disabled route features return `403` with `E_FEATURE_DISABLED`.
@@ -184,6 +224,8 @@ Feature gates:
 - `attendees` gates attendee and RSVP routes.
 - `reminders` gates reminder CRUD and dispatch route.
 - `recurrence` gates recurrence set/clear routes.
+- `booking` gates `/admin/booking/config` read/update.
+- Public booking routes validate plugin state/feature/page config in-handler.
 
 Abilities enforced through core authz namespace `calendar.`:
 - `calendar.event.create`
@@ -192,6 +234,10 @@ Abilities enforced through core authz namespace `calendar.`:
 - `calendar.event.delete`
 - `calendar.event.manage_attendees`
 - `calendar.reminder.manage`
+
+Booking behavior:
+- `slotDurationMinutes` is tenant-configured by admin.
+- Public reservations are accepted only for generated slots matching that duration exactly.
 
 ---
 
@@ -775,7 +821,54 @@ PUT /api/v1/admin/tenants/:id/tier
 **Request Body:**
 ```json
 {
-  "tierId": 2
+  "subscriptionTier": "tier1"
+}
+```
+
+### Get Tenant Quotas
+
+```
+GET /api/v1/admin/tenants/:id/quotas
+```
+
+**Authentication:** Required (Admin)
+
+**Response:**
+```json
+{
+  "data": {
+    "tenantId": 1,
+    "maxMembers": null,
+    "quotaOverrides": {
+      "maxPendingInvitations": 25,
+      "maxAuthTokensPerTenant": 500,
+      "maxAuthTokensPerUser": 100
+    },
+    "effectiveLimits": {
+      "members": 20,
+      "pendingInvitations": 25,
+      "authTokensPerTenant": 500,
+      "authTokensPerUser": 100
+    }
+  }
+}
+```
+
+### Update Tenant Quotas
+
+```
+PUT /api/v1/admin/tenants/:id/quotas
+```
+
+**Authentication:** Required (Admin)
+
+**Request Body:**
+```json
+{
+  "maxMembers": 25,
+  "maxPendingInvitations": 25,
+  "maxAuthTokensPerTenant": 500,
+  "maxAuthTokensPerUser": 100
 }
 ```
 
@@ -1215,8 +1308,23 @@ POST /api/v1/tenants/:id/members
 **Request Body:**
 ```json
 {
-  "userId": 5,
+  "email": "member@example.com",
   "role": "member"
+}
+```
+
+### Update Member Role
+
+```
+PUT /api/v1/tenants/:id/members/:userId/role
+```
+
+**Authentication:** Required (must be owner)
+
+**Request Body:**
+```json
+{
+  "role": "viewer"
 }
 ```
 
@@ -1227,6 +1335,32 @@ DELETE /api/v1/tenants/:id/members/:userId
 ```
 
 **Authentication:** Required (must be admin)
+
+### Get Tenant Quotas
+
+```
+GET /api/v1/tenants/:id/quotas
+```
+
+**Authentication:** Required (must be tenant member)
+
+### Update Tenant Quotas
+
+```
+PUT /api/v1/tenants/:id/quotas
+```
+
+**Authentication:** Required (must be owner or admin)
+
+**Request Body:**
+```json
+{
+  "maxMembers": 25,
+  "maxPendingInvitations": 25,
+  "maxAuthTokensPerTenant": 500,
+  "maxAuthTokensPerUser": 100
+}
+```
 
 ### Leave Tenant
 
@@ -1256,7 +1390,7 @@ POST /api/v1/tenants/:id/invitations
 ```json
 {
   "email": "invitee@example.com",
-  "role": "member"
+  "role": "viewer"
 }
 ```
 
@@ -1785,10 +1919,16 @@ GET /api/v1/apps/analytics/active-users?from=2026-01-01&to=2026-01-31
 **Response:**
 ```json
 {
-  "data": [
-    { "date": "2026-01-01", "count": 42 },
-    { "date": "2026-01-02", "count": 38 }
-  ]
+  "data": {
+    "period": {
+      "from": "2026-01-01",
+      "to": "2026-01-31"
+    },
+    "points": [
+      { "date": "2026-01-01", "count": 42 },
+      { "date": "2026-01-02", "count": 38 }
+    ]
+  }
 }
 ```
 
@@ -1809,16 +1949,22 @@ GET /api/v1/apps/analytics/mrr?from=2026-01-01&to=2026-01-31
 **Response:**
 ```json
 {
-  "data": [
-    {
-      "date": "2026-01-01",
-      "mrr": 499900,
-      "arr": 5998800,
-      "currency": "usd",
-      "newSubscriptions": 3,
-      "cancellations": 1
-    }
-  ]
+  "data": {
+    "period": {
+      "from": "2026-01-01",
+      "to": "2026-01-31"
+    },
+    "points": [
+      {
+        "date": "2026-01-01",
+        "mrr": 499900,
+        "arr": 5998800,
+        "currency": "usd",
+        "newSubscriptions": 3,
+        "cancellations": 1
+      }
+    ]
+  }
 }
 ```
 
@@ -1851,3 +1997,764 @@ GET /api/v1/apps/analytics/revenue?from=2026-01-01&to=2026-01-31
   }
 }
 ```
+
+### Cohorts
+
+```
+GET /api/v1/apps/analytics/cohorts?from=2026-01-01&to=2026-03-31
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+**Response:**
+```json
+{
+  "data": {
+    "period": {
+      "from": "2026-01-01",
+      "to": "2026-03-31"
+    },
+    "cohorts": [
+      {
+        "cohortDate": "2026-01-01",
+        "cohortSize": 100,
+        "day7Count": 45,
+        "day14Count": 37,
+        "day30Count": 21,
+        "day7RetentionRate": 45,
+        "day14RetentionRate": 37,
+        "day30RetentionRate": 21
+      }
+    ]
+  }
+}
+```
+
+### Funnels
+
+```
+GET /api/v1/apps/analytics/funnels?from=2026-01-01&to=2026-01-31
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+**Response:**
+```json
+{
+  "data": {
+    "period": {
+      "from": "2026-01-01",
+      "to": "2026-01-31"
+    },
+    "steps": [
+      {
+        "id": "active_users",
+        "label": "Active users",
+        "count": 350,
+        "conversionFromPrevious": null
+      },
+      {
+        "id": "subscriptions_created",
+        "label": "Subscriptions created",
+        "count": 30,
+        "conversionFromPrevious": 8.57
+      }
+    ],
+    "overallConversionRate": 6,
+    "failedPaymentCount": 2
+  }
+}
+```
+
+### Alerts and Threshold Evaluation
+
+```
+GET /api/v1/apps/analytics/alerts/evaluate?from=2026-01-01&to=2026-01-31
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+**Response:**
+```json
+{
+  "data": {
+    "evaluatedAt": "2026-02-13T12:00:00.000Z",
+    "triggeredCount": 1,
+    "evaluations": [
+      {
+        "rule": {
+          "id": "alert-high-churn",
+          "name": "High churn warning",
+          "metric": "churnRate",
+          "operator": "gt",
+          "threshold": 5,
+          "severity": "warning",
+          "enabled": true
+        },
+        "currentValue": 7.2,
+        "triggered": true
+      }
+    ]
+  }
+}
+```
+
+### Custom Reports
+
+```
+GET /api/v1/apps/analytics/reports/custom
+```
+
+Runs saved report definitions from analytics admin config.
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+### Run Ad-hoc Report
+
+```
+POST /api/v1/apps/analytics/reports/run
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+**Request Body:**
+```json
+{
+  "dataset": "funnel",
+  "from": "2026-01-01",
+  "to": "2026-01-31"
+}
+```
+
+Supported datasets:
+- `overview`
+- `active_users`
+- `mrr`
+- `revenue`
+- `cohort`
+- `funnel`
+
+### Data Export (CSV / Excel / PDF)
+
+```
+GET /api/v1/apps/analytics/exports?format=csv&dataset=overview&from=2026-01-01&to=2026-01-31
+```
+
+**Authentication:** Required
+**Headers:**
+- `X-Tenant-ID`: Required tenant ID
+
+**Query Parameters:**
+- `format` (required): `csv`, `excel`, or `pdf`
+- `dataset` (required): one of the supported datasets
+- `from` (optional): Start date (YYYY-MM-DD)
+- `to` (optional): End date (YYYY-MM-DD)
+
+### Admin Config (Owner/Admin only)
+
+```
+GET /api/v1/apps/analytics/admin/config
+PUT /api/v1/apps/analytics/admin/config
+```
+
+Admin config schema:
+```json
+{
+  "customReports": [
+    {
+      "id": "report-overview-30d",
+      "name": "Overview (30d)",
+      "dataset": "overview",
+      "fromDaysAgo": 30,
+      "toDaysAgo": 0
+    }
+  ],
+  "alertRules": [
+    {
+      "id": "alert-high-churn",
+      "name": "High churn warning",
+      "metric": "churnRate",
+      "operator": "gt",
+      "threshold": 5,
+      "severity": "warning",
+      "enabled": true
+    }
+  ],
+  "funnelSteps": ["Active users", "Subscriptions created", "Invoices paid"]
+}
+```
+
+---
+
+## Chatbot Plugin
+
+Base prefix: `/api/v1/apps/chatbot`
+
+All routes require authentication and the `chat` feature to be enabled.
+
+### Admin Configuration (admin/owner only)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/config` | Get current provider config (API key masked), available tiers, and model options |
+| PUT | `/config` | Upsert provider config (provider, model, mode, API key, tier, temperature, etc.) |
+
+#### PUT `/config` body:
+
+```json
+{
+  "provider": "openai",
+  "model": "gpt-4o",
+  "mode": "support",
+  "apiKey": "sk-...",
+  "requiredTierSlug": "tier1",
+  "systemPrompt": "Custom instructions...",
+  "temperature": 0.7,
+  "maxTokens": 4096
+}
+```
+
+- `apiKey` is optional on updates (omit to keep existing key)
+- `requiredTierSlug` can be `null` for no tier restriction
+
+### Knowledge Base (admin/owner only)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/knowledge` | List knowledge documents for tenant |
+| POST | `/knowledge` | Create knowledge document |
+| PUT | `/knowledge/:id` | Update knowledge document |
+| DELETE | `/knowledge/:id` | Delete knowledge document |
+
+### Conversations (authenticated users, tier-gated)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/conversations` | List user's conversations (paginated via `?limit=`) |
+| POST | `/conversations` | Create new conversation |
+| GET | `/conversations/:id` | Get conversation with all messages |
+| DELETE | `/conversations/:id` | Delete conversation (owner only) |
+
+### Messages (streaming)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/conversations/:id/messages` | Send message, returns streaming text response |
+
+#### POST `/conversations/:id/messages` body:
+
+```json
+{
+  "content": "Hello, can you help me?"
+}
+```
+
+Response is a streamed text response (`text/plain; charset=utf-8`).
+
+### Tier Gating
+
+When `required_tier_slug` is set on the provider config, conversation and message routes check the tenant's subscription tier level. Returns `403` with:
+```json
+{
+  "error": "TIER_REQUIRED",
+  "message": "Your subscription plan does not include chatbot access"
+}
+```
+
+### Modes
+
+- **support**: AI answers from admin-managed knowledge base documents
+- **assistant**: AI has tool access to search notes, list calendar events, and search wiki pages
+
+---
+
+## Notifications Plugin
+
+Base prefix: `/api/v1/apps/notifications`
+
+All routes require authentication and the `preferences` feature to be enabled.
+
+### Preferences
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/preferences` | List current user's notification preferences |
+| PUT | `/preferences` | Batch upsert preferences |
+| GET | `/preferences/types` | List known notification types with labels |
+
+#### PUT `/preferences` body:
+
+```json
+{
+  "preferences": [
+    { "notificationType": "messaging.message.received", "channel": "in_app", "enabled": true },
+    { "notificationType": "messaging.message.received", "channel": "email", "enabled": false }
+  ]
+}
+```
+
+- `preferences` must be an array of 1-50 items
+- `notificationType` must be alphanumeric with dots (max 200 chars)
+- `channel` must be one of: `in_app`, `email`
+- `enabled` must be a boolean
+- Uses `ON CONFLICT` upsert: creates new or updates existing preference
+
+#### GET `/preferences/types` response:
+
+Returns known notification types with descriptions and available channels:
+
+```json
+{
+  "data": [
+    {
+      "type": "messaging.message.received",
+      "label": "New message",
+      "description": "When you receive a direct or group message",
+      "channels": ["in_app", "email"]
+    }
+  ]
+}
+```
+
+### Database
+
+- `plugin_notifications_preferences` (tenant-scoped, RLS)
+  - UNIQUE constraint: `(tenant_id, user_id, notification_type, channel)`
+
+---
+
+## Messaging Plugin
+
+Base prefix: `/api/v1/apps/messaging`
+
+All routes require authentication and the `messaging` feature to be enabled.
+
+### Conversations
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/conversations` | List user's conversations with unread counts + last message + participants |
+| POST | `/conversations` | Create direct or group conversation |
+| GET | `/conversations/:id` | Get conversation with participants + recent messages |
+| PUT | `/conversations/:id` | Update group name (group admin only) |
+| DELETE | `/conversations/:id` | Leave conversation |
+
+#### POST `/conversations` body (direct):
+
+```json
+{
+  "type": "direct",
+  "participantIds": [42]
+}
+```
+
+- Exactly 1 other participant required (self auto-added)
+- Deduplicates: returns existing direct conversation if one exists with same participants
+
+#### POST `/conversations` body (group):
+
+```json
+{
+  "type": "group",
+  "name": "Project Team",
+  "participantIds": [42, 43, 44]
+}
+```
+
+- At least 2 other participants required (self auto-added as admin)
+- `name` is required for groups (max 200 chars)
+- Max 50 participants total
+
+#### PUT `/conversations/:id` body:
+
+```json
+{
+  "name": "New Group Name"
+}
+```
+
+- Group admin only, group conversations only
+
+### Messages
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/conversations/:id/messages` | Paginated messages (`?limit=50&beforeId=X&afterId=Y`) |
+| POST | `/conversations/:id/messages` | Send message (notifies other participants) |
+| PUT | `/conversations/:id/messages/:messageId` | Edit own message |
+| DELETE | `/conversations/:id/messages/:messageId` | Soft-delete own message |
+
+#### POST `/conversations/:id/messages` body:
+
+```json
+{
+  "content": "Hello everyone!"
+}
+```
+
+- Content max 10,000 characters
+- Sends notification (`messaging.message.received`) to other participants
+- Auto-marks conversation as read for sender
+- Dispatches `messaging:message.sent` hook
+
+#### Pagination
+
+- `beforeId` — fetch older messages (DESC, reversed to chronological)
+- `afterId` — fetch newer messages (ASC)
+- Default limit: 50, max: 100
+
+### Read Markers
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/conversations/:id/read` | Mark conversation as read (sets last_read_message_id) |
+
+### Participants
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/conversations/:id/participants` | Add participants (group admin only) |
+| DELETE | `/conversations/:id/participants/:userId` | Remove participant (group admin only) |
+
+#### POST `/conversations/:id/participants` body:
+
+```json
+{
+  "userIds": [45, 46]
+}
+```
+
+- Group conversations only, admin role required
+- Skips already-existing participants (ON CONFLICT DO NOTHING)
+- Returns updated participant list with user details
+
+### User Search
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/users/search` | Search tenant users (`?q=term&limit=20`) |
+
+- Minimum 2 characters for query
+- Max 20 results
+- Uses `UsersFacade` if available, falls back to direct DB query
+
+### Unread Count
+
+Unread count = messages where `id > participant.last_read_message_id AND sender_id != current_user AND deleted_at IS NULL`.
+
+### Database
+
+- `plugin_messaging_conversations` (tenant-scoped, RLS)
+- `plugin_messaging_participants` (tenant-scoped, RLS) — UNIQUE `(conversation_id, user_id)`
+- `plugin_messaging_messages` (tenant-scoped, RLS)
+
+### Hooks
+
+- `messaging:conversation.created` — dispatched when a conversation is created
+- `messaging:message.sent` — dispatched when a message is sent
+
+---
+
+## Forms Plugin
+
+Base prefix: `/api/v1/apps/forms`
+
+Typeform-like feedback and satisfaction surveys with conversational UX. Tier C plugin.
+
+### Forms CRUD (authenticated)
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/forms` | List forms for tenant | `forms.form.read` |
+| POST | `/forms` | Create new form | `forms.form.write` |
+| GET | `/forms/:id` | Get form details | `forms.form.read` |
+| PUT | `/forms/:id` | Update form | `forms.form.write` |
+| DELETE | `/forms/:id` | Delete form | `forms.form.delete` |
+| POST | `/forms/:id/publish` | Publish form | `forms.form.write` |
+| POST | `/forms/:id/close` | Close form | `forms.form.write` |
+
+### Responses (authenticated)
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/forms/:id/responses` | List responses (paginated, searchable) | `forms.response.read` |
+| GET | `/forms/:id/responses/:rid` | Get single response | `forms.response.read` |
+| DELETE | `/forms/:id/responses/:rid` | Delete response | `forms.response.delete` |
+
+### Analytics & Export (authenticated)
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/forms/:id/analytics` | Get form analytics summary (90 days) | `forms.analytics.read` |
+| GET | `/forms/:id/export/csv` | Export responses as CSV | `forms.response.read` |
+
+### Public Routes (no auth)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/public/:slug` | Get published form by slug |
+| POST | `/public/:slug/submit` | Submit response (rate limited: 10/min per IP) |
+
+#### POST `/public/:slug/submit` body:
+
+```json
+{
+  "respondentEmail": "user@example.com",
+  "respondentName": "John Doe",
+  "answers": [
+    { "questionId": "q1", "value": "Very satisfied" },
+    { "questionId": "q2", "value": 9 }
+  ],
+  "metadata": {
+    "durationSeconds": 120
+  }
+}
+```
+
+### Abilities
+
+- `forms.form.read` — all roles
+- `forms.form.write` — owner, admin, member
+- `forms.form.delete` — owner, admin
+- `forms.response.read` — owner, admin, member
+- `forms.response.delete` — owner, admin
+- `forms.analytics.read` — owner, admin, member
+
+### Hooks
+
+- `forms:form.published` — dispatched when a form is published
+- `forms:form.closed` — dispatched when a form is closed
+- `forms:response.submitted` — dispatched when a new response is submitted
+
+### Question Types
+
+`short_text`, `long_text`, `email`, `phone`, `url`, `number`, `dropdown`, `multiple_choice`, `checkboxes`, `rating`, `opinion_scale`, `yes_no`, `date`, `nps`, `welcome_screen`, `statement`
+
+### Database
+
+- `plugin_forms_forms` (tenant-scoped, RLS) — form definitions with questions as JSONB
+- `plugin_forms_responses` (tenant-scoped, RLS) — submitted responses with answers as JSONB
+- `plugin_forms_form_analytics` (tenant-scoped, RLS) — daily analytics (views, starts, completions)
+
+---
+
+## Support Plugin
+
+Base prefix: `/api/v1/apps/support`
+
+### User Routes
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/categories` | List active categories |
+| GET | `/config/mode` | Get support mode (chatbot availability, bypass categories) |
+| POST | `/tickets` | Create a new ticket (subject, description, categorySlug) |
+| GET | `/tickets` | List own tickets (filterable by status, cursor pagination) |
+| GET | `/tickets/:id` | Get ticket detail with public comments |
+| POST | `/tickets/:id/comments` | Add comment to own ticket |
+| POST | `/tickets/:id/reopen` | Reopen a resolved/closed ticket |
+| POST | `/tickets/:id/csat` | Submit CSAT rating (1-5) on resolved ticket |
+
+### Admin Routes
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin/tickets` | List all tickets cross-tenant (filters: status, priority, category, assignee, tenant) |
+| GET | `/admin/tickets/:id` | Get ticket detail with all comments (including internal) |
+| PUT | `/admin/tickets/:id` | Update ticket status/priority |
+| POST | `/admin/tickets/:id/assign` | Assign ticket to user |
+| POST | `/admin/tickets/:id/comments` | Add comment (public or internal) |
+| GET | `/admin/tickets/:id/activity` | Get ticket activity log |
+| GET | `/admin/stats` | Get support stats (open, unassigned, SLA %, avg response, avg CSAT) |
+| GET | `/admin/config` | Get support configuration |
+| PUT | `/admin/config` | Update support configuration (categories, SLA, auto-close) |
+
+### Authorization
+
+- `support.ticket.create` — owner, admin, member (NOT viewer)
+- `support.ticket.read` — all roles
+- `support.ticket.comment` — owner, admin, member (NOT viewer)
+- `support.admin.read` — owner, admin
+- `support.admin.manage` — owner, admin
+
+### Hooks
+
+**Defined (emitted by support plugin):**
+- `support:ticket.created` — when a ticket is created
+- `support:ticket.updated` — when ticket status/priority changes
+- `support:ticket.assigned` — when a ticket is assigned
+- `support:ticket.resolved` — when a ticket is resolved
+- `support:ticket.closed` — when a ticket is closed
+- `support:comment.added` — when a comment is added
+- `support:csat.submitted` — when CSAT rating is submitted
+
+**Listened (consumed by support plugin):**
+- `chatbot:conversation.escalated` — creates a ticket from chatbot escalation
+- `team:member_removed` — unassigns tickets from removed member
+
+### Chatbot Escalation Route
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/apps/chatbot/conversations/:id/escalate` | Escalate conversation to human support (dispatches `chatbot:conversation.escalated` hook) |
+
+### Database
+
+- `plugin_support_tickets` (tenant-scoped, RLS) — support tickets with SLA tracking and CSAT
+- `plugin_support_comments` (tenant-scoped, RLS) — ticket comments (public/internal)
+- `plugin_support_activity_log` (tenant-scoped, RLS) — ticket activity history
+- `plugin_chatbot_conversations.escalated_at` — added column for escalation tracking
+- `plugin_chatbot_conversations.support_ticket_id` — FK to support ticket
+
+---
+
+## Experiments Plugin (A/B Testing)
+
+Base prefix: `/api/v1/apps/experiments`
+
+### Admin Routes (require app admin role)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/experiments` | List all experiments (optional `?status=running`) |
+| GET | `/experiments/:id` | Get experiment with variants |
+| POST | `/experiments` | Create experiment (name, key, type, trafficPercentage, targetingRules) |
+| PUT | `/experiments/:id` | Update experiment |
+| DELETE | `/experiments/:id` | Delete experiment (cascades variants, assignments, events) |
+| POST | `/experiments/:id/start` | Start experiment (draft/paused -> running) |
+| POST | `/experiments/:id/pause` | Pause experiment (running -> paused) |
+| POST | `/experiments/:id/complete` | Complete experiment (set winner, running/paused -> completed) |
+
+### Variant Routes (admin only)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/experiments/:id/variants` | List variants for experiment |
+| POST | `/experiments/:id/variants` | Create variant (name, key, weight, isControl, featureOverrides) |
+| PUT | `/experiments/:id/variants/:vid` | Update variant |
+| DELETE | `/experiments/:id/variants/:vid` | Delete variant |
+
+### Assignment & Tracking (any authenticated user)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/resolve/:experimentKey` | Resolve variant for current user (sticky assignment) |
+| POST | `/events` | Track conversion/engagement event (experimentKey, eventType, eventValue, metadata) |
+
+### Results (admin only)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/experiments/:id/results` | Get results with statistical analysis (Z-test) |
+| GET | `/experiments/:id/assignments` | List all assignments for experiment (paginated) |
+
+### Request/Response Examples
+
+**Create experiment:**
+```json
+POST /api/v1/apps/experiments/experiments
+{
+  "name": "New Onboarding Flow",
+  "key": "new-onboarding-flow",
+  "description": "Test the new step-by-step onboarding",
+  "hypothesis": "New onboarding will increase activation rate by 15%",
+  "type": "ab_test",
+  "trafficPercentage": 80,
+  "targetingRules": {
+    "tenantIds": [1, 2],
+    "roles": ["member", "admin"],
+    "emailDomains": ["company.com"]
+  }
+}
+```
+
+**Create variant:**
+```json
+POST /api/v1/apps/experiments/experiments/1/variants
+{
+  "name": "Control",
+  "key": "control",
+  "weight": 50,
+  "isControl": true
+}
+```
+
+**Resolve variant (response):**
+```json
+GET /api/v1/apps/experiments/resolve/new-onboarding-flow
+{
+  "data": {
+    "inExperiment": true,
+    "experimentId": 1,
+    "experimentKey": "new-onboarding-flow",
+    "variantId": 2,
+    "variantKey": "treatment-a",
+    "featureOverrides": { "new_onboarding": true }
+  }
+}
+```
+
+**Track event:**
+```json
+POST /api/v1/apps/experiments/events
+{
+  "experimentKey": "new-onboarding-flow",
+  "eventType": "conversion",
+  "eventValue": 1,
+  "metadata": { "step": "signup_complete" }
+}
+```
+
+**Complete experiment:**
+```json
+POST /api/v1/apps/experiments/experiments/1/complete
+{
+  "winnerVariantId": 2
+}
+```
+
+### Authorization
+
+Admin-only routes check `user.role === 'admin'` (app-level admin, not tenant role). Regular users can only resolve variants and track events.
+
+### Abilities
+
+- `experiments.experiment.read` — admin only (via route handler check)
+- `experiments.experiment.write` — admin only
+- `experiments.experiment.delete` — admin only
+- `experiments.assignment.read` — any authenticated user (own only via resolve)
+- `experiments.event.write` — any authenticated user
+- `experiments.results.read` — admin only
+
+### Hooks
+
+- `experiments:experiment.started` — dispatched when experiment status changes to running
+- `experiments:experiment.completed` — dispatched when experiment is completed (includes winnerVariantId)
+- `experiments:variant.assigned` — dispatched when a user is auto-assigned to a variant
+- `experiments:event.tracked` — dispatched when a conversion/engagement event is tracked
+
+### Statistical Analysis
+
+Results endpoint performs Z-test for two proportions:
+- Compares conversion rates between control and test variants
+- Reports: p-value, confidence level, uplift, z-score
+- Flags `isSignificant` when p < 0.05
+- Flags `sampleSizeSufficient` when both variants have n >= 30
+- For multivariate tests: compares each variant against control independently
+
+### Database
+
+- `plugin_experiments_experiments` (permissive SELECT RLS) — experiment definitions with targeting rules
+- `plugin_experiments_variants` (permissive SELECT RLS) — variant definitions with feature overrides
+- `plugin_experiments_assignments` (permissive SELECT RLS) — sticky user-to-variant assignments (unique per experiment+user)
+- `plugin_experiments_events` (permissive SELECT RLS) — conversion/engagement events per assignment

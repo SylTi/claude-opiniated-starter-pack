@@ -5,7 +5,7 @@
  * NO fs.readdir at runtime - all plugins come from plugins.config.ts.
  */
 
-import type { PluginManifest } from '@saas/plugins-core'
+import type { PluginManifest, PluginTranslations } from '@saas/plugins-core'
 import { ALL_PLUGINS, extractManifest, getMainAppPluginId } from './plugins.config.js'
 
 /**
@@ -18,7 +18,9 @@ export type ManifestLoader = () => Promise<PluginManifest>
  */
 export type ClientPluginLoader = () => Promise<{
   default?: unknown
+  publicPage?: unknown
   register?: (context: unknown) => void | Promise<void>
+  translations?: PluginTranslations
 }>
 
 /**

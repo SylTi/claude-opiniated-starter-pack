@@ -13,22 +13,24 @@
  * the same context object without a direct dependency on the SaaS app.
  */
 
-import { useMemo, useRef, useCallback, type ReactNode } from 'react'
+import { useContext, useMemo, useRef, useCallback, type ReactNode } from 'react'
 import { useRouter as useNextRouter, usePathname, useSearchParams } from 'next/navigation'
 import NextLink from 'next/link'
 import NextImage from 'next/image'
 import {
   FrameworkContext,
+  type AuthBridge,
   type ThemeBridge,
   type FrameworkContextValue,
   type FrameworkLinkProps,
   type FrameworkImageProps,
 } from '@saas/plugins-core/framework'
 import { THEME_COOKIE_NAME } from '@/lib/theme-config'
+import { useAuth } from '@/contexts/auth-context'
 
 // Re-export types and hooks from plugins-core/framework for convenience
-export type { RouterAdapter, FrameworkLinkProps, FrameworkImageProps, FrameworkContextValue } from '@saas/plugins-core/framework'
-export { useFramework, useFrameworkRequired } from '@saas/plugins-core/framework'
+export type { RouterAdapter, FrameworkLinkProps, FrameworkImageProps, FrameworkContextValue, AuthBridge } from '@saas/plugins-core/framework'
+export { useFramework, useFrameworkRequired, usePluginAuth } from '@saas/plugins-core/framework'
 
 const DEFAULT_THEME = 'light'
 const DARK_THEME = 'dark'
@@ -173,6 +175,39 @@ export function FrameworkProvider({ children }: FrameworkProviderProps): React.R
     Image: NextImageAdapter,
     theme: themeBridge,
   }), [nextRouter, pathname, searchParams, themeBridge])
+
+  return (
+    <FrameworkContext.Provider value={value}>
+      {children}
+    </FrameworkContext.Provider>
+  )
+}
+
+/**
+ * Syncs auth state into the framework context.
+ * Must be rendered inside both FrameworkProvider and AuthProvider.
+ *
+ * This creates an inner FrameworkContext.Provider that shadows the outer one,
+ * adding the auth bridge while preserving all other framework primitives.
+ */
+export function FrameworkAuthSync({ children }: { children: ReactNode }): React.ReactElement {
+  const outerFramework = useContext(FrameworkContext)
+  const { user, isLoading: authLoading, isAuthenticated } = useAuth()
+
+  const authBridge = useMemo<AuthBridge>(() => ({
+    user: user ? { id: user.id, email: user.email, fullName: user.fullName, role: user.role } : null,
+    isLoading: authLoading,
+    isAuthenticated,
+  }), [user, authLoading, isAuthenticated])
+
+  const value = useMemo<FrameworkContextValue | null>(() => {
+    if (!outerFramework) return null
+    return { ...outerFramework, auth: authBridge }
+  }, [outerFramework, authBridge])
+
+  if (!value) {
+    return <>{children}</>
+  }
 
   return (
     <FrameworkContext.Provider value={value}>

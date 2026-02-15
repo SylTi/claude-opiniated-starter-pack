@@ -1,8 +1,9 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '@saas/ui/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@saas/ui/card'
+import { Badge } from '@saas/ui/badge'
+import { useI18n } from '@/contexts/i18n-context'
 import type { BillingTierDTO, PriceDTO, ValidateDiscountCodeResponse } from '@saas/shared'
 import { Check, Tag } from 'lucide-react'
 
@@ -34,6 +35,7 @@ export function PricingCard({
   isLoading,
   discountValidation,
 }: PricingCardProps): React.ReactElement {
+  const { t } = useI18n('skeleton')
   const { tier, prices } = billingTier
   const isCurrentTier = tier.slug === currentTierSlug
   const isFree = tier.slug === 'free'
@@ -73,16 +75,16 @@ export function PricingCard({
           {tier.name}
           {isCurrentTier && (
             <span className="text-sm font-normal text-primary bg-primary/10 px-2 py-1 rounded">
-              Current Plan
+              {t('billing.currentPlan')}
             </span>
           )}
         </CardTitle>
-        <CardDescription>{tier.description || `${tier.name} tier features`}</CardDescription>
+        <CardDescription>{tier.description || t('billing.tierFeatures', { tier: tier.name })}</CardDescription>
       </CardHeader>
       <CardContent className="flex-1">
         <div className="mb-6">
           {isFree ? (
-            <div className="text-3xl font-bold">Free</div>
+            <div className="text-3xl font-bold">{t('billing.free')}</div>
           ) : matchingPrice ? (
             <div>
               {discountValidation ? (
@@ -95,7 +97,7 @@ export function PricingCard({
                       <Tag className="h-3 w-3 mr-1" />
                       {discountValidation.discountCode?.discountType === 'percent'
                         ? `${discountValidation.discountCode.discountValue}% OFF`
-                        : `${formatPrice(discountValidation.discountApplied, matchingPrice.currency)} OFF`}
+                        : `${formatPrice(discountValidation.discountApplied, matchingPrice.currency)} ${t('billing.off')}`}
                     </Badge>
                   </div>
                   <span className="text-3xl font-bold text-green-600">
@@ -107,17 +109,17 @@ export function PricingCard({
               )}
               <span className="text-muted-foreground">/{selectedInterval}</span>
               {matchingPrice.taxBehavior === 'exclusive' && (
-                <span className="text-sm text-muted-foreground block">+ applicable taxes</span>
+                <span className="text-sm text-muted-foreground block">{t('billing.applicableTaxes')}</span>
               )}
             </div>
           ) : (
-            <div className="text-muted-foreground">Price not available</div>
+            <div className="text-muted-foreground">{t('billing.priceUnavailable')}</div>
           )}
         </div>
 
         {tier.maxTeamMembers !== null && tier.maxTeamMembers > 0 && (
           <p className="text-sm text-muted-foreground mb-4">
-            Up to {tier.maxTeamMembers} team members
+            {t('billing.upToTeamMembers', { count: tier.maxTeamMembers })}
           </p>
         )}
 
@@ -133,11 +135,11 @@ export function PricingCard({
       <CardFooter>
         {isFree ? (
           <Button variant="outline" className="w-full" disabled>
-            {isCurrentTier ? 'Current Plan' : 'Free Forever'}
+            {isCurrentTier ? t('billing.currentPlan') : t('billing.freeForever')}
           </Button>
         ) : isCurrentTier ? (
           <Button variant="outline" className="w-full" disabled>
-            Current Plan
+            {t('billing.currentPlan')}
           </Button>
         ) : (
           <Button
@@ -145,7 +147,7 @@ export function PricingCard({
             onClick={handleSubscribe}
             disabled={isLoading || !matchingPrice}
           >
-            {isLoading ? 'Loading...' : `Upgrade to ${tier.name}`}
+            {isLoading ? t('common.loading') : t('billing.upgradeToTier', { tier: tier.name })}
           </Button>
         )}
       </CardFooter>

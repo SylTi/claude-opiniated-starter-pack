@@ -109,6 +109,11 @@ export const ROLE_PERMISSIONS: Record<TenantRole, readonly TenantAction[]> = {
     ACTIONS.BILLING_VIEW,
     ACTIONS.SUBSCRIPTION_VIEW,
   ],
+  viewer: [
+    // Strict read-only access (no billing/subscription visibility)
+    ACTIONS.TENANT_READ,
+    ACTIONS.MEMBER_LIST,
+  ],
 } as const
 
 /**

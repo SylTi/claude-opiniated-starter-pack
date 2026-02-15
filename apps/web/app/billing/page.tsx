@@ -1,16 +1,18 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import { useAuth } from '@/contexts/auth-context'
+import { useI18n } from '@/contexts/i18n-context'
 import { billingApi, ApiError } from '@/lib/api'
 import { PricingCard } from '@/components/billing/pricing-card'
 import { SubscriptionStatus } from '@/components/billing/subscription-status'
 import { BalanceCard } from '@/components/billing/balance-card'
 import { CouponRedemption } from '@/components/billing/coupon-redemption'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsList, TabsTrigger } from '@saas/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@saas/ui/select'
+import { Input } from '@saas/ui/input'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@saas/ui/card'
 import type { BillingTierDTO, BillingSubscriptionDTO, ValidateDiscountCodeResponse } from '@saas/shared'
 import { Tag, X, CheckCircle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -25,6 +27,7 @@ function formatAmount(amount: number, currency: string): string {
 }
 
 export default function BillingPage(): React.ReactElement {
+  const { t } = useI18n('skeleton')
   const { user, isLoading: authLoading } = useAuth()
   const [tiers, setTiers] = useState<BillingTierDTO[]>([])
   const [subscription, setSubscription] = useState<BillingSubscriptionDTO | null>(null)
@@ -53,11 +56,11 @@ export default function BillingPage(): React.ReactElement {
         setSubscription(subData)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load billing data')
+      setError(err instanceof Error ? err.message : t('billing.loadError'))
     } finally {
       setIsLoading(false)
     }
-  }, [user])
+  }, [user, t])
 
   useEffect(() => {
     if (!authLoading) {
@@ -77,7 +80,7 @@ export default function BillingPage(): React.ReactElement {
       const result = await billingApi.validateDiscountCode(discountCode.trim().toUpperCase(), priceId)
       setDiscountValidation(result)
       if (!result.valid) {
-        toast.error(result.message ?? 'Invalid discount code')
+        toast.error(result.message ?? t('billing.invalidDiscountCode'))
       }
     } catch (err) {
       if (err instanceof ApiError) {
@@ -116,9 +119,9 @@ export default function BillingPage(): React.ReactElement {
       }
 
       const { url } = await billingApi.createCheckout(payload)
-      window.location.href = url
+      window.location.assign(url)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create checkout session')
+      setError(err instanceof Error ? err.message : t('billing.checkoutError'))
       setCheckoutLoading(false)
     }
   }
@@ -153,9 +156,9 @@ export default function BillingPage(): React.ReactElement {
   return (
     <div className="container mx-auto py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">Billing</h1>
+        <h1 className="text-3xl font-bold">{t('billing.title')}</h1>
         <p className="text-muted-foreground">
-          Manage your subscription and billing settings
+          {t('billing.subtitle')}
         </p>
       </div>
 
@@ -179,7 +182,7 @@ export default function BillingPage(): React.ReactElement {
       )}
 
       <div className="mb-6">
-        <h2 className="text-2xl font-semibold mb-4">Available Plans</h2>
+        <h2 className="text-2xl font-semibold mb-4">{t('billing.availablePlans')}</h2>
 
         <div className="flex flex-wrap items-center gap-4 mb-6">
           <Tabs
@@ -187,10 +190,10 @@ export default function BillingPage(): React.ReactElement {
             onValueChange={(v) => setSelectedInterval(v as 'month' | 'year')}
           >
             <TabsList>
-              <TabsTrigger value="month">Monthly</TabsTrigger>
+              <TabsTrigger value="month">{t('billing.monthly')}</TabsTrigger>
               <TabsTrigger value="year">
-                Yearly
-                <span className="ml-1 text-xs text-green-600">(Save 20%)</span>
+                {t('billing.yearly')}
+                <span className="ml-1 text-xs text-green-600">{t('billing.save20')}</span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -217,17 +220,17 @@ export default function BillingPage(): React.ReactElement {
             <CardHeader className="pb-3">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Tag className="h-5 w-5" />
-                Discount Code
+                {t('billing.discountCode')}
               </CardTitle>
               <CardDescription>
-                Enter a discount code to apply to your subscription
+                {t('billing.discountCodeDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <Input
-                    placeholder="Enter discount code"
+                    placeholder={t('billing.enterDiscountCode')}
                     value={discountCode}
                     onChange={(e) => {
                       setDiscountCode(e.target.value.toUpperCase())
@@ -253,13 +256,13 @@ export default function BillingPage(): React.ReactElement {
                 <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
                   <div className="flex items-center gap-2 text-green-700">
                     <CheckCircle className="h-4 w-4" />
-                    <span className="font-medium">Discount Applied!</span>
+                    <span className="font-medium">{t('billing.discountApplied')}</span>
                   </div>
                   <div className="mt-1 text-sm text-green-600">
-                    <p>Original: {formatAmount(discountValidation.originalAmount, selectedCurrency)}</p>
-                    <p>Discount: -{formatAmount(discountValidation.discountApplied, selectedCurrency)}</p>
+                    <p>{t('billing.original')}: {formatAmount(discountValidation.originalAmount, selectedCurrency)}</p>
+                    <p>{t('billing.discount')}: -{formatAmount(discountValidation.discountApplied, selectedCurrency)}</p>
                     <p className="font-semibold">
-                      New Price: {formatAmount(discountValidation.discountedAmount, selectedCurrency)}
+                      {t('billing.newPrice')}: {formatAmount(discountValidation.discountedAmount, selectedCurrency)}
                     </p>
                   </div>
                 </div>
@@ -267,7 +270,7 @@ export default function BillingPage(): React.ReactElement {
 
               {discountCode && !discountValidation && !validatingDiscount && (
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Click on a plan to validate the discount code
+                  {t('billing.clickPlanToValidate')}
                 </p>
               )}
             </CardContent>
@@ -315,7 +318,7 @@ export default function BillingPage(): React.ReactElement {
       {!user && (
         <div className="mt-8 p-4 bg-muted rounded text-center">
           <p className="text-muted-foreground">
-            Please <a href="/auth/login" className="text-primary underline">sign in</a> to manage your subscription.
+            {t('billing.pleaseSignInPrefix')} <Link href="/login" className="text-primary underline">{t('billing.signIn')}</Link> {t('billing.pleaseSignInSuffix')}
           </p>
         </div>
       )}

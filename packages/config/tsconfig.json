@@ -18,6 +18,6 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },
-  "include": ["plugins.*.ts", "main-app.ts", "main-app.client.ts"],
+  "include": ["plugins.*.ts", "main-app.ts", "main-app.client.ts", "*.d.ts"],
   "exclude": ["node_modules"]
 }

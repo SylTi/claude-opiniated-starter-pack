@@ -6,6 +6,7 @@
  */
 
 import type { NavItem, NavItemsContext, NavLinksConfig } from './types.js'
+import { navLinksText, translations } from './translations.js'
 
 /**
  * Default configuration.
@@ -14,7 +15,7 @@ const defaultConfig: NavLinksConfig = {
   links: [
     {
       id: 'custom-docs',
-      label: 'Documentation',
+      label: navLinksText('defaults.documentation'),
       href: '/docs',
       icon: 'book',
       order: 100,
@@ -113,5 +114,6 @@ export function register(context: {
   console.log('[nav-links] Plugin registered')
 }
 
+export { translations }
 // Export types
 export type { NavItem, NavItemsContext, NavLinksConfig }

@@ -92,7 +92,10 @@ All tenant routes require authentication. The `X-Tenant-ID` header can be includ
 |--------|----------|-------------|
 | POST | `/tenants/:id/switch` | Switch current tenant |
 | POST | `/tenants/:id/members` | Add member to tenant |
+| PUT | `/tenants/:id/members/:userId/role` | Update member role (owner only) |
 | DELETE | `/tenants/:id/members/:userId` | Remove member from tenant |
+| GET | `/tenants/:id/quotas` | Get tenant quota usage and limits |
+| PUT | `/tenants/:id/quotas` | Update tenant quota overrides |
 | POST | `/tenants/:id/leave` | Leave tenant (owner cannot leave) |
 
 ### Tenant Invitations
@@ -285,6 +288,45 @@ Delivery model:
 
 ---
 
+## Workers Plugin (requires auth + tenant context + plugin enabled)
+
+Base prefix: `/api/v1/apps/workers`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin/stats` | Read worker queue counters |
+| GET | `/admin/tasks` | List worker tasks |
+| GET | `/admin/tasks/:id` | Get one worker task |
+| GET | `/admin/tasks/:id/attempts` | List attempt history for one task |
+| POST | `/admin/tasks` | Enqueue worker task |
+| POST | `/admin/tasks/:id/cancel` | Cancel pending/failed/processing task |
+| POST | `/admin/tasks/:id/requeue` | Requeue terminal task (`failed`, `dead_letter`, `cancelled`, `succeeded`) |
+| POST | `/admin/dispatch` | Run worker dispatch loop for due jobs |
+
+Feature-gate behavior:
+- Disabled route feature returns `403` with `{ "error": "E_FEATURE_DISABLED", "message": "Feature <id> is disabled for this tenant" }`
+- Route to feature mapping:
+  - `monitoring` -> `/admin/stats`, `/admin/tasks`, `/admin/tasks/:id`, `/admin/tasks/:id/attempts`
+  - `enqueue` -> `/admin/tasks` (POST)
+  - `manage` -> `/admin/tasks/:id/cancel`
+  - `replay` -> `/admin/tasks/:id/requeue`
+  - `dispatch` -> `/admin/dispatch`
+
+Authorization model:
+- Namespace: `workers.`
+- Abilities:
+  - `workers.task.enqueue`
+  - `workers.task.read`
+  - `workers.task.dispatch`
+  - `workers.task.manage`
+
+Task execution model:
+- Generic queue payload (`taskType`, `handlerKey`, arbitrary JSON `payload`) with retries and dead-letter state.
+- Built-in handlers: `noop`, `fail_test`, `http_request`, `hook_action`, `webhooks_event`.
+- Webhook integration is optional: `webhooks_event` only succeeds when `webhooks` plugin is enabled for the tenant; otherwise task fails/retries/dead-letters normally.
+
+---
+
 ## Wiki Plugin (requires auth + tenant context + plugin enabled)
 
 Base prefix: `/api/v1/apps/wiki`
@@ -350,7 +392,11 @@ Base prefix: `/api/v1/apps/calendar`
 | DELETE | `/events/:id/reminders/:reminderId` | Cancel reminder |
 | POST | `/events/:id/recurrence` | Set recurrence rule (feature-gated) |
 | DELETE | `/events/:id/recurrence` | Clear recurrence rule (feature-gated) |
+| GET | `/admin/booking/config` | Read tenant booking page config |
+| PUT | `/admin/booking/config` | Update tenant booking page config (owner/admin only) |
 | POST | `/admin/reminders/dispatch` | Process due reminders and send notifications |
+| GET | `/public/booking/:tenantId/:pageSlug/slots` | Public: list bookable slots for a date (`?date=YYYY-MM-DD`) |
+| POST | `/public/booking/:tenantId/:pageSlug/reservations` | Public: reserve one slot |
 
 Feature-gate behavior:
 - Disabled route feature returns `403` with `{ "error": "E_FEATURE_DISABLED", "message": "Feature <id> is disabled for this tenant" }`
@@ -359,6 +405,8 @@ Feature-gate behavior:
   - `attendees` -> attendee and RSVP routes
   - `reminders` -> reminder create/delete and dispatch route
   - `recurrence` -> recurrence set/clear routes
+  - `booking` -> `/admin/booking/config` (read/update)
+  - public booking routes validate plugin state/feature/page visibility in-handler
 
 Authorization model:
 - Namespace: `calendar.`
@@ -373,6 +421,36 @@ Authorization model:
 Reminder model:
 - Reminders are persisted in plugin tables and dispatched from `/admin/reminders/dispatch`.
 - Dispatch writes execution rows, retries transient failures with bounded backoff, and marks terminal failures.
+
+Public booking model:
+- Admin defines `slotDurationMinutes` in booking config.
+- Public users can only book generated slots of exactly that duration.
+- Reservations create confirmed calendar events and attendee rows with guest email/name.
+
+---
+
+## Analytics Plugin (requires auth + tenant context + plugin enabled)
+
+Base prefix: `/api/v1/apps/analytics`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/overview` | KPI overview (DAU, MAU, MRR, ARR, churn, LTV, ARPU) |
+| GET | `/active-users` | Active users time series (`?from=YYYY-MM-DD&to=YYYY-MM-DD`) |
+| GET | `/mrr` | MRR/ARR trend time series (`?from=YYYY-MM-DD&to=YYYY-MM-DD`) |
+| GET | `/revenue` | Revenue totals and LTV over a date range |
+| GET | `/cohorts` | Cohort retention analysis (D7/D14/D30) |
+| GET | `/funnels` | Funnel conversion analysis |
+| GET | `/alerts/evaluate` | Evaluate alert rules against current metric values |
+| GET | `/reports/custom` | Run persisted custom reports from plugin config |
+| POST | `/reports/run` | Run an ad-hoc report (`dataset`, `from`, `to`) |
+| GET | `/exports` | Export report dataset (`format=csv|excel|pdf`, `dataset`, `from`, `to`) |
+| GET | `/admin/config` | Read analytics admin config (owner/admin only) |
+| PUT | `/admin/config` | Update analytics admin config (owner/admin only) |
+
+Notes:
+- Admin config includes `customReports`, `alertRules`, and `funnelSteps`.
+- All successful responses use `{ data, message? }`, failures use `{ error, message, errors? }`.
 
 ---
 
@@ -397,6 +475,8 @@ All admin routes require authentication and admin role.
 |--------|----------|-------------|
 | GET | `/admin/tenants` | List all tenants |
 | PUT | `/admin/tenants/:id/tier` | Update tenant subscription tier |
+| GET | `/admin/tenants/:id/quotas` | Get tenant quota settings and effective limits |
+| PUT | `/admin/tenants/:id/quotas` | Update tenant quota overrides |
 
 ### Subscription Tiers
 
@@ -499,12 +579,14 @@ All admin routes require authentication and admin role.
 
 - `owner`: Full control, cannot leave tenant
 - `admin`: Can manage members and invitations
-- `member`: Basic access
+- `member`: Standard tenant member access
+- `viewer`: Read-only tenant access
 
 ## Invitation Roles
 
 - `admin`: Invited as admin
 - `member`: Invited as member
+- `viewer`: Invited as read-only viewer
 
 ---
 

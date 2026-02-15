@@ -29,6 +29,10 @@
       "types": "./dist/navigation/index.d.ts",
       "default": "./dist/navigation/index.js"
     },
+    "./i18n": {
+      "types": "./dist/i18n/index.d.ts",
+      "default": "./dist/i18n/index.js"
+    },
     "./framework": {
       "types": "./dist/framework/framework-context.d.ts",
       "default": "./dist/framework/framework-context.js"

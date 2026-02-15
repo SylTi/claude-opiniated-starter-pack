@@ -31,6 +31,18 @@ export const updateTenantTierValidator = vine.compile(
 )
 
 /**
+ * Validator for updating tenant quota overrides (admin)
+ */
+export const updateTenantQuotasValidator = vine.compile(
+  vine.object({
+    maxMembers: vine.number().min(1).nullable().optional(),
+    maxPendingInvitations: vine.number().min(1).nullable().optional(),
+    maxAuthTokensPerTenant: vine.number().min(1).nullable().optional(),
+    maxAuthTokensPerUser: vine.number().min(1).nullable().optional(),
+  })
+)
+
+/**
  * Validator for creating a subscription tier (admin)
  */
 export const createTierValidator = vine.compile(

@@ -10,6 +10,9 @@ export * from "./types/rbac.js";
 export * from "./types/audit.js";
 export * from "./types/authz.js";
 export * from "./types/plugin.js";
+export * from "./types/notification_preference.js";
+export * from "./types/messaging.js";
+export * from "./types/support.js";
 
 // Enterprise types - re-exported from separate file
 // On public repo, index.enterprise.ts is empty (exports nothing)

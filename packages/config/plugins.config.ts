@@ -5,6 +5,7 @@
  *
  * Currently configured for: @plugins/main-app
  */
+/// <reference path="./plugins-modules.d.ts" />
 
 import type { PluginManifest } from '@saas/plugins-core'
 
@@ -30,36 +31,11 @@ export type PluginConfig = {
   manifestImport: () => Promise<unknown>
 }
 
-type PluginConfigOptions = {
-  packageName?: string
-  serverEntrypoint?: string
-  clientEntrypoint?: string
-  manifestEntrypoint?: string
-}
-
 /**
- * Create a plugin config using convention-based defaults.
- *
- * Defaults:
- * - packageName: @plugins/{id}
- * - serverEntrypoint: packageName
- * - clientEntrypoint: {packageName}/client
- * - manifestEntrypoint: {packageName}/plugin.meta.json
+ * NOTE: Each plugin MUST use literal string imports (not variables) so that
+ * Turbopack can statically analyze and resolve them at build time.
+ * Do NOT use createPluginConfig() with dynamic variable imports.
  */
-function createPluginConfig(id: string, options: PluginConfigOptions = {}): PluginConfig {
-  const packageName = options.packageName ?? `@plugins/${id}`
-  const serverEntrypoint = options.serverEntrypoint ?? packageName
-  const clientEntrypoint = options.clientEntrypoint ?? `${packageName}/client`
-  const manifestEntrypoint = options.manifestEntrypoint ?? `${packageName}/plugin.meta.json`
-
-  return {
-    id,
-    packageName,
-    serverEntrypoint,
-    clientImport: () => import(clientEntrypoint),
-    manifestImport: () => import(manifestEntrypoint),
-  }
-}
 
 // =============================================================================
 // MAIN-APP PLUGIN
@@ -85,11 +61,19 @@ export const MAIN_APP_PLUGIN: PluginConfig = {
  * Additional plugins to load (besides main-app).
  */
 export const ADDITIONAL_PLUGINS: Record<string, PluginConfig> = {
-  'nav-links': createPluginConfig('nav-links', {
+  'nav-links': {
+    id: 'nav-links',
+    packageName: '@plugins/nav-links',
     serverEntrypoint: '@plugins/nav-links/server',
-    clientEntrypoint: '@plugins/nav-links',
-  }),
-  notes: createPluginConfig('notes'),
+    clientImport: () => import('@plugins/nav-links'),
+    manifestImport: () => import('@plugins/nav-links/plugin.meta.json'),
+  },
+  notes: {
+    id: 'notes',
+    packageName: '@plugins/notes',
+    clientImport: () => import('@plugins/notes/client'),
+    manifestImport: () => import('@plugins/notes/plugin.meta.json'),
+  },
 }
 
 // =============================================================================

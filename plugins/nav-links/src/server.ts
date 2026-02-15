@@ -7,6 +7,7 @@
 
 import type { NavSection, NavItem as CoreNavItem } from '@saas/plugins-core'
 import type { NavLinksConfig } from './types.js'
+import { navLinksText } from './translations.js'
 
 /**
  * Default configuration.
@@ -15,7 +16,7 @@ const defaultConfig: NavLinksConfig = {
   links: [
     {
       id: 'custom-docs',
-      label: 'Documentation',
+      label: navLinksText('defaults.documentation'),
       href: '/docs',
       icon: 'book',
       order: 100,
@@ -85,7 +86,7 @@ export function navItemsFilter(
   if (!mainSection) {
     mainSection = {
       id: 'core.main',
-      label: 'Main',
+      label: navLinksText('nav.mainSection'),
       order: 100,
       items: [],
     }

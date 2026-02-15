@@ -19,7 +19,13 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@saas/shared": ["../../packages/shared/dist/index.js"],
+      "@saas/plugins-core": ["../../packages/plugins-core/dist/index.js"],
+      "@saas/plugins-core/*": ["../../packages/plugins-core/dist/*"],
+      "@saas/ui": ["../../packages/ui/src/index.ts"],
+      "@saas/ui/*": ["../../packages/ui/src/*"],
+      "@plugins/*": ["../../plugins/*/src"]
     }
   },
   "include": [

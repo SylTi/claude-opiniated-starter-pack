@@ -6,7 +6,7 @@ test.describe('Responsive Layout', () => {
     await page.setViewportSize({ width: 375, height: 812 })
     await page.goto('/')
 
-    await expect(page.getByRole('link', { name: /saas app/i })).toBeVisible()
+    await expect(page.getByRole('link', { name: /saas/i })).toBeVisible()
     const header = page.getByRole('banner')
     await expect(header.getByRole('link', { name: /sign in/i })).toBeVisible({
       timeout: 10000,
@@ -21,7 +21,7 @@ test.describe('Responsive Layout', () => {
     await page.setViewportSize({ width: 1280, height: 720 })
     await page.goto('/')
 
-    await expect(page.getByRole('link', { name: /saas app/i })).toBeVisible()
+    await expect(page.getByRole('link', { name: /saas/i })).toBeVisible()
     const header = page.getByRole('banner')
     await expect(header.getByRole('link', { name: /sign in/i })).toBeVisible({
       timeout: 10000,

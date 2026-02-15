@@ -1,8 +1,9 @@
-"use client";
+"use client"
 
-import { useCallback, useEffect, useState } from "react";
-import { adminBillingApi, ApiError } from "@/lib/api";
-import type { SubscriptionTierDTO } from "@saas/shared";
+import { useCallback, useEffect, useState } from "react"
+import { adminBillingApi, ApiError } from "@/lib/api"
+import { useI18n } from "@/contexts/i18n-context"
+import type { SubscriptionTierDTO } from "@saas/shared"
 import {
   Table,
   TableBody,
@@ -10,13 +11,13 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+} from "@saas/ui/table"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@saas/ui/card"
+import { Button } from "@saas/ui/button"
+import { Badge } from "@saas/ui/badge"
+import { Input } from "@saas/ui/input"
+import { Label } from "@saas/ui/label"
+import { Textarea } from "@saas/ui/textarea"
 import {
   Dialog,
   DialogContent,
@@ -24,9 +25,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Loader2, Plus, Pencil, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+} from "@saas/ui/dialog"
+import { Loader2, Plus, Pencil, Trash2 } from "lucide-react"
+import { toast } from "sonner"
 
 type TierFormState = {
   slug: string;
@@ -35,6 +36,9 @@ type TierFormState = {
   maxTeamMembers: string;
   priceMonthly: string;
   yearlyDiscountPercent: string;
+  quotaMaxPendingInvitations: string;
+  quotaMaxAuthTokensPerTenant: string;
+  quotaMaxAuthTokensPerUser: string;
   features: string;
   isActive: boolean;
 };
@@ -46,49 +50,87 @@ const defaultFormState: TierFormState = {
   maxTeamMembers: "",
   priceMonthly: "",
   yearlyDiscountPercent: "",
+  quotaMaxPendingInvitations: "",
+  quotaMaxAuthTokensPerTenant: "",
+  quotaMaxAuthTokensPerUser: "",
   features: "",
   isActive: true,
-};
+}
+
+function readQuotaValue(source: Record<string, unknown>, camelKey: string, snakeKey: string): string {
+  const raw = source[camelKey] ?? source[snakeKey]
+  if (typeof raw === "number" && Number.isInteger(raw) && raw > 0) {
+    return String(raw)
+  }
+  return ""
+}
+
+function parseQuotaInput(
+  value: string,
+  errorMessage: string,
+): { hasValue: false } | { hasValue: true; value: number } | null {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return { hasValue: false }
+  }
+  const parsed = Number(trimmed)
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    toast.error(errorMessage)
+    return null
+  }
+  return { hasValue: true, value: parsed }
+}
 
 export default function AdminTiersPage(): React.ReactElement {
-  const [tiers, setTiers] = useState<SubscriptionTierDTO[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingTier, setEditingTier] = useState<SubscriptionTierDTO | null>(null);
-  const [formData, setFormData] = useState<TierFormState>(defaultFormState);
+  const { t } = useI18n("skeleton")
+  const [tiers, setTiers] = useState<SubscriptionTierDTO[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingTier, setEditingTier] = useState<SubscriptionTierDTO | null>(null)
+  const [formData, setFormData] = useState<TierFormState>(defaultFormState)
 
   const fetchTiers = useCallback(async (): Promise<void> => {
     try {
-      const data = await adminBillingApi.listTiers();
-      setTiers(data);
+      const data = await adminBillingApi.listTiers()
+      setTiers(data)
     } catch (error) {
       if (error instanceof ApiError) {
-        toast.error(error.message);
+        toast.error(error.message)
       } else {
-        toast.error("Failed to fetch tiers");
+        toast.error(t("adminTiers.fetchError"))
       }
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  }, []);
+  }, [t])
 
   useEffect(() => {
-    fetchTiers();
-  }, [fetchTiers]);
+    fetchTiers()
+  }, [fetchTiers])
 
   const resetForm = (): void => {
-    setFormData(defaultFormState);
-    setEditingTier(null);
-  };
+    setFormData(defaultFormState)
+    setEditingTier(null)
+  }
 
   const openCreateDialog = (): void => {
-    resetForm();
-    setIsDialogOpen(true);
-  };
+    resetForm()
+    setIsDialogOpen(true)
+  }
 
   const openEditDialog = (tier: SubscriptionTierDTO): void => {
-    setEditingTier(tier);
+    const quotaSource =
+      tier.features &&
+      typeof tier.features === "object" &&
+      !Array.isArray(tier.features) &&
+      tier.features.quotas &&
+      typeof tier.features.quotas === "object" &&
+      !Array.isArray(tier.features.quotas)
+        ? (tier.features.quotas as Record<string, unknown>)
+        : {}
+
+    setEditingTier(tier)
     setFormData({
       slug: tier.slug,
       name: tier.name,
@@ -96,11 +138,26 @@ export default function AdminTiersPage(): React.ReactElement {
       maxTeamMembers: tier.maxTeamMembers?.toString() ?? "",
       priceMonthly: tier.priceMonthly?.toString() ?? "",
       yearlyDiscountPercent: tier.yearlyDiscountPercent?.toString() ?? "",
+      quotaMaxPendingInvitations: readQuotaValue(
+        quotaSource,
+        "maxPendingInvitations",
+        "max_pending_invitations",
+      ),
+      quotaMaxAuthTokensPerTenant: readQuotaValue(
+        quotaSource,
+        "maxAuthTokensPerTenant",
+        "max_auth_tokens_per_tenant",
+      ),
+      quotaMaxAuthTokensPerUser: readQuotaValue(
+        quotaSource,
+        "maxAuthTokensPerUser",
+        "max_auth_tokens_per_user",
+      ),
       features: tier.features ? JSON.stringify(tier.features, null, 2) : "",
       isActive: tier.isActive,
-    });
-    setIsDialogOpen(true);
-  };
+    })
+    setIsDialogOpen(true)
+  }
 
   const buildPayload = (allowNullFeatures: boolean): {
     slug?: string;
@@ -112,21 +169,87 @@ export default function AdminTiersPage(): React.ReactElement {
     features?: Record<string, unknown> | null;
     isActive?: boolean;
   } | null => {
-    let features: Record<string, unknown> | null | undefined;
+    let features: Record<string, unknown> | null | undefined
     if (!formData.features.trim()) {
-      features = allowNullFeatures ? null : undefined;
+      features = allowNullFeatures ? null : undefined
     } else {
       try {
-        const parsed = JSON.parse(formData.features);
+        const parsed = JSON.parse(formData.features)
         if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
-          toast.error("Features must be a JSON object");
-          return null;
+          toast.error(t("adminTiers.featuresMustBeJsonObject"))
+          return null
         }
-        features = parsed as Record<string, unknown>;
+        features = parsed as Record<string, unknown>
       } catch {
-        toast.error("Features must be valid JSON");
-        return null;
+        toast.error(t("adminTiers.featuresMustBeValidJson"))
+        return null
       }
+    }
+
+    const pendingInvitesInput = parseQuotaInput(
+      formData.quotaMaxPendingInvitations,
+      t("adminTiers.maxPendingInvitationsValidation"),
+    )
+    if (!pendingInvitesInput) {
+      return null
+    }
+
+    const perTenantTokensInput = parseQuotaInput(
+      formData.quotaMaxAuthTokensPerTenant,
+      t("adminTiers.maxTokensPerTenantValidation"),
+    )
+    if (!perTenantTokensInput) {
+      return null
+    }
+
+    const perUserTokensInput = parseQuotaInput(
+      formData.quotaMaxAuthTokensPerUser,
+      t("adminTiers.maxTokensPerUserValidation"),
+    )
+    if (!perUserTokensInput) {
+      return null
+    }
+
+    const hasAnyQuotaDefault =
+      pendingInvitesInput.hasValue || perTenantTokensInput.hasValue || perUserTokensInput.hasValue
+
+    const nextFeatures =
+      features === undefined || features === null ? {} : { ...features }
+    const currentQuotasRaw = nextFeatures.quotas
+    const currentQuotas =
+      currentQuotasRaw && typeof currentQuotasRaw === "object" && !Array.isArray(currentQuotasRaw)
+        ? { ...(currentQuotasRaw as Record<string, unknown>) }
+        : {}
+
+    delete currentQuotas.maxPendingInvitations
+    delete currentQuotas.max_pending_invitations
+    delete currentQuotas.maxAuthTokensPerTenant
+    delete currentQuotas.max_auth_tokens_per_tenant
+    delete currentQuotas.maxAuthTokensPerUser
+    delete currentQuotas.max_auth_tokens_per_user
+
+    if (pendingInvitesInput.hasValue) {
+      currentQuotas.maxPendingInvitations = pendingInvitesInput.value
+    }
+    if (perTenantTokensInput.hasValue) {
+      currentQuotas.maxAuthTokensPerTenant = perTenantTokensInput.value
+    }
+    if (perUserTokensInput.hasValue) {
+      currentQuotas.maxAuthTokensPerUser = perUserTokensInput.value
+    }
+
+    if (Object.keys(currentQuotas).length > 0) {
+      nextFeatures.quotas = currentQuotas
+    } else {
+      delete nextFeatures.quotas
+    }
+
+    if (hasAnyQuotaDefault || Object.keys(nextFeatures).length > 0) {
+      features = nextFeatures
+    } else if (allowNullFeatures) {
+      features = null
+    } else {
+      features = undefined
     }
 
     return {
@@ -142,24 +265,24 @@ export default function AdminTiersPage(): React.ReactElement {
         : null,
       features,
       isActive: formData.isActive,
-    };
-  };
+    }
+  }
 
   const handleSubmit = async (): Promise<void> => {
-    const payload = buildPayload(!!editingTier);
+    const payload = buildPayload(!!editingTier)
     if (!payload) {
-      return;
+      return
     }
 
     try {
-      setActionLoading(true);
+      setActionLoading(true)
       if (editingTier) {
-        await adminBillingApi.updateTier(editingTier.id, payload);
-        toast.success("Tier updated successfully");
+        await adminBillingApi.updateTier(editingTier.id, payload)
+        toast.success(t("adminTiers.updateSuccess"))
       } else {
         if (!payload.slug || !payload.name) {
-          toast.error("Slug and name are required");
-          return;
+          toast.error(t("adminTiers.slugNameRequired"))
+          return
         }
         await adminBillingApi.createTier({
           slug: payload.slug,
@@ -170,67 +293,69 @@ export default function AdminTiersPage(): React.ReactElement {
           yearlyDiscountPercent: payload.yearlyDiscountPercent ?? undefined,
           features: payload.features ?? undefined,
           isActive: payload.isActive ?? true,
-        });
-        toast.success("Tier created successfully");
+        })
+        toast.success(t("adminTiers.createSuccess"))
       }
-      setIsDialogOpen(false);
-      resetForm();
-      fetchTiers();
+      setIsDialogOpen(false)
+      resetForm()
+      fetchTiers()
     } catch (error) {
       if (error instanceof ApiError) {
-        toast.error(error.message);
+        toast.error(error.message)
       } else {
-        toast.error("Failed to save tier");
+        toast.error(t("adminTiers.saveError"))
       }
     } finally {
-      setActionLoading(false);
+      setActionLoading(false)
     }
-  };
+  }
 
   const handleToggleActive = async (tier: SubscriptionTierDTO): Promise<void> => {
     try {
-      setActionLoading(true);
-      await adminBillingApi.updateTier(tier.id, { isActive: !tier.isActive });
-      toast.success(`Tier ${tier.isActive ? "disabled" : "enabled"}`);
-      fetchTiers();
+      setActionLoading(true)
+      await adminBillingApi.updateTier(tier.id, { isActive: !tier.isActive })
+      toast.success(
+        t(tier.isActive ? "adminTiers.disabledSuccess" : "adminTiers.enabledSuccess"),
+      )
+      fetchTiers()
     } catch (error) {
       if (error instanceof ApiError) {
-        toast.error(error.message);
+        toast.error(error.message)
       } else {
-        toast.error("Failed to update tier");
+        toast.error(t("adminTiers.updateError"))
       }
     } finally {
-      setActionLoading(false);
+      setActionLoading(false)
     }
-  };
+  }
 
   const handleDelete = async (tier: SubscriptionTierDTO): Promise<void> => {
-    if (!confirm(`Delete tier "${tier.name}"? This cannot be undone.`)) {
-      return;
+    if (!confirm(t("adminTiers.confirmDelete", { name: tier.name }))) {
+      return
     }
 
     try {
-      setActionLoading(true);
-      await adminBillingApi.deleteTier(tier.id);
-      toast.success("Tier deleted successfully");
-      fetchTiers();
+      setActionLoading(true)
+      await adminBillingApi.deleteTier(tier.id)
+      toast.success(t("adminTiers.deleteSuccess"))
+      fetchTiers()
     } catch (error) {
       if (error instanceof ApiError) {
-        toast.error(error.message);
+        toast.error(error.message)
       } else {
-        toast.error("Failed to delete tier");
+        toast.error(t("adminTiers.deleteError"))
       }
     } finally {
-      setActionLoading(false);
+      setActionLoading(false)
     }
-  };
+  }
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
-    );
+    )
   }
 
   return (
@@ -239,14 +364,14 @@ export default function AdminTiersPage(): React.ReactElement {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Subscription Tiers</CardTitle>
+              <CardTitle>{t("adminTiers.title")}</CardTitle>
               <CardDescription>
-                Manage plan names, levels, limits, and availability.
+                {t("adminTiers.description")}
               </CardDescription>
             </div>
             <Button onClick={openCreateDialog}>
               <Plus className="h-4 w-4 mr-2" />
-              New Tier
+              {t("adminTiers.newTier")}
             </Button>
           </div>
         </CardHeader>
@@ -254,14 +379,14 @@ export default function AdminTiersPage(): React.ReactElement {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Slug</TableHead>
-                <TableHead>Level</TableHead>
-                <TableHead>Team Limit</TableHead>
-                <TableHead>Price Monthly</TableHead>
-                <TableHead>Discount %</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("adminTiers.tableName")}</TableHead>
+                <TableHead>{t("adminTiers.tableSlug")}</TableHead>
+                <TableHead>{t("adminTiers.tableLevel")}</TableHead>
+                <TableHead>{t("adminTiers.tableTeamLimit")}</TableHead>
+                <TableHead>{t("adminTiers.tablePriceMonthly")}</TableHead>
+                <TableHead>{t("adminTiers.tableDiscount")}</TableHead>
+                <TableHead>{t("adminTiers.tableStatus")}</TableHead>
+                <TableHead className="text-right">{t("adminTiers.tableActions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -271,7 +396,7 @@ export default function AdminTiersPage(): React.ReactElement {
                     colSpan={8}
                     className="text-center text-muted-foreground py-8"
                   >
-                    No tiers found
+                    {t("adminTiers.noTiers")}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -280,12 +405,12 @@ export default function AdminTiersPage(): React.ReactElement {
                     <TableCell className="font-medium">{tier.name}</TableCell>
                     <TableCell className="font-mono text-sm">{tier.slug}</TableCell>
                     <TableCell>{tier.level}</TableCell>
-                    <TableCell>{tier.maxTeamMembers ?? "-"}</TableCell>
-                    <TableCell>{tier.priceMonthly ?? "-"}</TableCell>
-                    <TableCell>{tier.yearlyDiscountPercent ?? "-"}</TableCell>
+                    <TableCell>{tier.maxTeamMembers ?? t("adminTiers.notAvailable")}</TableCell>
+                    <TableCell>{tier.priceMonthly ?? t("adminTiers.notAvailable")}</TableCell>
+                    <TableCell>{tier.yearlyDiscountPercent ?? t("adminTiers.notAvailable")}</TableCell>
                     <TableCell>
                       <Badge variant={tier.isActive ? "default" : "outline"}>
-                        {tier.isActive ? "Active" : "Inactive"}
+                        {tier.isActive ? t("adminTiers.active") : t("adminTiers.inactive")}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -297,7 +422,7 @@ export default function AdminTiersPage(): React.ReactElement {
                           disabled={actionLoading}
                         >
                           <Pencil className="h-4 w-4 mr-1" />
-                          Edit
+                          {t("adminTiers.edit")}
                         </Button>
                         <Button
                           variant="outline"
@@ -306,7 +431,7 @@ export default function AdminTiersPage(): React.ReactElement {
                           disabled={actionLoading}
                         >
                           <Trash2 className="h-4 w-4 mr-1" />
-                          Delete
+                          {t("adminTiers.delete")}
                         </Button>
                         <Button
                           variant="outline"
@@ -314,7 +439,7 @@ export default function AdminTiersPage(): React.ReactElement {
                           onClick={() => handleToggleActive(tier)}
                           disabled={actionLoading}
                         >
-                          {tier.isActive ? "Disable" : "Enable"}
+                          {tier.isActive ? t("adminTiers.disable") : t("adminTiers.enable")}
                         </Button>
                       </div>
                     </TableCell>
@@ -329,14 +454,14 @@ export default function AdminTiersPage(): React.ReactElement {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editingTier ? "Edit Tier" : "Create Tier"}</DialogTitle>
+            <DialogTitle>{editingTier ? t("adminTiers.editTier") : t("adminTiers.createTier")}</DialogTitle>
             <DialogDescription>
-              Keep levels ordered from lowest to highest for access control.
+              {t("adminTiers.dialogDescription")}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="tier-name">Name</Label>
+              <Label htmlFor="tier-name">{t("adminTiers.fieldName")}</Label>
               <Input
                 id="tier-name"
                 value={formData.name}
@@ -346,7 +471,7 @@ export default function AdminTiersPage(): React.ReactElement {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="tier-slug">Slug</Label>
+              <Label htmlFor="tier-slug">{t("adminTiers.fieldSlug")}</Label>
               <Input
                 id="tier-slug"
                 value={formData.slug}
@@ -357,7 +482,7 @@ export default function AdminTiersPage(): React.ReactElement {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="tier-level">Level</Label>
+              <Label htmlFor="tier-level">{t("adminTiers.fieldLevel")}</Label>
               <Input
                 id="tier-level"
                 type="number"
@@ -369,7 +494,7 @@ export default function AdminTiersPage(): React.ReactElement {
             </div>
             <div className="grid gap-2 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="tier-team-limit">Max Team Members</Label>
+                <Label htmlFor="tier-team-limit">{t("adminTiers.fieldMaxTeamMembers")}</Label>
                 <Input
                   id="tier-team-limit"
                   type="number"
@@ -383,7 +508,7 @@ export default function AdminTiersPage(): React.ReactElement {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="tier-price-monthly">Price Monthly</Label>
+                <Label htmlFor="tier-price-monthly">{t("adminTiers.fieldPriceMonthly")}</Label>
                 <Input
                   id="tier-price-monthly"
                   type="number"
@@ -399,7 +524,7 @@ export default function AdminTiersPage(): React.ReactElement {
             </div>
             <div className="grid gap-2 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="tier-discount">Yearly Discount %</Label>
+                <Label htmlFor="tier-discount">{t("adminTiers.fieldYearlyDiscount")}</Label>
                 <Input
                   id="tier-discount"
                   type="number"
@@ -424,11 +549,64 @@ export default function AdminTiersPage(): React.ReactElement {
                     }))
                   }
                 />
-                <Label htmlFor="tier-active">Active</Label>
+                <Label htmlFor="tier-active">{t("adminTiers.active")}</Label>
               </div>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="tier-features">Features (JSON)</Label>
+              <Label htmlFor="tier-features">{t("adminTiers.fieldFeaturesJson")}</Label>
+              <p className="text-xs text-muted-foreground">
+                {t("adminTiers.featuresHint")}
+              </p>
+              <div className="grid gap-2 md:grid-cols-3">
+                <div className="grid gap-2">
+                  <Label htmlFor="tier-quota-pending">{t("adminTiers.maxPendingInvitations")}</Label>
+                  <Input
+                    id="tier-quota-pending"
+                    type="number"
+                    min={1}
+                    placeholder={t("adminTiers.noDefault")}
+                    value={formData.quotaMaxPendingInvitations}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        quotaMaxPendingInvitations: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="tier-quota-tenant-tokens">{t("adminTiers.maxTokensPerTenant")}</Label>
+                  <Input
+                    id="tier-quota-tenant-tokens"
+                    type="number"
+                    min={1}
+                    placeholder={t("adminTiers.noDefault")}
+                    value={formData.quotaMaxAuthTokensPerTenant}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        quotaMaxAuthTokensPerTenant: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="tier-quota-user-tokens">{t("adminTiers.maxTokensPerUser")}</Label>
+                  <Input
+                    id="tier-quota-user-tokens"
+                    type="number"
+                    min={1}
+                    placeholder={t("adminTiers.noDefault")}
+                    value={formData.quotaMaxAuthTokensPerUser}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        quotaMaxAuthTokensPerUser: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
               <Textarea
                 id="tier-features"
                 rows={6}
@@ -436,7 +614,7 @@ export default function AdminTiersPage(): React.ReactElement {
                 onChange={(event) =>
                   setFormData((prev) => ({ ...prev, features: event.target.value }))
                 }
-                placeholder='{"storage":"10GB","support":"email"}'
+                placeholder={t("adminTiers.featuresPlaceholder")}
               />
             </div>
           </div>
@@ -446,14 +624,14 @@ export default function AdminTiersPage(): React.ReactElement {
               onClick={() => setIsDialogOpen(false)}
               disabled={actionLoading}
             >
-              Cancel
+              {t("adminTiers.cancel")}
             </Button>
             <Button onClick={handleSubmit} disabled={actionLoading}>
-              {actionLoading ? "Saving..." : "Save Tier"}
+              {actionLoading ? t("adminTiers.saving") : t("adminTiers.saveTier")}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
-  );
+  )
 }

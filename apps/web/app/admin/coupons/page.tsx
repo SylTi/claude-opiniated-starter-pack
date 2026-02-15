@@ -1,8 +1,9 @@
-"use client";
+"use client"
 
-import { useCallback, useEffect, useState } from "react";
-import { adminCouponsApi, ApiError } from "@/lib/api";
-import type { CouponDTO } from "@saas/shared";
+import { useCallback, useEffect, useState } from "react"
+import { adminCouponsApi, ApiError } from "@/lib/api"
+import { useI18n } from "@/contexts/i18n-context"
+import type { CouponDTO } from "@saas/shared"
 import {
   Table,
   TableBody,
@@ -10,18 +11,18 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@saas/ui/table"
+import { Button } from "@saas/ui/button"
+import { Badge } from "@saas/ui/badge"
+import { Input } from "@saas/ui/input"
+import { Label } from "@saas/ui/label"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@saas/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -29,16 +30,17 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { Loader2, Plus, Pencil, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+} from "@saas/ui/dialog"
+import { Loader2, Plus, Pencil, Trash2 } from "lucide-react"
+import { toast } from "sonner"
 
 export default function AdminCouponsPage(): React.ReactElement {
-  const [coupons, setCoupons] = useState<CouponDTO[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingCoupon, setEditingCoupon] = useState<CouponDTO | null>(null);
+  const { locale, t } = useI18n("skeleton")
+  const [coupons, setCoupons] = useState<CouponDTO[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState<number | null>(null)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingCoupon, setEditingCoupon] = useState<CouponDTO | null>(null)
   const [formData, setFormData] = useState({
     code: "",
     description: "",
@@ -46,24 +48,24 @@ export default function AdminCouponsPage(): React.ReactElement {
     currency: "usd",
     expiresAt: "",
     isActive: true,
-  });
+  })
 
   const fetchCoupons = useCallback(async (): Promise<void> => {
     try {
-      const data = await adminCouponsApi.list();
-      setCoupons(data);
+      const data = await adminCouponsApi.list()
+      setCoupons(data)
     } catch (error) {
       if (error instanceof ApiError) {
-        toast.error(error.message);
+        toast.error(error.message)
       }
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    fetchCoupons();
-  }, [fetchCoupons]);
+    fetchCoupons()
+  }, [fetchCoupons])
 
   const resetForm = (): void => {
     setFormData({
@@ -73,21 +75,21 @@ export default function AdminCouponsPage(): React.ReactElement {
       currency: "usd",
       expiresAt: "",
       isActive: true,
-    });
-    setEditingCoupon(null);
-  };
+    })
+    setEditingCoupon(null)
+  }
 
   const openCreateDialog = (): void => {
-    resetForm();
-    setIsDialogOpen(true);
-  };
+    resetForm()
+    setIsDialogOpen(true)
+  }
 
   const openEditDialog = (coupon: CouponDTO): void => {
     if (coupon.redeemedByUserId !== null) {
-      toast.error("Cannot edit a redeemed coupon");
-      return;
+      toast.error(t("adminCoupons.cannotEditRedeemed"))
+      return
     }
-    setEditingCoupon(coupon);
+    setEditingCoupon(coupon)
     setFormData({
       code: coupon.code,
       description: coupon.description || "",
@@ -95,13 +97,13 @@ export default function AdminCouponsPage(): React.ReactElement {
       currency: coupon.currency,
       expiresAt: coupon.expiresAt ? coupon.expiresAt.split("T")[0] : "",
       isActive: coupon.isActive,
-    });
-    setIsDialogOpen(true);
-  };
+    })
+    setIsDialogOpen(true)
+  }
 
   const handleSubmit = async (): Promise<void> => {
     try {
-      setActionLoading(-1);
+      setActionLoading(-1)
       const payload = {
         code: formData.code,
         description: formData.description || undefined,
@@ -109,126 +111,128 @@ export default function AdminCouponsPage(): React.ReactElement {
         currency: formData.currency,
         expiresAt: formData.expiresAt || undefined,
         isActive: formData.isActive,
-      };
+      }
 
       if (editingCoupon) {
-        await adminCouponsApi.update(editingCoupon.id, payload);
-        toast.success("Coupon updated successfully");
+        await adminCouponsApi.update(editingCoupon.id, payload)
+        toast.success(t("adminCoupons.updateSuccess"))
       } else {
-        await adminCouponsApi.create(payload);
-        toast.success("Coupon created successfully");
+        await adminCouponsApi.create(payload)
+        toast.success(t("adminCoupons.createSuccess"))
       }
 
-      setIsDialogOpen(false);
-      resetForm();
-      fetchCoupons();
+      setIsDialogOpen(false)
+      resetForm()
+      fetchCoupons()
     } catch (error) {
       if (error instanceof ApiError) {
-        toast.error(error.message);
+        toast.error(error.message)
       }
     } finally {
-      setActionLoading(null);
+      setActionLoading(null)
     }
-  };
+  }
 
   const handleDelete = async (id: number): Promise<void> => {
-    if (!confirm("Are you sure you want to delete this coupon?")) {
-      return;
+    if (!confirm(t("adminCoupons.confirmDelete"))) {
+      return
     }
 
     try {
-      setActionLoading(id);
-      await adminCouponsApi.delete(id);
-      toast.success("Coupon deleted successfully");
-      fetchCoupons();
+      setActionLoading(id)
+      await adminCouponsApi.delete(id)
+      toast.success(t("adminCoupons.deleteSuccess"))
+      fetchCoupons()
     } catch (error) {
       if (error instanceof ApiError) {
-        toast.error(error.message);
+        toast.error(error.message)
       }
     } finally {
-      setActionLoading(null);
+      setActionLoading(null)
     }
-  };
+  }
 
   const handleToggleActive = async (coupon: CouponDTO): Promise<void> => {
     if (coupon.redeemedByUserId !== null) {
-      toast.error("Cannot modify a redeemed coupon");
-      return;
+      toast.error(t("adminCoupons.cannotModifyRedeemed"))
+      return
     }
     try {
-      setActionLoading(coupon.id);
-      await adminCouponsApi.update(coupon.id, { isActive: !coupon.isActive });
-      toast.success(`Coupon ${coupon.isActive ? "disabled" : "enabled"}`);
-      fetchCoupons();
+      setActionLoading(coupon.id)
+      await adminCouponsApi.update(coupon.id, { isActive: !coupon.isActive })
+      toast.success(
+        t(coupon.isActive ? "adminCoupons.disabledSuccess" : "adminCoupons.enabledSuccess"),
+      )
+      fetchCoupons()
     } catch (error) {
       if (error instanceof ApiError) {
-        toast.error(error.message);
+        toast.error(error.message)
       }
     } finally {
-      setActionLoading(null);
+      setActionLoading(null)
     }
-  };
+  }
 
   const formatDate = (dateString: string | null): string => {
-    if (!dateString) return "-";
-    return new Date(dateString).toLocaleDateString();
-  };
+    if (!dateString) return t("adminCoupons.notAvailable")
+    return new Date(dateString).toLocaleDateString(locale)
+  }
 
   const formatAmount = (amount: number, currency: string | undefined): string => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat(locale, {
       style: "currency",
       currency: (currency || "usd").toUpperCase(),
-    }).format(amount / 100);
-  };
+    }).format(amount / 100)
+  }
 
   const getCouponStatus = (coupon: CouponDTO): { label: string; variant: "default" | "secondary" | "destructive" } => {
     if (coupon.redeemedByUserId !== null) {
-      return { label: "Redeemed", variant: "secondary" };
+      return { label: t("adminCoupons.statusRedeemed"), variant: "secondary" }
     }
     if (!coupon.isActive) {
-      return { label: "Inactive", variant: "destructive" };
+      return { label: t("adminCoupons.statusInactive"), variant: "destructive" }
     }
     if (coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) {
-      return { label: "Expired", variant: "destructive" };
+      return { label: t("adminCoupons.statusExpired"), variant: "destructive" }
     }
-    return { label: "Active", variant: "default" };
-  };
+    return { label: t("adminCoupons.statusActive"), variant: "default" }
+  }
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
-    );
+    )
   }
 
   return (
     <div className="bg-card text-card-foreground rounded-lg border p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Coupons</h1>
-          <p className="text-muted-foreground">Manage single-use coupons for cash credits</p>
+          <h1 className="text-2xl font-bold text-foreground">{t("adminCoupons.title")}</h1>
+          <p className="text-muted-foreground">{t("adminCoupons.subtitle")}</p>
         </div>
         <Button onClick={openCreateDialog}>
           <Plus className="h-4 w-4 mr-2" />
-          Add Coupon
+          {t("adminCoupons.addCoupon")}
         </Button>
       </div>
 
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Code</TableHead>
-            <TableHead>Credit Amount</TableHead>
-            <TableHead>Expires</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Redeemed By</TableHead>
-            <TableHead>Actions</TableHead>
+            <TableHead>{t("adminCoupons.tableCode")}</TableHead>
+            <TableHead>{t("adminCoupons.tableCreditAmount")}</TableHead>
+            <TableHead>{t("adminCoupons.tableExpires")}</TableHead>
+            <TableHead>{t("adminCoupons.tableStatus")}</TableHead>
+            <TableHead>{t("adminCoupons.tableRedeemedBy")}</TableHead>
+            <TableHead>{t("adminCoupons.tableActions")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {coupons.map((coupon) => {
-            const status = getCouponStatus(coupon);
+            const status = getCouponStatus(coupon)
             return (
               <TableRow key={coupon.id}>
                 <TableCell>
@@ -255,7 +259,7 @@ export default function AdminCouponsPage(): React.ReactElement {
                       <p className="text-muted-foreground">{formatDate(coupon.redeemedAt)}</p>
                     </div>
                   ) : (
-                    "-"
+                    t("adminCoupons.notAvailable")
                   )}
                 </TableCell>
                 <TableCell>
@@ -278,9 +282,9 @@ export default function AdminCouponsPage(): React.ReactElement {
                         {actionLoading === coupon.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : coupon.isActive ? (
-                          "Disable"
+                          t("adminCoupons.disable")
                         ) : (
-                          "Enable"
+                          t("adminCoupons.enable")
                         )}
                       </Button>
                     )}
@@ -295,12 +299,12 @@ export default function AdminCouponsPage(): React.ReactElement {
                   </div>
                 </TableCell>
               </TableRow>
-            );
+            )
           })}
           {coupons.length === 0 && (
             <TableRow>
               <TableCell colSpan={6} className="text-center text-muted-foreground">
-                No coupons found
+                {t("adminCoupons.noCoupons")}
               </TableCell>
             </TableRow>
           )}
@@ -311,40 +315,40 @@ export default function AdminCouponsPage(): React.ReactElement {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {editingCoupon ? "Edit Coupon" : "Create Coupon"}
+              {editingCoupon ? t("adminCoupons.editCoupon") : t("adminCoupons.createCoupon")}
             </DialogTitle>
             <DialogDescription>
               {editingCoupon
-                ? "Update details for this coupon."
-                : "Create a single-use coupon for account credits."}
+                ? t("adminCoupons.editDescription")
+                : t("adminCoupons.createDescription")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="code">Code</Label>
+              <Label htmlFor="code">{t("adminCoupons.fieldCode")}</Label>
               <Input
                 id="code"
                 value={formData.code}
                 onChange={(e) =>
                   setFormData({ ...formData, code: e.target.value.toUpperCase() })
                 }
-                placeholder="e.g., GIFT50"
+                placeholder={t("adminCoupons.codePlaceholder")}
               />
             </div>
             <div>
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">{t("adminCoupons.fieldDescription")}</Label>
               <Input
                 id="description"
                 value={formData.description}
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
                 }
-                placeholder="Optional description"
+                placeholder={t("adminCoupons.descriptionPlaceholder")}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="creditAmount">Credit Amount (cents)</Label>
+                <Label htmlFor="creditAmount">{t("adminCoupons.fieldCreditAmount")}</Label>
                 <Input
                   id="creditAmount"
                   type="number"
@@ -352,11 +356,11 @@ export default function AdminCouponsPage(): React.ReactElement {
                   onChange={(e) =>
                     setFormData({ ...formData, creditAmount: e.target.value })
                   }
-                  placeholder="e.g., 5000 for $50"
+                  placeholder={t("adminCoupons.creditAmountPlaceholder")}
                 />
               </div>
               <div>
-                <Label htmlFor="currency">Currency</Label>
+                <Label htmlFor="currency">{t("adminCoupons.fieldCurrency")}</Label>
                 <Select
                   value={formData.currency}
                   onValueChange={(v) => setFormData({ ...formData, currency: v })}
@@ -365,14 +369,14 @@ export default function AdminCouponsPage(): React.ReactElement {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="usd">USD</SelectItem>
-                    <SelectItem value="eur">EUR</SelectItem>
+                    <SelectItem value="usd">{t("common.currency.usd")}</SelectItem>
+                    <SelectItem value="eur">{t("common.currency.eur")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div>
-              <Label htmlFor="expiresAt">Expiration Date</Label>
+              <Label htmlFor="expiresAt">{t("adminCoupons.fieldExpirationDate")}</Label>
               <Input
                 id="expiresAt"
                 type="date"
@@ -385,15 +389,15 @@ export default function AdminCouponsPage(): React.ReactElement {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-              Cancel
+              {t("adminCoupons.cancel")}
             </Button>
             <Button onClick={handleSubmit} disabled={actionLoading === -1}>
               {actionLoading === -1 && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {editingCoupon ? "Update" : "Create"}
+              {editingCoupon ? t("adminCoupons.update") : t("adminCoupons.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
-  );
+  )
 }

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import type { NavModelWithIcons } from '@/lib/nav/types'
 import type { NavContext } from '@saas/plugins-core'
 import { NavSection } from '@/components/nav/nav-section'
+import { useI18n } from '@/contexts/i18n-context'
 
 /**
  * Props for DefaultAdminShell.
@@ -23,6 +24,8 @@ export function DefaultAdminShell({
   nav,
   children,
 }: DefaultAdminShellProps): React.ReactElement {
+  const { t } = useI18n('skeleton')
+
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-background">
       <div className="container mx-auto py-8 px-4">
@@ -32,9 +35,9 @@ export function DefaultAdminShell({
             <nav className="bg-card text-card-foreground rounded-lg border p-4">
               <div className="mb-4 px-3">
                 <h2 className="text-lg font-semibold text-foreground">
-                  Admin Panel
+                  {t('admin.shell.title')}
                 </h2>
-                <p className="text-sm text-muted-foreground">Manage your application</p>
+                <p className="text-sm text-muted-foreground">{t('admin.shell.subtitle')}</p>
               </div>
 
               <div className="space-y-4">

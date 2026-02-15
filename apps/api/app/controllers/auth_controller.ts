@@ -23,6 +23,7 @@ import { AuditContext } from '#services/audit_context'
 import { AUDIT_EVENT_TYPES } from '#constants/audit_events'
 import { systemOps } from '#services/system_operation_service'
 import { hookRegistry } from '@saas/plugins-core'
+import { tenantQuotaService } from '#services/tenant_quota_service'
 
 export default class AuthController {
   private authService = new AuthService()
@@ -181,7 +182,8 @@ export default class AuthController {
           .where('id', invitationData!.tenantId)
           .first()
         if (!tenant) return false
-        return tenant.canAddMember(invitationData!.memberCount, trx)
+        const limits = await tenantQuotaService.getEffectiveLimits(tenant, trx)
+        return !tenantQuotaService.willExceed(limits.members, invitationData!.memberCount, 1)
       })
 
       if (!canAddMember) {

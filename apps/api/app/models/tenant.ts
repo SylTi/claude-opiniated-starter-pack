@@ -9,6 +9,12 @@ import Subscription from '#models/subscription'
 import SubscriptionTier from '#models/subscription_tier'
 import { CurrencyMismatchError } from '#exceptions/billing_errors'
 
+export interface TenantQuotaOverrides {
+  maxPendingInvitations?: number | null
+  maxAuthTokensPerTenant?: number | null
+  maxAuthTokensPerUser?: number | null
+}
+
 export default class Tenant extends BaseModel {
   static table = 'tenants'
 
@@ -29,6 +35,13 @@ export default class Tenant extends BaseModel {
 
   @column()
   declare maxMembers: number | null
+
+  @column({
+    prepare: (value: TenantQuotaOverrides | null) => (value ? JSON.stringify(value) : null),
+    consume: (value: string | TenantQuotaOverrides | null) =>
+      typeof value === 'string' ? (JSON.parse(value) as TenantQuotaOverrides) : value,
+  })
+  declare quotaOverrides: TenantQuotaOverrides | null
 
   @column()
   declare balance: number

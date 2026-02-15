@@ -17,6 +17,9 @@ export * from './enforcement/index.js'
 // Navigation
 export * from './navigation/index.js'
 
+// i18n
+export * from './i18n/index.js'
+
 // Migration helpers
 export * from './migrations/index.js'
 

@@ -12,6 +12,7 @@ import {
   paginationValidator,
   updateUserTierValidator,
   updateTenantTierValidator,
+  updateTenantQuotasValidator,
   createProductValidator,
   updateProductValidator,
   listPricesValidator,
@@ -20,6 +21,7 @@ import {
 } from '#validators/admin'
 import { AuditContext } from '#services/audit_context'
 import { AUDIT_EVENT_TYPES } from '#constants/audit_events'
+import { tenantQuotaService } from '#services/tenant_quota_service'
 
 export default class AdminController {
   /**
@@ -339,6 +341,8 @@ export default class AdminController {
         ownerId: tenant.ownerId,
         ownerEmail: tenant.owner?.email ?? null,
         memberCount: Number(tenant.$extras.memberCount) || 0,
+        maxMembers: tenant.maxMembers,
+        quotaOverrides: tenant.quotaOverrides ?? {},
         balance: tenant.balance ?? 0,
         balanceCurrency: tenant.balanceCurrency ?? 'usd',
         createdAt: tenant.createdAt.toISO(),
@@ -406,6 +410,67 @@ export default class AdminController {
         subscriptionExpiresAt: subscription.expiresAt?.toISO() ?? null,
       },
       message: 'Tenant subscription tier has been updated successfully',
+    })
+  }
+
+  /**
+   * Get tenant quota settings and effective limits (admin)
+   */
+  async getTenantQuotas({ params, response }: HttpContext): Promise<void> {
+    const tenant = await Tenant.findOrFail(params.id)
+    const effectiveLimits = await tenantQuotaService.getEffectiveLimits(tenant)
+
+    response.json({
+      data: {
+        tenantId: tenant.id,
+        maxMembers: tenant.maxMembers,
+        quotaOverrides: tenant.quotaOverrides ?? {},
+        effectiveLimits: {
+          members: effectiveLimits.members,
+          pendingInvitations: effectiveLimits.pendingInvitations,
+          authTokensPerTenant: effectiveLimits.authTokensPerTenant,
+          authTokensPerUser: effectiveLimits.authTokensPerUser,
+        },
+      },
+    })
+  }
+
+  /**
+   * Update tenant quota settings (admin)
+   */
+  async updateTenantQuotas(ctx: HttpContext): Promise<void> {
+    const { params, request, response } = ctx
+    const audit = new AuditContext(ctx)
+    const tenant = await Tenant.findOrFail(params.id)
+    const payload = await request.validateUsing(updateTenantQuotasValidator)
+
+    tenantQuotaService.applyQuotaUpdates(tenant, payload)
+    await tenant.save()
+
+    const effectiveLimits = await tenantQuotaService.getEffectiveLimits(tenant)
+
+    audit.emit(
+      AUDIT_EVENT_TYPES.TENANT_UPDATE,
+      { type: 'tenant', id: tenant.id },
+      {
+        source: 'admin.updateTenantQuotas',
+        updatedFields: Object.keys(payload),
+      }
+    )
+
+    response.json({
+      data: {
+        tenantId: tenant.id,
+        maxMembers: tenant.maxMembers,
+        quotaOverrides: tenant.quotaOverrides ?? {},
+        effectiveLimits: {
+          members: effectiveLimits.members,
+          pendingInvitations: effectiveLimits.pendingInvitations,
+          authTokensPerTenant: effectiveLimits.authTokensPerTenant,
+          authTokensPerUser: effectiveLimits.authTokensPerUser,
+        },
+      },
+      message: 'Tenant quotas updated successfully',
     })
   }
 

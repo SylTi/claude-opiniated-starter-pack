@@ -4,17 +4,19 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2, CheckCircle, XCircle, Users, AlertCircle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@saas/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@saas/ui/card'
+import { Alert, AlertDescription } from '@saas/ui/alert'
 import { invitationsApi, setTenantId } from '@/lib/api'
 import { ApiError } from '@/lib/api'
 import { useAuth } from '@/contexts/auth-context'
+import { useI18n } from '@/contexts/i18n-context'
 import type { InvitationDetailsDTO } from '@saas/shared'
 
 type InviteState = 'loading' | 'loaded' | 'accepting' | 'accepted' | 'declined' | 'error' | 'no-token' | 'login-required'
 
 function InviteContent(): React.ReactElement {
+  const { t } = useI18n('skeleton')
   const router = useRouter()
   const searchParams = useSearchParams()
   const token = searchParams.get('token')
@@ -50,18 +52,18 @@ function InviteContent(): React.ReactElement {
         setState('error')
         if (err instanceof ApiError) {
           if (err.statusCode === 404) {
-            setError('This invitation link is invalid or has expired.')
+            setError(t('tenantInvite.invalidOrExpired'))
           } else {
             setError(err.message)
           }
         } else {
-          setError('An unexpected error occurred.')
+          setError(t('common.unexpectedError'))
         }
       }
     }
 
     fetchInvitation()
-  }, [token, isAuthenticated, authLoading])
+  }, [token, isAuthenticated, authLoading, t])
 
   const handleAccept = async (): Promise<void> => {
     if (!token) return
@@ -77,7 +79,7 @@ function InviteContent(): React.ReactElement {
       if (err instanceof ApiError) {
         setError(err.message)
       } else {
-        setError('Failed to accept invitation.')
+        setError(t('tenantInvite.acceptError'))
       }
     }
   }
@@ -93,7 +95,7 @@ function InviteContent(): React.ReactElement {
       if (err instanceof ApiError) {
         setError(err.message)
       } else {
-        setError('Failed to decline invitation.')
+        setError(t('tenantInvite.declineError'))
       }
     }
   }
@@ -103,7 +105,7 @@ function InviteContent(): React.ReactElement {
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <Loader2 className="mx-auto h-12 w-12 animate-spin text-blue-600" />
-          <p className="mt-4 text-gray-600">Loading invitation...</p>
+          <p className="mt-4 text-gray-600">{t('tenantInvite.loading')}</p>
         </div>
       </div>
     )
@@ -115,14 +117,14 @@ function InviteContent(): React.ReactElement {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <XCircle className="mx-auto h-12 w-12 text-red-500" />
-            <CardTitle className="mt-4">Invalid Invitation</CardTitle>
+            <CardTitle className="mt-4">{t('tenantInvite.invalidTitle')}</CardTitle>
             <CardDescription>
-              This invitation link is invalid. Please check your email for the correct link.
+              {t('tenantInvite.invalidDescription')}
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
             <Link href="/dashboard">
-              <Button>Go to Dashboard</Button>
+              <Button>{t('common.goToDashboard')}</Button>
             </Link>
           </CardContent>
         </Card>
@@ -136,12 +138,12 @@ function InviteContent(): React.ReactElement {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <XCircle className="mx-auto h-12 w-12 text-red-500" />
-            <CardTitle className="mt-4">Invitation Error</CardTitle>
+            <CardTitle className="mt-4">{t('tenantInvite.errorTitle')}</CardTitle>
             <CardDescription>{error}</CardDescription>
           </CardHeader>
           <CardContent className="text-center">
             <Link href="/dashboard">
-              <Button>Go to Dashboard</Button>
+              <Button>{t('common.goToDashboard')}</Button>
             </Link>
           </CardContent>
         </Card>
@@ -158,32 +160,32 @@ function InviteContent(): React.ReactElement {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <Users className="mx-auto h-12 w-12 text-blue-600" />
-            <CardTitle className="mt-4">Workspace Invitation</CardTitle>
+            <CardTitle className="mt-4">{t('tenantInvite.workspaceInvitation')}</CardTitle>
             <CardDescription>
-              You&apos;ve been invited to join <strong>{invitation.tenant.name}</strong>
+              {t('tenantInvite.invitedToJoin', { tenant: invitation.tenant.name })}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-lg bg-gray-50 p-4 text-center">
-              <p className="text-sm text-gray-600">Invited by</p>
+              <p className="text-sm text-gray-600">{t('tenantInvite.invitedBy')}</p>
               <p className="font-medium">{invitation.invitedBy.fullName || invitation.invitedBy.email}</p>
-              <p className="mt-2 text-sm text-gray-600">Role</p>
+              <p className="mt-2 text-sm text-gray-600">{t('tenantInvite.role')}</p>
               <p className="font-medium capitalize">{invitation.role}</p>
             </div>
 
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Please sign in or create an account to accept this invitation.
+                {t('tenantInvite.signInOrCreate')}
               </AlertDescription>
             </Alert>
 
             <div className="space-y-2">
               <Link href={loginUrl} className="block">
-                <Button className="w-full">Sign In</Button>
+                <Button className="w-full">{t('tenantInvite.signIn')}</Button>
               </Link>
               <Link href={registerUrl} className="block">
-                <Button variant="outline" className="w-full">Create Account</Button>
+                <Button variant="outline" className="w-full">{t('tenantInvite.createAccount')}</Button>
               </Link>
             </div>
           </CardContent>
@@ -198,13 +200,13 @@ function InviteContent(): React.ReactElement {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
-            <CardTitle className="mt-4">Welcome to the team!</CardTitle>
+            <CardTitle className="mt-4">{t('tenantInvite.welcomeTitle')}</CardTitle>
             <CardDescription>
-              You&apos;ve successfully joined <strong>{invitation?.tenant.name}</strong>.
+              {t('tenantInvite.joinedSuccess', { tenant: invitation?.tenant.name ?? '' })}
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
-            <Button onClick={() => router.push('/dashboard')}>Go to Dashboard</Button>
+            <Button onClick={() => router.push('/dashboard')}>{t('common.goToDashboard')}</Button>
           </CardContent>
         </Card>
       </div>
@@ -217,14 +219,14 @@ function InviteContent(): React.ReactElement {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <XCircle className="mx-auto h-12 w-12 text-gray-400" />
-            <CardTitle className="mt-4">Invitation Declined</CardTitle>
+            <CardTitle className="mt-4">{t('tenantInvite.declinedTitle')}</CardTitle>
             <CardDescription>
-              You&apos;ve declined the invitation to join {invitation?.tenant.name}.
+              {t('tenantInvite.declinedDescription', { tenant: invitation?.tenant.name ?? '' })}
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
             <Link href="/dashboard">
-              <Button variant="outline">Go to Dashboard</Button>
+              <Button variant="outline">{t('common.goToDashboard')}</Button>
             </Link>
           </CardContent>
         </Card>
@@ -238,16 +240,16 @@ function InviteContent(): React.ReactElement {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <Users className="mx-auto h-12 w-12 text-blue-600" />
-          <CardTitle className="mt-4">Workspace Invitation</CardTitle>
+          <CardTitle className="mt-4">{t('tenantInvite.workspaceInvitation')}</CardTitle>
           <CardDescription>
-            You&apos;ve been invited to join <strong>{invitation?.tenant.name}</strong>
+            {t('tenantInvite.invitedToJoin', { tenant: invitation?.tenant.name ?? '' })}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-lg bg-gray-50 p-4 text-center">
-            <p className="text-sm text-gray-600">Invited by</p>
+            <p className="text-sm text-gray-600">{t('tenantInvite.invitedBy')}</p>
             <p className="font-medium">{invitation?.invitedBy.fullName || invitation?.invitedBy.email}</p>
-            <p className="mt-2 text-sm text-gray-600">Role</p>
+            <p className="mt-2 text-sm text-gray-600">{t('tenantInvite.role')}</p>
             <p className="font-medium capitalize">{invitation?.role}</p>
           </div>
 
@@ -258,7 +260,7 @@ function InviteContent(): React.ReactElement {
               onClick={handleDecline}
               disabled={state === 'accepting'}
             >
-              Decline
+              {t('tenantInvite.decline')}
             </Button>
             <Button
               className="flex-1"
@@ -268,10 +270,10 @@ function InviteContent(): React.ReactElement {
               {state === 'accepting' ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Accepting...
+                  {t('tenantInvite.accepting')}
                 </>
               ) : (
-                'Accept Invitation'
+                t('tenantInvite.acceptInvitation')
               )}
             </Button>
           </div>

@@ -10,7 +10,7 @@ import {
   Users,
   UsersRound,
 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@saas/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,12 +18,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@saas/ui/dropdown-menu";
 import { useAuth } from "@/contexts/auth-context";
+import { useI18n } from "@/contexts/i18n-context";
 
 export function UserMenu(): React.ReactElement {
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { t } = useI18n("skeleton");
 
   if (!user) {
     return <></>;
@@ -63,7 +65,7 @@ export function UserMenu(): React.ReactElement {
         <DropdownMenuLabel>
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">
-              {user.fullName || "User"}
+              {user.fullName || t("user.defaultName")}
             </p>
             <p className="text-xs leading-none text-muted-foreground">
               {user.email}
@@ -73,24 +75,24 @@ export function UserMenu(): React.ReactElement {
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => router.push("/dashboard")}>
           <LayoutDashboard className="mr-2 h-4 w-4" />
-          <span>Dashboard</span>
+          <span>{t("user.dashboard")}</span>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => router.push("/profile")}>
           <User className="mr-2 h-4 w-4" />
-          <span>Profile</span>
+          <span>{t("user.profile")}</span>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => router.push("/profile/security")}>
           <Shield className="mr-2 h-4 w-4" />
-          <span>Security</span>
+          <span>{t("user.security")}</span>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => router.push("/profile/settings")}>
           <Settings className="mr-2 h-4 w-4" />
-          <span>Settings</span>
+          <span>{t("user.settings")}</span>
         </DropdownMenuItem>
         {user.currentTenantId && user.effectiveSubscriptionTier.level > 0 && (
           <DropdownMenuItem onClick={() => router.push("/team")}>
             <UsersRound className="mr-2 h-4 w-4" />
-            <span>Team</span>
+            <span>{t("user.team")}</span>
           </DropdownMenuItem>
         )}
         {user.role === "admin" && (
@@ -98,14 +100,14 @@ export function UserMenu(): React.ReactElement {
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => router.push("/admin/dashboard")}>
               <Users className="mr-2 h-4 w-4" />
-              <span>Admin Panel</span>
+              <span>{t("user.adminPanel")}</span>
             </DropdownMenuItem>
           </>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" />
-          <span>Log out</span>
+          <span>{t("user.logout")}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

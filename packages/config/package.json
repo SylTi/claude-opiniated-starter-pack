@@ -33,14 +33,9 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@plugins/calendar": "workspace:*",
-    "@plugins/collab": "workspace:*",
-    "@plugins/files": "workspace:*",
     "@plugins/main-app": "workspace:*",
     "@plugins/nav-links": "workspace:*",
     "@plugins/notes": "workspace:*",
-    "@plugins/webhooks": "workspace:*",
-    "@plugins/wiki": "workspace:*",
     "@saas/plugins-core": "workspace:*"
   },
   "devDependencies": {

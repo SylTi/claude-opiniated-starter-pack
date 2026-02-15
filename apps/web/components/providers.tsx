@@ -6,7 +6,8 @@ import type { AppDesign } from '@saas/plugins-core'
 import { AuthProvider } from '@/contexts/auth-context'
 import { DesignProvider } from '@/contexts/design-context'
 import { NavigationProvider } from '@/contexts/navigation-context'
-import { FrameworkProvider } from '@/contexts/framework-context'
+import { FrameworkProvider, FrameworkAuthSync } from '@/contexts/framework-context'
+import { I18nProvider } from '@/contexts/i18n-context'
 import { ShellWrapper } from '@/components/shells/shell-wrapper'
 import { Header } from '@/components/header'
 import { loadMainAppClientDesign } from '@saas/config/main-app/client'
@@ -38,6 +39,10 @@ interface ProvidersProps {
    * Passed from layout.tsx to avoid hydration mismatch.
    */
   initialTheme?: Theme
+  /**
+   * Initial locale from cookie.
+   */
+  initialLocale?: string
 }
 
 /**
@@ -66,6 +71,7 @@ export function Providers(props: ProvidersProps): React.ReactElement {
     children,
     initialHasUserInfoCookie = false,
     initialUserRole = null,
+    initialLocale,
     serverSafeMode,
   } = props
 
@@ -107,28 +113,32 @@ export function Providers(props: ProvidersProps): React.ReactElement {
       initialHasUserInfoCookie={initialHasUserInfoCookie}
       initialUserRole={initialUserRole}
     >
-      <DesignProvider design={clientDesign} serverSafeMode={serverSafeMode}>
-        <NavigationProvider>
-          {/* Header needs NavigationContext but must be OUTSIDE ShellWrapper */}
-          <Header />
-          {/* Only page content goes through ShellWrapper for area-specific layouts */}
-          <ShellWrapper>
-            {children}
-          </ShellWrapper>
-        </NavigationProvider>
-      </DesignProvider>
+      <FrameworkAuthSync>
+        <DesignProvider design={clientDesign} serverSafeMode={serverSafeMode}>
+          <NavigationProvider>
+            {/* Header needs NavigationContext but must be OUTSIDE ShellWrapper */}
+            <Header />
+            {/* Only page content goes through ShellWrapper for area-specific layouts */}
+            <ShellWrapper>
+              {children}
+            </ShellWrapper>
+          </NavigationProvider>
+        </DesignProvider>
+      </FrameworkAuthSync>
     </AuthProvider>
   )
 
   return (
-    <FrameworkProvider>
-      {PluginAppProviders ? (
-        <PluginAppProviders>
-          {coreProviders}
-        </PluginAppProviders>
-      ) : (
-        coreProviders
-      )}
-    </FrameworkProvider>
+    <I18nProvider initialLocale={initialLocale}>
+      <FrameworkProvider>
+        {PluginAppProviders ? (
+          <PluginAppProviders>
+            {coreProviders}
+          </PluginAppProviders>
+        ) : (
+          coreProviders
+        )}
+      </FrameworkProvider>
+    </I18nProvider>
   )
 }

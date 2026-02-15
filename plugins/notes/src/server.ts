@@ -36,6 +36,7 @@ interface RoutesRegistrar {
 }
 import type { CreateNoteDTO, UpdateNoteDTO, NoteDTO } from './types.js'
 import { NOTES_ABILITIES } from './types.js'
+import { notesText } from './translations.js'
 
 /**
  * Plugin context passed during registration.
@@ -69,39 +70,46 @@ interface HttpContext {
     id: number
     membership: { role: string }
   }
-  tenantDb?: unknown
+  tenantDb?: TenantDbClient
   plugin?: {
     id: string
     grantedCapabilities: string[]
   }
 }
 
-/**
- * ⚠️ WARNING: IN-MEMORY STORAGE - DEMO ONLY ⚠️
- *
- * This is a simplified in-memory store for demonstration purposes.
- * DO NOT use this pattern in production!
- *
- * Issues with this approach:
- * - Data is lost on server restart
- * - Not thread-safe in multi-worker deployments
- * - No persistence across requests in serverless environments
- *
- * In production, use the actual database with proper models:
- * - Create a PluginNotesNote model extending BaseModel
- * - Use ctx.tenantDb for tenant-scoped queries
- * - Leverage RLS policies created by migrations
- */
-const notesStore: Map<string, NoteDTO[]> = new Map()
+type DbQueryResult<T> = { rows: T[] }
 
-let noteIdCounter = 1
+interface TenantDbClient {
+  rawQuery<T = unknown>(sql: string, bindings?: unknown[]): Promise<DbQueryResult<T>>
+}
 
-function getNotesForTenant(tenantId: number): NoteDTO[] {
-  const key = `tenant:${tenantId}`
-  if (!notesStore.has(key)) {
-    notesStore.set(key, [])
+type NotesTenantRole = 'owner' | 'admin' | 'member' | 'viewer'
+
+function normalizeTenantRole(role: unknown): NotesTenantRole | null {
+  if (role === 'owner' || role === 'admin' || role === 'member' || role === 'viewer') {
+    return role
   }
-  return notesStore.get(key)!
+  return null
+}
+
+type NoteRow = {
+  id: number
+  tenant_id: number
+  user_id: number
+  title: string
+  content: string | null
+  created_at: string
+  updated_at: string
+}
+
+function serializeNote(row: NoteRow): NoteDTO {
+  return {
+    id: row.id,
+    title: row.title,
+    content: row.content,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
 }
 
 /**
@@ -114,9 +122,11 @@ async function checkAuthz(
   ctx: HttpContext,
   ability: string
 ): Promise<{ allowed: boolean; reason?: string }> {
+  const tenantRole = normalizeTenantRole(ctx.tenant?.membership?.role)
   const authzCtx: AuthzContext = {
     tenantId: ctx.tenant!.id,
     userId: ctx.auth.user!.id,
+    tenantRole: tenantRole ?? undefined,
   }
 
   const decision = await authzResolver(authzCtx, { ability })
@@ -136,13 +146,19 @@ export async function register(context: PluginContext): Promise<void> {
     if (!authz.allowed) {
       return ctx.response.forbidden({
         error: 'AuthzDenied',
-        message: authz.reason || 'You do not have permission to read notes',
+        message: authz.reason || notesText('api.authz.readDenied'),
       })
     }
 
-    const tenantId = ctx.tenant!.id
-    const notes = getNotesForTenant(tenantId)
-    ctx.response.json({ data: notes })
+    const result = await ctx.tenantDb!.rawQuery<NoteRow>(
+      `SELECT id, tenant_id, user_id, title, content, created_at, updated_at
+       FROM plugin_notes_notes
+       WHERE tenant_id = ?
+       ORDER BY created_at DESC`,
+      [ctx.tenant!.id]
+    )
+
+    ctx.response.json({ data: result.rows.map(serializeNote) })
   })
 
   // GET /api/v1/apps/notes/notes/:id - Get note
@@ -152,24 +168,28 @@ export async function register(context: PluginContext): Promise<void> {
     if (!authz.allowed) {
       return ctx.response.forbidden({
         error: 'AuthzDenied',
-        message: authz.reason || 'You do not have permission to read notes',
+        message: authz.reason || notesText('api.authz.readDenied'),
       })
     }
 
-    const tenantId = ctx.tenant!.id
     const noteId = parseInt(ctx.request.param('id') ?? '0', 10)
-
-    const notes = getNotesForTenant(tenantId)
-    const note = notes.find((n) => n.id === noteId)
+    const result = await ctx.tenantDb!.rawQuery<NoteRow>(
+      `SELECT id, tenant_id, user_id, title, content, created_at, updated_at
+       FROM plugin_notes_notes
+       WHERE tenant_id = ? AND id = ?
+       LIMIT 1`,
+      [ctx.tenant!.id, noteId]
+    )
+    const note = result.rows[0]
 
     if (!note) {
       return ctx.response.notFound({
         error: 'NoteNotFound',
-        message: 'Note not found',
+        message: notesText('api.note.notFound'),
       })
     }
 
-    ctx.response.json({ data: note })
+    ctx.response.json({ data: serializeNote(note) })
   })
 
   // POST /api/v1/apps/notes/notes - Create note
@@ -179,34 +199,30 @@ export async function register(context: PluginContext): Promise<void> {
     if (!authz.allowed) {
       return ctx.response.forbidden({
         error: 'AuthzDenied',
-        message: authz.reason || 'You do not have permission to create notes',
+        message: authz.reason || notesText('api.authz.createDenied'),
       })
     }
 
-    const tenantId = ctx.tenant!.id
     const body = ctx.request.body() as unknown as CreateNoteDTO
 
     if (!body.title || body.title.trim() === '') {
       return ctx.response.unprocessableEntity({
         error: 'ValidationError',
-        message: 'Title is required',
-        errors: [{ field: 'title', message: 'Title is required', rule: 'required' }],
+        message: notesText('api.validation.titleRequired'),
+        errors: [{ field: 'title', message: notesText('api.validation.titleRequired'), rule: 'required' }],
       })
     }
 
-    const now = new Date().toISOString()
-    const note: NoteDTO = {
-      id: noteIdCounter++,
-      title: body.title,
-      content: body.content ?? null,
-      createdAt: now,
-      updatedAt: now,
-    }
+    const insertResult = await ctx.tenantDb!.rawQuery<NoteRow>(
+      `INSERT INTO plugin_notes_notes (
+         tenant_id, user_id, title, content, created_at, updated_at
+       )
+       VALUES (?, ?, ?, NULLIF(?, ''), NOW(), NOW())
+       RETURNING id, tenant_id, user_id, title, content, created_at, updated_at`,
+      [ctx.tenant!.id, ctx.auth.user!.id, body.title.trim(), body.content ?? '']
+    )
 
-    const notes = getNotesForTenant(tenantId)
-    notes.push(note)
-
-    ctx.response.created({ data: note })
+    ctx.response.created({ data: serializeNote(insertResult.rows[0]) })
   })
 
   // PUT /api/v1/apps/notes/notes/:id - Update note
@@ -216,34 +232,48 @@ export async function register(context: PluginContext): Promise<void> {
     if (!authz.allowed) {
       return ctx.response.forbidden({
         error: 'AuthzDenied',
-        message: authz.reason || 'You do not have permission to update notes',
+        message: authz.reason || notesText('api.authz.updateDenied'),
       })
     }
 
-    const tenantId = ctx.tenant!.id
     const noteId = parseInt(ctx.request.param('id') ?? '0', 10)
     const body = ctx.request.body() as unknown as UpdateNoteDTO
 
-    const notes = getNotesForTenant(tenantId)
-    const noteIndex = notes.findIndex((n) => n.id === noteId)
-
-    if (noteIndex === -1) {
+    const existingResult = await ctx.tenantDb!.rawQuery<NoteRow>(
+      `SELECT id, tenant_id, user_id, title, content, created_at, updated_at
+       FROM plugin_notes_notes
+       WHERE tenant_id = ? AND id = ?
+       LIMIT 1`,
+      [ctx.tenant!.id, noteId]
+    )
+    const existing = existingResult.rows[0]
+    if (!existing) {
       return ctx.response.notFound({
         error: 'NoteNotFound',
-        message: 'Note not found',
+        message: notesText('api.note.notFound'),
       })
     }
 
-    const note = notes[noteIndex]
-    if (body.title !== undefined) {
-      note.title = body.title
-    }
-    if (body.content !== undefined) {
-      note.content = body.content
-    }
-    note.updatedAt = new Date().toISOString()
+    const nextTitle = body.title !== undefined ? body.title.trim() : existing.title
+    const nextContent = body.content !== undefined ? body.content : existing.content
 
-    ctx.response.json({ data: note })
+    if (!nextTitle) {
+      return ctx.response.unprocessableEntity({
+        error: 'ValidationError',
+        message: notesText('api.validation.titleRequired'),
+        errors: [{ field: 'title', message: notesText('api.validation.titleRequired'), rule: 'required' }],
+      })
+    }
+
+    const updateResult = await ctx.tenantDb!.rawQuery<NoteRow>(
+      `UPDATE plugin_notes_notes
+       SET title = ?, content = NULLIF(?, ''), updated_at = NOW()
+       WHERE tenant_id = ? AND id = ?
+       RETURNING id, tenant_id, user_id, title, content, created_at, updated_at`,
+      [nextTitle, nextContent ?? '', ctx.tenant!.id, noteId]
+    )
+
+    ctx.response.json({ data: serializeNote(updateResult.rows[0]) })
   })
 
   // DELETE /api/v1/apps/notes/notes/:id - Delete note
@@ -253,24 +283,24 @@ export async function register(context: PluginContext): Promise<void> {
     if (!authz.allowed) {
       return ctx.response.forbidden({
         error: 'AuthzDenied',
-        message: authz.reason || 'You do not have permission to delete notes',
+        message: authz.reason || notesText('api.authz.deleteDenied'),
       })
     }
 
-    const tenantId = ctx.tenant!.id
     const noteId = parseInt(ctx.request.param('id') ?? '0', 10)
+    const deleteResult = await ctx.tenantDb!.rawQuery<{ id: number }>(
+      `DELETE FROM plugin_notes_notes
+       WHERE tenant_id = ? AND id = ?
+       RETURNING id`,
+      [ctx.tenant!.id, noteId]
+    )
 
-    const notes = getNotesForTenant(tenantId)
-    const noteIndex = notes.findIndex((n) => n.id === noteId)
-
-    if (noteIndex === -1) {
+    if (deleteResult.rows.length === 0) {
       return ctx.response.notFound({
         error: 'NoteNotFound',
-        message: 'Note not found',
+        message: notesText('api.note.notFound'),
       })
     }
-
-    notes.splice(noteIndex, 1)
     ctx.response.noContent()
   })
 
@@ -294,37 +324,39 @@ export async function authzResolver(
   check: AuthzCheck
 ): Promise<AuthzDecision> {
   const { ability } = check
+  const role = normalizeTenantRole(ctx.tenantRole)
 
-  // ⚠️ WARNING: This is a simplified demo resolver.
-  // In production, query plugin_notes_roles tables for proper RBAC.
+  if (!role) {
+    return {
+      allow: false,
+      reason: notesText('api.authz.tenantRoleRequired'),
+    }
+  }
 
   switch (ability) {
     case NOTES_ABILITIES.NOTE_READ:
-      // All tenant members can read notes
       return { allow: true }
 
     case NOTES_ABILITIES.NOTE_WRITE:
-      // All tenant members can write notes (demo only)
-      // In production: check plugin_notes_role_abilities for write permission
-      return { allow: true }
+      return {
+        allow: role === 'owner' || role === 'admin' || role === 'member',
+        reason: role === 'viewer' ? notesText('api.authz.viewerReadOnly') : undefined,
+      }
 
     case NOTES_ABILITIES.NOTE_DELETE:
-      // ⚠️ DEMO: Always allows delete. In production, check role:
-      // In production, this would query plugin_notes_roles for admin/owner role
-      // or check plugin_notes_role_abilities for delete permission.
-      // Example production check:
-      // const hasPermission = await checkPluginRole(ctx.tenantId, ctx.userId, 'notes.note.delete')
-      // return { allow: hasPermission, reason: hasPermission ? undefined : 'Requires delete permission' }
       return {
-        allow: true,
-        reason: '⚠️ Demo mode: delete always allowed. Implement RBAC in production.',
+        allow: role === 'owner' || role === 'admin',
+        reason:
+          role === 'member' || role === 'viewer'
+            ? notesText('api.authz.adminOwnerDeleteOnly')
+            : undefined,
       }
 
     default:
       // Unknown ability - deny (fail-closed)
       return {
         allow: false,
-        reason: `Unknown ability: ${ability}`,
+        reason: notesText('api.authz.unknownAbility', { ability }),
       }
   }
 }

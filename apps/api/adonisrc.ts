@@ -58,10 +58,11 @@ export default defineConfig({
     () => import('@adonisjs/limiter/limiter_provider'),
     () => import('@adonisjs/shield/shield_provider'),
     // Plugin system boot - loads plugins, validates capabilities, mounts routes
-    // Only runs in web environment - migrations run independently via database.ts config
+    // Runs in web and test environments. In test, boot is skipped unless PLUGINS_BOOT_IN_TESTS=true.
+    // Migrations run independently via database.ts config.
     {
       file: () => import('#providers/plugin_boot_provider'),
-      environment: ['web'],
+      environment: ['web', 'test'],
     },
   ],
 
@@ -95,7 +96,7 @@ export default defineConfig({
   tests: {
     suites: [
       {
-        files: ['tests/unit/**/*.spec(.ts|.js)'],
+        files: ['tests/unit/**/*.spec(.ts|.js)', '../plugins/*/tests/unit/**/*.spec(.ts|.js)'],
         name: 'unit',
         timeout: 2000,
       },

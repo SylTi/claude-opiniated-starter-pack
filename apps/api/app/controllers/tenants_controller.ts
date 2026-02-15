@@ -13,7 +13,9 @@ import {
   createTenantValidator,
   updateTenantValidator,
   addMemberValidator,
+  updateMemberRoleValidator,
   sendInvitationValidator,
+  updateTenantQuotasValidator,
 } from '#validators/tenant'
 import { TENANT_ROLES } from '#constants/roles'
 import {
@@ -29,6 +31,7 @@ import { AuditContext } from '#services/audit_context'
 import { AUDIT_EVENT_TYPES } from '#constants/audit_events'
 import { systemOps } from '#services/system_operation_service'
 import { hookRegistry } from '@saas/plugins-core'
+import { tenantQuotaService } from '#services/tenant_quota_service'
 
 export default class TenantsController {
   private mailService = new MailService()
@@ -197,12 +200,16 @@ export default class TenantsController {
       })
       .firstOrFail()
 
+    const quotas = await tenantQuotaService.getSnapshot(tenant, user.id)
+
     response.json({
       data: {
         id: tenant.id,
         name: tenant.name,
         slug: tenant.slug,
         ownerId: tenant.ownerId,
+        maxMembers: tenant.maxMembers,
+        quotas,
         members: tenant.memberships.map((m) => ({
           id: m.id,
           userId: m.userId,
@@ -278,6 +285,95 @@ export default class TenantsController {
         updatedAt: tenant.updatedAt?.toISO() ?? null,
       },
       message: 'Tenant updated successfully',
+    })
+  }
+
+  /**
+   * Get tenant quota snapshot (effective limits + current usage)
+   */
+  async getQuotas({ auth, params, response }: HttpContext): Promise<void> {
+    const user = auth.user!
+    const tenantId = Number(params.id)
+
+    const result = await this.getMembershipWithGuard(user.id, tenantId)
+    if (!result) {
+      return response.forbidden({
+        error: 'Forbidden',
+        message: 'You are not a member of this tenant',
+      })
+    }
+
+    if (!result.guard.can(ACTIONS.TENANT_READ)) {
+      return response.forbidden({
+        error: 'RbacDenied',
+        message: 'You do not have permission to view this tenant quotas',
+        deniedActions: [ACTIONS.TENANT_READ],
+      })
+    }
+
+    const tenant = await Tenant.findOrFail(tenantId)
+    const quotas = await tenantQuotaService.getSnapshot(tenant, user.id)
+
+    response.json({
+      data: {
+        tenantId: tenant.id,
+        maxMembers: tenant.maxMembers,
+        quotaOverrides: tenant.quotaOverrides ?? {},
+        quotas,
+      },
+    })
+  }
+
+  /**
+   * Update tenant quota overrides
+   */
+  async updateQuotas(ctx: HttpContext): Promise<void> {
+    const { auth, params, request, response } = ctx
+    const audit = new AuditContext(ctx)
+    const user = auth.user!
+    const tenantId = Number(params.id)
+
+    const result = await this.getMembershipWithGuard(user.id, tenantId)
+    if (!result) {
+      return response.forbidden({
+        error: 'Forbidden',
+        message: 'You are not a member of this tenant',
+      })
+    }
+
+    if (!result.guard.can(ACTIONS.TENANT_UPDATE)) {
+      return response.forbidden({
+        error: 'RbacDenied',
+        message: 'You do not have permission to update tenant quotas',
+        deniedActions: [ACTIONS.TENANT_UPDATE],
+      })
+    }
+
+    const payload = await request.validateUsing(updateTenantQuotasValidator)
+    const tenant = await Tenant.findOrFail(tenantId)
+
+    tenantQuotaService.applyQuotaUpdates(tenant, payload)
+    await tenant.save()
+
+    const quotas = await tenantQuotaService.getSnapshot(tenant, user.id)
+
+    audit.emitForTenant(
+      AUDIT_EVENT_TYPES.TENANT_UPDATE,
+      tenant.id,
+      { type: 'tenant', id: tenant.id },
+      {
+        updatedFields: Object.keys(payload),
+      }
+    )
+
+    response.json({
+      data: {
+        tenantId: tenant.id,
+        maxMembers: tenant.maxMembers,
+        quotaOverrides: tenant.quotaOverrides ?? {},
+        quotas,
+      },
+      message: 'Tenant quotas updated successfully',
     })
   }
 
@@ -397,10 +493,9 @@ export default class TenantsController {
             throw new AlreadyMemberError()
           }
 
-          // Check max members limit (inside transaction with lock)
-          if (!(await tenant.canAddMember(tenant.memberships.length, trx))) {
-            const maxMembers = await tenant.getEffectiveMaxMembers(trx)
-            throw new MemberLimitReachedError(maxMembers ?? 0)
+          const limits = await tenantQuotaService.getEffectiveLimits(tenant, trx)
+          if (tenantQuotaService.willExceed(limits.members, tenant.memberships.length, 1)) {
+            throw new MemberLimitReachedError(limits.members ?? 0)
           }
 
           // Create member inside transaction
@@ -462,6 +557,113 @@ export default class TenantsController {
       }
       throw error
     }
+  }
+
+  /**
+   * Update member role within tenant
+   */
+  async updateMemberRole(ctx: HttpContext): Promise<void> {
+    const { auth, params, request, response } = ctx
+    const audit = new AuditContext(ctx)
+    const user = auth.user!
+    const { id: tenantId, userId: memberUserId } = params
+    const targetUserId = Number(memberUserId)
+
+    const result = await this.getMembershipWithGuard(user.id, tenantId)
+    if (!result) {
+      return response.forbidden({
+        error: 'Forbidden',
+        message: 'You are not a member of this tenant',
+      })
+    }
+
+    if (!result.guard.can(ACTIONS.MEMBER_UPDATE_ROLE)) {
+      return response.forbidden({
+        error: 'RbacDenied',
+        message: 'You do not have permission to update member roles',
+        deniedActions: [ACTIONS.MEMBER_UPDATE_ROLE],
+      })
+    }
+
+    const { role } = await request.validateUsing(updateMemberRoleValidator)
+
+    if (targetUserId === user.id) {
+      return response.badRequest({
+        error: 'ValidationError',
+        message: 'You cannot update your own role',
+      })
+    }
+
+    const updateResult = await systemOps.withTenantContext(
+      Number(tenantId),
+      async (trx) => {
+        const membership = await TenantMembership.query({ client: trx })
+          .where('tenantId', tenantId)
+          .where('userId', targetUserId)
+          .first()
+
+        if (!membership) {
+          return { status: 'NOT_FOUND' as const }
+        }
+
+        if (membership.role === TENANT_ROLES.OWNER) {
+          return { status: 'OWNER' as const }
+        }
+
+        if (membership.role === role) {
+          return { status: 'UNCHANGED' as const, previousRole: membership.role }
+        }
+
+        const previousRole = membership.role
+        membership.role = role
+        membership.useTransaction(trx)
+        await membership.save()
+
+        return { status: 'UPDATED' as const, previousRole }
+      },
+      user.id
+    )
+
+    if (updateResult.status === 'NOT_FOUND') {
+      return response.notFound({
+        error: 'NotFound',
+        message: 'Member not found',
+      })
+    }
+
+    if (updateResult.status === 'OWNER') {
+      return response.badRequest({
+        error: 'ValidationError',
+        message: 'Cannot change role for tenant owner',
+      })
+    }
+
+    if (updateResult.status === 'UNCHANGED') {
+      return response.json({
+        data: {
+          userId: targetUserId,
+          previousRole: updateResult.previousRole,
+          role,
+        },
+        message: 'Member role already up to date',
+      })
+    }
+
+    audit.emitForTenant(
+      AUDIT_EVENT_TYPES.MEMBER_ROLE_UPDATE,
+      Number(tenantId),
+      { type: 'user', id: targetUserId },
+      { previousRole: updateResult.previousRole, role }
+    )
+
+    response.json({
+      data: {
+        userId: targetUserId,
+        previousRole: updateResult.previousRole,
+        role,
+      },
+      message: 'Member role updated successfully',
+    })
   }
 
   /**
@@ -739,15 +941,26 @@ export default class TenantsController {
             return { error: 'FREE_TIER' as const }
           }
 
-          // Check max members limit (with lock held)
+          // Check quota limits (with lock held)
           const pendingInvitations = await TenantInvitation.query({ client: trx })
             .where('tenantId', tenantId)
             .where('status', 'pending')
 
+          const limits = await tenantQuotaService.getEffectiveLimits(tenant, trx)
+
           const totalPotentialMembers = tenant.memberships.length + pendingInvitations.length
-          if (!(await tenant.canAddMember(totalPotentialMembers, trx))) {
-            const maxMembers = await tenant.getEffectiveMaxMembers(trx)
+          if (tenantQuotaService.willExceed(limits.members, totalPotentialMembers, 1)) {
+            const maxMembers = limits.members
             return { error: 'LIMIT_REACHED' as const, maxMembers }
+          }
+
+          if (
+            tenantQuotaService.willExceed(limits.pendingInvitations, pendingInvitations.length, 1)
+          ) {
+            return {
+              error: 'INVITATION_QUOTA_REACHED' as const,
+              maxPendingInvitations: limits.pendingInvitations,
+            }
           }
 
           // Check if already a member
@@ -805,6 +1018,11 @@ export default class TenantsController {
             return response.badRequest({
               error: 'LimitReached',
               message: `Tenant would exceed the maximum of ${invitationResult.maxMembers} members with pending invitations. Upgrade your subscription to add more.`,
+            })
+          case 'INVITATION_QUOTA_REACHED':
+            return response.badRequest({
+              error: 'LimitReached',
+              message: `Tenant has reached the pending invitation quota (${invitationResult.maxPendingInvitations}).`,
             })
           case 'ALREADY_MEMBER':
             return response.badRequest({
@@ -1128,8 +1346,9 @@ export default class TenantsController {
             throw new Error('ALREADY_MEMBER')
           }
 
-          // Check tenant member limit (inside transaction with lock)
-          if (!(await tenant.canAddMember(tenant.memberships.length, trx))) {
+          // Check tenant member quota (inside transaction with lock)
+          const limits = await tenantQuotaService.getEffectiveLimits(tenant, trx)
+          if (tenantQuotaService.willExceed(limits.members, tenant.memberships.length, 1)) {
             throw new Error('LIMIT_REACHED')
           }
 

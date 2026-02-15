@@ -9,6 +9,7 @@ import { notFound, redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import { getMainAppPluginId, loadClientPluginManifest, hasClientEntrypoint, clientPluginLoaders } from '@saas/config/plugins/client'
 import { verifyUserFromApi } from '@/lib/server/auth'
+import { getServerI18n } from '@/lib/i18n/server'
 
 interface MainAppDispatcherPageProps {
   params: Promise<{
@@ -28,6 +29,8 @@ function isSafeMode(): boolean {
 export default async function MainAppDispatcherPage({
   params,
 }: MainAppDispatcherPageProps): Promise<React.ReactNode> {
+  const { t } = await getServerI18n('skeleton')
+
   if (isSafeMode()) {
     notFound()
   }
@@ -72,7 +75,7 @@ export default async function MainAppDispatcherPage({
 
     const MatchedPage = pageMatch.component
     return (
-      <Suspense fallback={<div className="container mx-auto py-8">Loading...</div>}>
+      <Suspense fallback={<div className="container mx-auto py-8">{t('common.loading')}</div>}>
         <MatchedPage params={pageMatch.params} />
       </Suspense>
     )

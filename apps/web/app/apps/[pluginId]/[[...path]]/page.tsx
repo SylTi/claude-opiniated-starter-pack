@@ -19,8 +19,10 @@
 
 import { notFound } from 'next/navigation'
 import { loadClientPluginManifest, hasClientEntrypoint, clientPluginLoaders } from '@saas/config/plugins/client'
+import { registerPluginTranslations, type PluginTranslations } from '@saas/plugins-core'
 import Link from 'next/link'
 import { Suspense } from 'react'
+import { getServerI18n } from '@/lib/i18n/server'
 
 interface PluginPageProps {
   params: Promise<{
@@ -64,6 +66,10 @@ async function loadPluginModule(pluginId: string): Promise<PluginLoadResult> {
 
   try {
     const pluginModule = await loader()
+    const translations = (pluginModule as { translations?: unknown }).translations
+    if (translations && typeof translations === 'object') {
+      registerPluginTranslations(pluginId, translations as PluginTranslations)
+    }
 
     // Look for default export (plugin app component)
     const PluginApp = (pluginModule as { default?: React.ComponentType<{ path: string }> }).default
@@ -98,15 +104,16 @@ async function loadPluginModule(pluginId: string): Promise<PluginLoadResult> {
  */
 export default async function PluginPage({ params }: PluginPageProps): Promise<React.ReactNode> {
   const { pluginId, path = [] } = await params
+  const { t } = await getServerI18n('skeleton')
 
   // Safe mode: disable all plugin UIs
   if (isSafeMode()) {
     return (
       <div className="container mx-auto py-8">
         <div className="rounded-lg border bg-destructive/10 p-6">
-          <h1 className="text-2xl font-semibold mb-4">Safe Mode Active</h1>
+          <h1 className="text-2xl font-semibold mb-4">{t('plugin.safeModeTitle')}</h1>
           <p className="text-muted-foreground">
-            Plugin UIs are disabled in safe mode. Contact your administrator.
+            {t('plugin.safeModeMessage')}
           </p>
         </div>
       </div>
@@ -141,17 +148,16 @@ export default async function PluginPage({ params }: PluginPageProps): Promise<R
             {manifest.displayName || manifest.pluginId}
           </h1>
           <p className="text-muted-foreground mb-4">
-            This plugin does not provide a standalone UI.
+            {t('plugin.noUiMessage')}
           </p>
           {(manifest.tier === 'B' || manifest.tier === 'C') && (
             <p className="text-sm text-muted-foreground">
-              Platform/app plugins often extend the app via API routes and hooks
-              rather than standalone pages.
+              {t('plugin.noUiExtended')}
             </p>
           )}
           <div className="mt-6">
             <Link href="/dashboard" className="text-primary hover:underline">
-              ← Back to Dashboard
+              ← {t('plugin.backToDashboard')}
             </Link>
           </div>
         </div>
@@ -176,7 +182,7 @@ export default async function PluginPage({ params }: PluginPageProps): Promise<R
 
     const MatchedPage = pageMatch.component
     return (
-      <Suspense fallback={<div className="container mx-auto py-8">Loading...</div>}>
+      <Suspense fallback={<div className="container mx-auto py-8">{t('plugin.loading')}</div>}>
         <MatchedPage params={pageMatch.params} />
       </Suspense>
     )
@@ -192,15 +198,14 @@ export default async function PluginPage({ params }: PluginPageProps): Promise<R
             {manifest.displayName || manifest.pluginId}
           </h1>
           <p className="text-muted-foreground mb-4">
-            Version {manifest.version}
+            {t('plugin.version', { version: manifest.version })}
           </p>
           <p className="text-sm text-muted-foreground mb-4">
-            This plugin provides hooks and filters but does not have a standalone UI.
-            Its functionality is integrated into other parts of the application.
+            {t('plugin.integratedMessage')}
           </p>
           <div className="mt-6">
             <Link href="/dashboard" className="text-primary hover:underline">
-              ← Back to Dashboard
+              ← {t('plugin.backToDashboard')}
             </Link>
           </div>
         </div>
@@ -213,12 +218,12 @@ export default async function PluginPage({ params }: PluginPageProps): Promise<R
   return (
     <div className="container mx-auto py-8">
       <div className="rounded-lg border bg-destructive/10 p-6">
-        <h1 className="text-2xl font-semibold mb-4">Plugin Error</h1>
+        <h1 className="text-2xl font-semibold mb-4">{t('plugin.errorTitle')}</h1>
         <p className="text-muted-foreground">
-          Failed to load plugin. Please try again later or contact support if the issue persists.
+          {t('plugin.errorMessage')}
         </p>
         <p className="text-xs text-muted-foreground mt-2">
-          Error ID: {loadResult.errorId}
+          {t('plugin.errorId', { id: loadResult.errorId })}
         </p>
       </div>
     </div>

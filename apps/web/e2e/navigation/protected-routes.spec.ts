@@ -25,6 +25,8 @@ async function login(page: Page, user: { email: string; password: string }): Pro
 }
 
 test.describe('Protected Routes', () => {
+  test.describe.configure({ mode: 'serial' })
+
   test('redirects unauthenticated users to login', async ({ page }) => {
     await page.context().clearCookies()
 

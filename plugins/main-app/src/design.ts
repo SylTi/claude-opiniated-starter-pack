@@ -5,6 +5,7 @@
  */
 
 import type { AppDesign, ThemeTokens, NavModel, NavContext, NavSection, ShellProps } from '@saas/plugins-core'
+import { mainAppText } from './translations.js'
 
 /**
  * Server-side AppShell placeholder.
@@ -96,12 +97,12 @@ function getNavBaseline(context: NavContext): NavModel {
     // Dashboard - always shown
     mainSections.push({
       id: 'core.dashboard.section',
-      label: 'Dashboard',
+      label: mainAppText('nav.dashboard'),
       order: 100,
       items: [
         {
           id: 'core.dashboard',
-          label: 'Dashboard',
+          label: mainAppText('nav.dashboard'),
           href: '/dashboard',
           icon: 'LayoutDashboard',
           order: 100,
@@ -114,12 +115,12 @@ function getNavBaseline(context: NavContext): NavModel {
     if (context.tenantId) {
       mainSections.push({
         id: 'core.notes.section',
-        label: 'Notes',
+        label: mainAppText('nav.notes'),
         order: 200,
         items: [
           {
             id: 'core.notes',
-            label: 'Notes',
+            label: mainAppText('nav.notes'),
             href: '/apps/notes',
             icon: 'FileText',
             order: 100,
@@ -132,12 +133,12 @@ function getNavBaseline(context: NavContext): NavModel {
     if (context.userRole === 'admin') {
       mainSections.push({
         id: 'core.admin.link.section',
-        label: 'Admin',
+        label: mainAppText('nav.admin'),
         order: 900,
         items: [
           {
             id: 'core.admin.link',
-            label: 'Admin',
+            label: mainAppText('nav.admin'),
             href: '/admin/dashboard',
             icon: 'Shield',
             order: 100,
@@ -151,54 +152,54 @@ function getNavBaseline(context: NavContext): NavModel {
   if (context.userRole === 'admin') {
     adminSections.push({
       id: 'core.admin.main',
-      label: 'Administration',
+      label: mainAppText('nav.administration'),
       order: 100,
       items: [
         {
           id: 'core.admin.dashboard',
-          label: 'Dashboard',
+          label: mainAppText('nav.dashboard'),
           href: '/admin/dashboard',
           icon: 'LayoutDashboard',
           order: 100,
         },
         {
           id: 'core.admin.users',
-          label: 'Users',
+          label: mainAppText('nav.users'),
           href: '/admin/users',
           icon: 'Users',
           order: 200,
         },
         {
           id: 'core.admin.tenants',
-          label: 'Tenants',
+          label: mainAppText('nav.tenants'),
           href: '/admin/tenants',
           icon: 'UsersRound',
           order: 300,
         },
         {
           id: 'core.admin.tiers',
-          label: 'Tiers',
+          label: mainAppText('nav.tiers'),
           href: '/admin/tiers',
           icon: 'Layers',
           order: 400,
         },
         {
           id: 'core.admin.stripe',
-          label: 'Stripe',
+          label: mainAppText('nav.stripe'),
           href: '/admin/stripe',
           icon: 'CreditCard',
           order: 500,
         },
         {
           id: 'core.admin.discounts',
-          label: 'Discount Codes',
+          label: mainAppText('nav.discountCodes'),
           href: '/admin/discount-codes',
           icon: 'Tag',
           order: 600,
         },
         {
           id: 'core.admin.coupons',
-          label: 'Coupons',
+          label: mainAppText('nav.coupons'),
           href: '/admin/coupons',
           icon: 'Ticket',
           order: 700,
@@ -213,28 +214,28 @@ function getNavBaseline(context: NavContext): NavModel {
     const accountItems = [
       {
         id: 'core.dashboard.menu',
-        label: 'Dashboard',
+        label: mainAppText('nav.dashboard'),
         href: '/dashboard',
         icon: 'LayoutDashboard',
         order: 50,
       },
       {
         id: 'core.profile',
-        label: 'Profile',
+        label: mainAppText('nav.profile'),
         href: '/profile',
         icon: 'User',
         order: 100,
       },
       {
         id: 'core.security',
-        label: 'Security',
+        label: mainAppText('nav.security'),
         href: '/profile/security',
         icon: 'Shield',
         order: 200,
       },
       {
         id: 'core.settings',
-        label: 'Settings',
+        label: mainAppText('nav.settings'),
         href: '/profile/settings',
         icon: 'Settings',
         order: 300,
@@ -245,7 +246,7 @@ function getNavBaseline(context: NavContext): NavModel {
     if (context.tenantId && context.tierLevel > 0) {
       accountItems.push({
         id: 'core.team',
-        label: 'Team',
+        label: mainAppText('nav.team'),
         href: '/team',
         icon: 'UsersRound',
         order: 400,
@@ -254,7 +255,7 @@ function getNavBaseline(context: NavContext): NavModel {
 
     userMenuSections.push({
       id: 'core.account',
-      label: 'Account',
+      label: mainAppText('nav.account'),
       order: 100,
       items: accountItems,
     })
@@ -263,12 +264,12 @@ function getNavBaseline(context: NavContext): NavModel {
     if (context.userRole === 'admin') {
       userMenuSections.push({
         id: 'core.admin.menu',
-        label: 'Admin',
+        label: mainAppText('nav.admin'),
         order: 800,
         items: [
           {
             id: 'core.admin.panel',
-            label: 'Admin Panel',
+            label: mainAppText('nav.adminPanel'),
             href: '/admin/dashboard',
             icon: 'Users',
             order: 100,
@@ -292,7 +293,7 @@ function getNavBaseline(context: NavContext): NavModel {
  */
 export const design: AppDesign = {
   designId: 'main-app',
-  displayName: 'Main Application Design',
+  displayName: mainAppText('design.displayName'),
 
   appTokens: getAppTokens,
 

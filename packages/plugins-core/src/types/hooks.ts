@@ -150,6 +150,9 @@ export const FILTER_HOOKS = {
   'dashboard:widgets': 'dashboard:widgets',
   'dashboard:stats': 'dashboard:stats',
 
+  // Header
+  'ui:header:actions': 'ui:header:actions',
+
   // Settings
   'settings:sections': 'settings:sections',
 

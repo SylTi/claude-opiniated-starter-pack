@@ -6,15 +6,17 @@ import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2, ArrowLeft } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@saas/ui/button'
+import { Input } from '@saas/ui/input'
+import { Label } from '@saas/ui/label'
+import { Alert, AlertDescription } from '@saas/ui/alert'
+import { useI18n } from '@/contexts/i18n-context'
 import { authApi } from '@/lib/auth'
 import { ApiError } from '@/lib/api'
 import { resetPasswordSchema, type ResetPasswordFormData } from '@/lib/validations'
 
 function ResetPasswordForm(): React.ReactElement {
+  const { t } = useI18n('skeleton')
   const router = useRouter()
   const searchParams = useSearchParams()
   const token = searchParams.get('token')
@@ -32,7 +34,7 @@ function ResetPasswordForm(): React.ReactElement {
 
   const onSubmit = async (data: ResetPasswordFormData): Promise<void> => {
     if (!token) {
-      setError('Invalid reset link')
+      setError(t('auth.reset.invalidLink'))
       return
     }
 
@@ -48,7 +50,7 @@ function ResetPasswordForm(): React.ReactElement {
       if (err instanceof ApiError) {
         setError(err.message)
       } else {
-        setError('An unexpected error occurred')
+        setError(t('common.unexpectedError'))
       }
     }
   }
@@ -57,12 +59,12 @@ function ResetPasswordForm(): React.ReactElement {
     return (
       <>
         <div className="text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-foreground">Invalid link</h2>
+          <h2 className="text-3xl font-bold tracking-tight text-foreground">{t('auth.reset.invalidLinkTitle')}</h2>
           <p className="mt-4 text-muted-foreground">
-            This password reset link is invalid or has expired.
+            {t('auth.reset.invalidLinkMessage')}
           </p>
           <Link href="/forgot-password">
-            <Button className="mt-6">Request new link</Button>
+            <Button className="mt-6">{t('auth.reset.requestNewLink')}</Button>
           </Link>
         </div>
       </>
@@ -74,13 +76,13 @@ function ResetPasswordForm(): React.ReactElement {
       <>
         <div className="text-center">
           <h2 className="text-3xl font-bold tracking-tight text-foreground">
-            Password reset successful
+            {t('auth.reset.successTitle')}
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Your password has been reset successfully. You can now sign in with your new password.
+            {t('auth.reset.successMessage')}
           </p>
           <Button className="mt-6" onClick={() => router.push('/login')}>
-            Go to Login
+            {t('common.goToLogin')}
           </Button>
         </div>
       </>
@@ -90,9 +92,9 @@ function ResetPasswordForm(): React.ReactElement {
   return (
     <>
       <div className="text-center">
-        <h2 className="text-3xl font-bold tracking-tight text-foreground">Reset your password</h2>
+        <h2 className="text-3xl font-bold tracking-tight text-foreground">{t('auth.reset.title')}</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Enter your new password below.
+          {t('auth.reset.subtitle')}
         </p>
       </div>
 
@@ -105,7 +107,7 @@ function ResetPasswordForm(): React.ReactElement {
 
         <div className="space-y-4">
           <div>
-            <Label htmlFor="password">New password</Label>
+            <Label htmlFor="password">{t('auth.reset.newPassword')}</Label>
             <Input
               id="password"
               type="password"
@@ -119,7 +121,7 @@ function ResetPasswordForm(): React.ReactElement {
           </div>
 
           <div>
-            <Label htmlFor="passwordConfirmation">Confirm new password</Label>
+            <Label htmlFor="passwordConfirmation">{t('auth.reset.confirmNewPassword')}</Label>
             <Input
               id="passwordConfirmation"
               type="password"
@@ -137,10 +139,10 @@ function ResetPasswordForm(): React.ReactElement {
           {isSubmitting ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Resetting...
+              {t('auth.reset.resetting')}
             </>
           ) : (
-            'Reset password'
+            t('auth.reset.resetButton')
           )}
         </Button>
 
@@ -150,7 +152,7 @@ function ResetPasswordForm(): React.ReactElement {
             className="text-sm font-medium text-primary hover:text-primary/80"
           >
             <ArrowLeft className="inline-block mr-1 h-4 w-4" />
-            Back to login
+            {t('common.backToLoginLower')}
           </Link>
         </div>
       </form>
@@ -159,8 +161,10 @@ function ResetPasswordForm(): React.ReactElement {
 }
 
 export default function ResetPasswordPage(): React.ReactElement {
+  const { t } = useI18n('skeleton')
+
   return (
-    <Suspense fallback={<div className="text-center">Loading...</div>}>
+    <Suspense fallback={<div className="text-center">{t('common.loading')}</div>}>
       <ResetPasswordForm />
     </Suspense>
   )
